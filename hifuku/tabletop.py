@@ -97,15 +97,22 @@ class TableTopWorld:
         return SDFMesh(dimension, mesh)
 
 
-def create_tabletop_world() -> TableTopWorld:
-    # 73b2 table
+def create_standard_table() -> Box:
+    # create jsk-lab 73b2 table
     table_depth = 0.5
     table_width = 0.75
     table_height = 0.7
-    table = Box(extents=[table_depth, table_width, table_height], with_sdf=True)
-    x = 0.4 + table_depth * 0.5 + np.random.rand() * 0.2
+    pos = [0.4 + table_depth * 0.5, 0.0, table_height * 0.5]
+    table = Box(extents=[table_depth, table_width, table_height], pos=pos, with_sdf=True)
+    return table
+
+
+def create_tabletop_world() -> TableTopWorld:
+    table = create_standard_table()
+    table_depth, table_width, table_height = table._extents
+    x = np.random.rand() * 0.2
     y = -0.2 + np.random.rand() * 0.4
-    z = table_height * 0.5
+    z = 0.0
     table.translate([x, y, z])
 
     table_tip = table.copy_worldcoords()
