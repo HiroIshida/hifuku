@@ -102,9 +102,39 @@ def create_standard_table() -> Box:
     table_depth = 0.5
     table_width = 0.75
     table_height = 0.7
-    pos = [0.4 + table_depth * 0.5, 0.0, table_height * 0.5]
+    pos = [0.5 + table_depth * 0.5, 0.0, table_height * 0.5]
     table = Box(extents=[table_depth, table_width, table_height], pos=pos, with_sdf=True)
     return table
+
+
+def create_simple_tabletop_world(with_obstacle: bool = False) -> TableTopWorld:
+    table = create_standard_table()
+    table_depth, table_width, table_height = table._extents
+
+    table_tip = table.copy_worldcoords()
+    table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
+
+    obstacles = []
+    if with_obstacle:
+        box_co = table_tip.copy_worldcoords()
+        box_co.translate([0.2, 0.5, 0.1])
+        box = Box(extents=[0.1, 0.2, 0.2], with_sdf=True)
+        box.newcoords(box_co)
+        obstacles.append(box)
+
+        cylinder_co = table_tip.copy_worldcoords()
+        cylinder_co.translate([0.45, 0.1, 0.15])
+        cylinder = Cylinder(radius=0.05, height=0.3, with_sdf=True)
+        cylinder.newcoords(cylinder_co)
+        obstacles.append(cylinder)
+
+        cylinder_co = table_tip.copy_worldcoords()
+        cylinder_co.translate([0.0, 0.1, 0.15])
+        cylinder = Cylinder(radius=0.05, height=0.3, with_sdf=True)
+        cylinder.newcoords(cylinder_co)
+        obstacles.append(cylinder)
+
+    return TableTopWorld(table, obstacles)
 
 
 def create_tabletop_world() -> TableTopWorld:

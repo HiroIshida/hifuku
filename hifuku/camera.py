@@ -169,6 +169,7 @@ def create_synthetic_esdf(
     std_rotate = 0.03
     std_trans = 0.1
     n_camera = 2 + np.random.randint(4)
+    # n_camera = 1
     for _ in range(n_camera):
         camera_random = copy.deepcopy(camera)
         camera_random.translate(np.random.randn(3) * std_trans)
