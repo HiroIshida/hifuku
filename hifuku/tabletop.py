@@ -72,8 +72,8 @@ class TableTopWorld:
         self, grid_sizes: Tuple[int, int, int] = (56, 56, 28), mesh_height: float = 0.3
     ) -> Grid:
         depth, width, height = self.table._extents
-        lb = np.array([-0.5 * depth, -0.5 * width, height - 0.1])
-        ub = np.array([+0.5 * depth, +0.5 * width, height + mesh_height])
+        lb = np.array([-0.5 * depth, -0.5 * width, 0.5 * height - 0.1])
+        ub = np.array([+0.5 * depth, +0.5 * width, 0.5 * height + mesh_height])
         lb = self.table.transform_vector(lb)
         ub = self.table.transform_vector(ub)
         return Grid(lb, ub, grid_sizes)

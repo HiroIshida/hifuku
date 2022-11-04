@@ -159,6 +159,7 @@ class Camera(Axis):
 def create_synthetic_esdf(
     sdf: SDF,
     camera: Camera,
+    rm_config: RayMarchingConfig,
     esdf: Optional[EsdfMap] = None,
     max_dist: float = 2.5,
 ) -> EsdfMap:
@@ -167,21 +168,20 @@ def create_synthetic_esdf(
 
     std_rotate = 0.03
     std_trans = 0.1
-    cloud_list = []
-    2 + np.random.randint(4)
-    for _ in range(1):
+    n_camera = 2 + np.random.randint(4)
+    for _ in range(n_camera):
         camera_random = copy.deepcopy(camera)
         camera_random.translate(np.random.randn(3) * std_trans)
         camera_random.rotate(np.random.randn() * std_rotate, axis="z")
         ts = time.time()
-        pts_local = camera_random.generate_point_cloud(sdf, max_dist=max_dist)
+        cloud_global = camera_random.generate_point_cloud(sdf, rm_config=rm_config)
         print("elapsed time to generate cloud: {} sec".format(time.time() - ts))
 
+        cloud_camera = camera_random.inverse_transform_vector(cloud_global)
+
         ts = time.time()
-        esdf.update(camera_random.get_voxbloxpy_camera_pose(), pts_local)
+        esdf.update(camera_random.get_voxbloxpy_camera_pose(), cloud_camera)
         print("elapsed time to update esdf: {} sec".format(time.time() - ts))
-        pts_global = camera_random.transform_vector(pts_local)
-        cloud_list.append(pts_global)
     return esdf
 
 
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     esdf = EsdfMap.create(0.05)
     for _ in range(10):
         camera_tmp.rotate(np.random.randn() * 0.02, axis="z")
-        pts = camera_tmp.generate_point_cloud(sdf=sdf, max_dist=2.5)
+        pts = camera_tmp.generate_point_cloud(sdf=sdf, rm_config=RayMarchingConfig(max_dist=2.5))
         pose = camera_tmp.get_voxbloxpy_camera_pose()
         ts = time.time()
         esdf.update(pose, pts)
