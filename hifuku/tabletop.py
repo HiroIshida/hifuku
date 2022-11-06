@@ -36,14 +36,13 @@ class TableTopWorld:
         mesh_height: float = 0.3,
         fill_value: float = np.nan,
     ) -> GridSDF:
+
         grid = self.get_grid()
         X, Y, Z = grid.get_meshgrid(indexing="ij")
-        pts_local = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
-        tf = self.table.get_transform()
-        pts_world = tf.transform_vector(pts_local)
+        pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
 
         sdf = UnionSDF([obs.sdf for obs in self.obstacles])
-        values = sdf.__call__(pts_world)
+        values = sdf.__call__(pts)
         return GridSDF(grid, values, fill_value, create_itp_lazy=True)
 
     @classmethod
