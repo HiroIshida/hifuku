@@ -15,6 +15,7 @@ from voxbloxpy.core import EsdfMap, IntegratorType
 
 from hifuku.camera import RayMarchingConfig, create_synthetic_esdf
 from hifuku.robot import get_pr2_kinect_camera
+from hifuku.sdf import create_union_sdf
 from hifuku.tabletop import create_simple_tabletop_world
 from hifuku.utils import skcoords_to_pose_vec
 
@@ -25,15 +26,14 @@ use_base = True
 world = create_simple_tabletop_world(with_obstacle=True)
 union_sdf = world.get_union_sdf()
 camera = get_pr2_kinect_camera()
-esdf = EsdfMap.create(0.02, integrator_type=IntegratorType.FAST)
+esdf = EsdfMap.create(0.02, integrator_type=IntegratorType.MERGED)
 esdf = create_synthetic_esdf(
     union_sdf, camera, rm_config=RayMarchingConfig(max_dist=2.0), esdf=esdf
 )
+grid_sdf = esdf.get_grid_sdf(world.get_grid(), fill_value=1.0, create_itp_lazy=True)
+grid_sdf_comp = grid_sdf.get_quantized()
 
-
-def sdf(pts):
-    return esdf.get_sd_batch(pts, fill_value=2.0)
-
+sdf = create_union_sdf((grid_sdf_comp, world.table.sdf))  # type: ignore
 
 col_kinmap = PR2Paramter.collision_kinematics(with_base=use_base)
 col_kinmap.update_joint_angles(PR2Paramter.reset_manip_pose_table())
@@ -47,9 +47,10 @@ target_co.translate([0.85, -0.05, 0.9])
 target_co.rotate(0.4, axis="z")
 target_pose = skcoords_to_pose_vec(target_co)
 
-ik_config = IKConfig(clearance=0.02)
+ik_config = IKConfig(clearance=0.05)
 solver = InverseKinematicsSolver([target_pose], kinmap, cspace, config=ik_config)
-res = solver.solve(avoid_obstacle=False)
+
+res = solver.solve(avoid_obstacle=True)
 
 visualize = True
 if visualize:
@@ -74,9 +75,7 @@ if visualize:
     colvis_manager = CollisionSphereVisualizationManager(col_kinmap, viewer)
     angles = get_robot_config(robot_model, PR2Paramter.rarm_joint_names(), with_base=use_base)
     colvis_manager.update(angles, sdf)
-
     viewer.show()
-    grid_sdf = esdf.get_grid_sdf(world.get_grid(), fill_value=1.0)
     # grid_sdf = esdf.get_grid_sdf(esdf.get_voxel_info().get_boundary_grid(0.02), fill_value=1.0)
-    grid_sdf.render_volume(isomin=-0.1, isomax=0.1)
+    # grid_sdf.render_volume(isomin=-0.1, isomax=0.1)
     time.sleep(30)
