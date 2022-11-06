@@ -1,7 +1,7 @@
 import copy
 import time
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Optional
 
 import numpy as np
 import skrobot
@@ -13,10 +13,7 @@ from skrobot.sdf.signed_distance_function import UnionSDF
 from trimesh import PointCloud
 from voxbloxpy.core import CameraPose, EsdfMap
 
-
-class SDF(Protocol):
-    def __call__(self, pts: np.ndarray) -> np.ndarray:
-        ...
+from hifuku.sdf import SDFProtocol
 
 
 @dataclass
@@ -81,7 +78,7 @@ class Camera(Axis):
 
     def generate_point_cloud(
         self,
-        sdf: SDF,
+        sdf: SDFProtocol,
         rm_config: RayMarchingConfig,
         hit_only: bool = False,
     ) -> np.ndarray:
@@ -157,7 +154,7 @@ class Camera(Axis):
 
 
 def create_synthetic_esdf(
-    sdf: SDF,
+    sdf: SDFProtocol,
     camera: Camera,
     rm_config: RayMarchingConfig,
     esdf: Optional[EsdfMap] = None,
