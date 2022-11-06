@@ -37,7 +37,7 @@ sdf = create_union_sdf((grid_sdf_comp, world.table.sdf))  # type: ignore
 
 col_kinmap = PR2Paramter.collision_kinematics(with_base=use_base)
 col_kinmap.update_joint_angles(PR2Paramter.reset_manip_pose_table())
-tspace = TaskSpace(3, sdf=sdf)
+tspace = TaskSpace(3, sdf=sdf)  # type: ignore
 cspace = ConfigurationSpace(tspace, col_kinmap, PR2Paramter.rarm_default_bounds(with_base=use_base))
 kinmap = PR2Paramter.rarm_kinematics(with_base=use_base)
 kinmap.update_joint_angles(PR2Paramter.reset_manip_pose_table())
@@ -74,7 +74,7 @@ if visualize:
 
     colvis_manager = CollisionSphereVisualizationManager(col_kinmap, viewer)
     angles = get_robot_config(robot_model, PR2Paramter.rarm_joint_names(), with_base=use_base)
-    colvis_manager.update(angles, sdf)
+    colvis_manager.update(angles, sdf)  # type: ignore
     viewer.show()
     # grid_sdf = esdf.get_grid_sdf(esdf.get_voxel_info().get_boundary_grid(0.02), fill_value=1.0)
     # grid_sdf.render_volume(isomin=-0.1, isomax=0.1)

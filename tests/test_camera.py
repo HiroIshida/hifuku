@@ -5,11 +5,12 @@ import tqdm
 from skrobot.model.primitives import Sphere
 from voxbloxpy.core import EsdfMap, IntegratorType
 
-from hifuku.camera import SDF, Camera, CameraConfig, RayMarchingConfig
+from hifuku.sdf import SDFProtocol
+from hifuku.camera import Camera, CameraConfig, RayMarchingConfig
 
 
 def genrate_camera_pcloud_pairs(
-    sdf: SDF, camera_config: CameraConfig, rm_config: RayMarchingConfig, nx: int = 20, nz: int = 3
+    sdf: SDFProtocol, camera_config: CameraConfig, rm_config: RayMarchingConfig, nx: int = 20, nz: int = 3
 ) -> List[Tuple[Camera, np.ndarray]]:
     thetas = np.linspace(0, 2 * np.pi, nx)
     phis = np.linspace(-0.7 * np.pi, 0.7 * np.pi, nz)

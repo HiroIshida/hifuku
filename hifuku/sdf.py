@@ -1,4 +1,4 @@
-from typing import Protocol, Tuple
+from typing import Protocol, Tuple, Callable
 
 import numpy as np
 
@@ -8,7 +8,7 @@ class SDFProtocol(Protocol):
         ...
 
 
-def create_union_sdf(sdfs: Tuple[SDFProtocol, ...]) -> SDFProtocol:
+def create_union_sdf(sdfs: Tuple[SDFProtocol, ...]) -> Callable[[np.ndarray], np.ndarray]:
     def f(pts: np.ndarray):
         values = np.array([sdf(pts) for sdf in sdfs])
         values_min = np.min(values, axis=0)
