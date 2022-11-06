@@ -1,11 +1,27 @@
+import copy
 from dataclasses import dataclass
 from typing import List, Tuple
 
 import numpy as np
+import skrobot
+from skplan.kinematics import (
+    ArticulatedCollisionKinematicsMap,
+    ArticulatedEndEffectorKinematicsMap,
+)
+from skplan.robot.pr2 import PR2Paramter
+from skplan.solver.optimization import IKResult, InverseKinematicsSolver
+from skplan.space import ConfigurationSpace, TaskSpace
+from skplan.viewer.skrobot_viewer import set_robot_config
+from skrobot.coordinates import Coordinates
+from skrobot.model import Axis
 from skrobot.model.link import Link
 from skrobot.model.primitives import Box, Cylinder
+from skrobot.models.pr2 import PR2
 from skrobot.sdf import UnionSDF
 from voxbloxpy.core import Grid, GridSDF
+
+from hifuku.sdf import create_union_sdf
+from hifuku.utils import skcoords_to_pose_vec
 
 
 @dataclass
@@ -14,8 +30,7 @@ class TableTopWorld:
     obstacles: List[Link]
 
     def get_union_sdf(self) -> UnionSDF:
-        plane = Box([30, 30, 0.1], pos=(0, 0, -0.05), with_sdf=True)
-        lst = [self.table.sdf, plane.sdf]
+        lst = [self.table.sdf]
         for obstacle in self.obstacles:
             lst.append(obstacle.sdf)
         return UnionSDF(lst)
@@ -45,6 +60,18 @@ class TableTopWorld:
         values = sdf.__call__(pts)
         return GridSDF(grid, values, fill_value, create_itp_lazy=True)
 
+    def sample_pose(self) -> Coordinates:
+        table = self.table
+        table_depth, table_width, table_height = table._extents
+        table_tip = table.copy_worldcoords()
+        table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
+        table_tip.translate([0, 0, 0.05])
+
+        diff = np.random.rand(3) * np.array([table_depth, table_width, 0.2])
+        table_tip.translate(diff)
+        table_tip.rotate(-1.0 + np.random.rand() * 2.0, axis="z")
+        return table_tip
+
     @classmethod
     def sample(cls) -> "TableTopWorld":
         table = cls.create_standard_table()
@@ -57,14 +84,16 @@ class TableTopWorld:
         table_tip = table.copy_worldcoords()
         table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
 
-        n_box = np.random.randint(3)
-        n_cylinder = np.random.randint(8)
+        n_box = np.random.randint(3) + 1
+        n_cylinder = np.random.randint(8) + 1
 
         obstacles = []
 
+        color = np.array([255, 0, 0, 200])
+
         for _ in range(n_box):
             dimension = np.array([0.1, 0.1, 0.05]) + np.random.rand(3) * np.array([0.2, 0.2, 0.2])
-            box = Box(extents=dimension, with_sdf=True)
+            box = Box(extents=dimension, with_sdf=True, face_colors=color)
 
             co = table_tip.copy_worldcoords()
             box.newcoords(co)
@@ -77,7 +106,7 @@ class TableTopWorld:
         for _ in range(n_cylinder):
             r = np.random.rand() * 0.03 + 0.01
             h = np.random.rand() * 0.2 + 0.05
-            cylinder = Cylinder(radius=r, height=h, with_sdf=True)
+            cylinder = Cylinder(radius=r, height=h, with_sdf=True, face_colors=color)
 
             co = table_tip.copy_worldcoords()
             cylinder.newcoords(co)
@@ -130,6 +159,84 @@ def create_simple_tabletop_world(with_obstacle: bool = False) -> TableTopWorld:
     return TableTopWorld(table, obstacles)
 
 
+_cache = {"kinmap": None, "pr2": None}
+
+
+@dataclass
 class TabletopIKProblem:
     world: TableTopWorld
     grid_sdf: GridSDF
+    target_pose: Coordinates
+
+    @classmethod
+    def setup_pr2(cls) -> PR2:
+        if _cache["pr2"] is None:
+            pr2 = PR2(use_tight_joint_limit=False)
+            pr2.reset_manip_pose()
+            _cache["pr2"] = pr2
+        return _cache["pr2"]  # type: ignore
+
+    @classmethod
+    def setup_kinmaps(
+        cls,
+    ) -> Tuple[ArticulatedEndEffectorKinematicsMap, ArticulatedCollisionKinematicsMap]:
+        if _cache["kinmap"] is None:
+            pr2 = cls.setup_pr2()
+            efkin = PR2Paramter.rarm_kinematics(with_base=True)
+            efkin.reflect_skrobot_model(pr2)
+            colkin = PR2Paramter.collision_kinematics(with_base=True)
+            colkin.reflect_skrobot_model(pr2)
+            _cache["kinmap"] = (efkin, colkin)  # type: ignore
+        return _cache["kinmap"]  # type: ignore
+
+    @classmethod
+    def sample(cls) -> "TabletopIKProblem":
+        pr2 = cls.setup_pr2()
+        efkin, colkin = cls.setup_kinmaps()
+
+        def is_collision_init_config(world: TableTopWorld):
+            sdf = world.get_union_sdf()
+            pts, _ = colkin.map_skrobot_model(pr2)
+            vals = sdf(pts[0])
+            dists = vals - np.array(colkin.radius_list)
+            return np.any(dists < 0.0)
+
+        while True:
+            world = TableTopWorld.sample()
+            if not is_collision_init_config(world):
+                gridsdf = world.compute_exact_gridsdf(fill_value=2.0)
+                gridsdf.get_quantized()
+                target_pose = world.sample_pose()
+
+                problem = TabletopIKProblem(world, gridsdf, target_pose)
+                return problem
+
+    def solve(self, av_init: np.ndarray) -> IKResult:
+
+        sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
+
+        efkin, colkin = self.setup_kinmaps()
+        tspace = TaskSpace(3, sdf=sdf)  # type: ignore
+        cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
+
+        target_pose = skcoords_to_pose_vec(self.target_pose)
+        solver = InverseKinematicsSolver([target_pose], efkin, cspace)
+        result = solver.solve(avoid_obstacle=True)
+        result.success = bool(result.fun < 1e-6)
+        return result
+
+    def visualize(self, av: np.ndarray):
+        pr2 = copy.deepcopy(self.setup_pr2())
+        efkin, colkin = self.setup_kinmaps()
+        set_robot_config(pr2, efkin.control_joint_names, av, with_base=True)
+
+        axis = Axis()
+        axis.newcoords(self.target_pose)
+
+        viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
+        viewer.add(pr2)
+        viewer.add(self.world.table)
+        viewer.add(axis)
+        for obs in self.world.obstacles:
+            viewer.add(obs)
+        viewer.show()
