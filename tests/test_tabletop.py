@@ -1,6 +1,5 @@
 import numpy as np
 
-from hifuku.sdf import create_union_sdf
 from hifuku.tabletop import TabletopIKProblem
 
 
@@ -14,10 +13,26 @@ def test_exact_grid_conversion():
         pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
 
         # sdf
-        approx_sdf = create_union_sdf((problem.grid_sdf, problem.world.table.sdf))  # type: ignore
+        approx_sdf = problem.get_sdf()
         analytical_sdf = problem.world.get_union_sdf()
 
         # compare
         vals_approx = approx_sdf(pts)
         vals_analytical = analytical_sdf(pts)
         np.testing.assert_almost_equal(vals_approx, vals_analytical)
+
+
+def test_solve_problem():
+
+    av_init = np.zeros(10)
+    sample_count = 0
+    for _ in range(10):
+        while True:
+            sample_count += 1
+            problem = TabletopIKProblem.sample()
+            res = problem.solve(av_init)
+            if res.success:
+                efkin, colkin = problem.setup_kinmaps()
+                assert not colkin.is_colliding(problem.get_sdf(), res.x)
+                break
+    print("sample count {}".format(sample_count))

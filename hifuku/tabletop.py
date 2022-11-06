@@ -1,6 +1,6 @@
 import copy
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 
 import numpy as np
 import skrobot
@@ -189,6 +189,10 @@ class TabletopIKProblem:
             _cache["kinmap"] = (efkin, colkin)  # type: ignore
         return _cache["kinmap"]  # type: ignore
 
+    def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
+        sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
+        return sdf
+
     @classmethod
     def sample(cls) -> "TabletopIKProblem":
         pr2 = cls.setup_pr2()
@@ -212,11 +216,8 @@ class TabletopIKProblem:
                 return problem
 
     def solve(self, av_init: np.ndarray) -> IKResult:
-
-        sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
-
         efkin, colkin = self.setup_kinmaps()
-        tspace = TaskSpace(3, sdf=sdf)  # type: ignore
+        tspace = TaskSpace(3, sdf=self.get_sdf())  # type: ignore
         cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
 
         target_pose = skcoords_to_pose_vec(self.target_pose)
