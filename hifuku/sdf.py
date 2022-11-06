@@ -1,11 +1,9 @@
-from typing import Protocol, Tuple, Callable
+from typing import Callable, Tuple
 
 import numpy as np
+from skplan.sdf import SDFLike
 
-
-class SDFProtocol(Protocol):
-    def __call__(self, pts: np.ndarray) -> np.ndarray:
-        ...
+SDFProtocol = SDFLike
 
 
 def create_union_sdf(sdfs: Tuple[SDFProtocol, ...]) -> Callable[[np.ndarray], np.ndarray]:
