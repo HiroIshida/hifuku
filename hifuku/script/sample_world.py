@@ -1,4 +1,5 @@
 import uuid
+import os
 import warnings
 import zlib
 from dataclasses import dataclass
@@ -66,7 +67,7 @@ class DataGenerationTask(Process):
 
 
 if __name__ == "__main__":
-    n_problem = 300000
+    n_problem = 100000
 
     av_init = np.zeros(10)
 
@@ -74,9 +75,9 @@ if __name__ == "__main__":
     p.mkdir(exist_ok=True)
 
     chunk_dir_path = p / "chunk"
-    chunk_dir_path.mkdir(exist_ok=False)
+    chunk_dir_path.mkdir(exist_ok=True)
 
-    n_process = psutil.cpu_count(logical=False)
+    n_process = psutil.cpu_count(logical=False) * 2
     numbers = split_number(n_problem, n_process)
 
     process_list = []
@@ -85,6 +86,7 @@ if __name__ == "__main__":
         arg = DataGenerationTaskArg(idx_process, number, show_process_bar, chunk_dir_path)
         p = DataGenerationTask(arg)
         p.start()
+        os.system("taskset -p -c %d %d" % (idx_process  % os.cpu_count(), p.pid))
         process_list.append(p)
 
     for p in process_list:
