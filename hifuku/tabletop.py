@@ -1,6 +1,6 @@
 import copy
 from dataclasses import dataclass
-from typing import List, Tuple, Callable
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 import skrobot
@@ -9,7 +9,7 @@ from skplan.kinematics import (
     ArticulatedEndEffectorKinematicsMap,
 )
 from skplan.robot.pr2 import PR2Paramter
-from skplan.solver.optimization import IKResult, InverseKinematicsSolver
+from skplan.solver.optimization import IKConfig, IKResult, InverseKinematicsSolver
 from skplan.space import ConfigurationSpace, TaskSpace
 from skplan.viewer.skrobot_viewer import set_robot_config
 from skrobot.coordinates import Coordinates
@@ -21,6 +21,7 @@ from skrobot.sdf import UnionSDF
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
+from hifuku.types import ProblemInterface, RawDataset
 from hifuku.utils import skcoords_to_pose_vec
 
 
@@ -70,7 +71,7 @@ class TableTopWorld:
         diff = np.random.rand(3) * np.array([table_depth, table_width, 0.2])
         table_tip.translate(diff)
         table_tip.rotate(-1.0 + np.random.rand() * 2.0, axis="z")
-        return table_tip
+        return table_tip.copy_worldcoords()
 
     @classmethod
     def sample(cls) -> "TableTopWorld":
@@ -163,7 +164,7 @@ _cache = {"kinmap": None, "pr2": None}
 
 
 @dataclass
-class TabletopIKProblem:
+class TabletopIKProblem(ProblemInterface):
     world: TableTopWorld
     grid_sdf: GridSDF
     target_pose: Coordinates
@@ -209,21 +210,22 @@ class TabletopIKProblem:
             world = TableTopWorld.sample()
             if not is_collision_init_config(world):
                 gridsdf = world.compute_exact_gridsdf(fill_value=2.0)
-                gridsdf.get_quantized()
+                gridsdf = gridsdf.get_quantized()
                 target_pose = world.sample_pose()
 
                 problem = TabletopIKProblem(world, gridsdf, target_pose)
                 return problem
 
-    def solve(self, av_init: np.ndarray) -> IKResult:
+    def solve(self, av_init: np.ndarray, config: Optional[IKConfig] = None) -> IKResult:
+        if config is None:
+            config = IKConfig()
         efkin, colkin = self.setup_kinmaps()
         tspace = TaskSpace(3, sdf=self.get_sdf())  # type: ignore
         cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
 
         target_pose = skcoords_to_pose_vec(self.target_pose)
-        solver = InverseKinematicsSolver([target_pose], efkin, cspace)
+        solver = InverseKinematicsSolver([target_pose], efkin, cspace, config=config)
         result = solver.solve(avoid_obstacle=True)
-        result.success = bool(result.fun < 1e-6)
         return result
 
     def visualize(self, av: np.ndarray):
@@ -241,3 +243,8 @@ class TabletopIKProblem:
         for obs in self.world.obstacles:
             viewer.add(obs)
         viewer.show()
+
+
+@dataclass
+class TabletopIKDataset(RawDataset[TabletopIKProblem, IKResult]):
+    ...
