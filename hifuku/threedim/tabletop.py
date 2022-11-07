@@ -22,7 +22,7 @@ from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
 from hifuku.types import ProblemInterface, RawDataset
-from hifuku.utils import skcoords_to_pose_vec
+from hifuku.threedim.utils import skcoords_to_pose_vec
 
 
 @dataclass

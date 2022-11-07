@@ -1,7 +1,7 @@
 import numpy as np
 from skrobot.models.pr2 import PR2
 
-from hifuku.camera import Camera
+from hifuku.threedim.camera import Camera
 
 
 def get_pr2_kinect_camera() -> Camera:

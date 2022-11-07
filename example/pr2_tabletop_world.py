@@ -12,11 +12,11 @@ from skplan.viewer.skrobot_viewer import (
 from skrobot.model.primitives import Axis, PointCloudLink
 from voxbloxpy.core import EsdfMap, IntegratorType
 
-from hifuku.camera import RayMarchingConfig, create_synthetic_esdf
-from hifuku.robot import get_pr2_kinect_camera
+from hifuku.threedim.camera import RayMarchingConfig, create_synthetic_esdf
+from hifuku.threedim.robot import get_pr2_kinect_camera
+from hifuku.threedim.tabletop import create_simple_tabletop_world
+from hifuku.threedim.utils import skcoords_to_pose_vec
 from hifuku.sdf import create_union_sdf
-from hifuku.tabletop import create_simple_tabletop_world
-from hifuku.utils import skcoords_to_pose_vec
 
 np.random.seed(4)
 use_base = True

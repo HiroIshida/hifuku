@@ -3,7 +3,7 @@ import time
 import skrobot
 from skrobot.model import Axis
 
-from hifuku.tabletop import TableTopWorld
+from hifuku.threedim.tabletop import TableTopWorld
 
 world = TableTopWorld.sample()
 target_pose = world.sample_pose()

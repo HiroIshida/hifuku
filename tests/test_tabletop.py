@@ -1,6 +1,6 @@
 import numpy as np
 
-from hifuku.tabletop import TabletopIKProblem, IKConfig
+from hifuku.threedim.tabletop import TabletopIKProblem, IKConfig
 
 
 def test_exact_grid_conversion():
