@@ -1,6 +1,6 @@
 import numpy as np
 
-from hifuku.tabletop import TabletopIKProblem
+from hifuku.tabletop import TabletopIKProblem, IKConfig
 
 
 def test_exact_grid_conversion():
@@ -19,7 +19,7 @@ def test_exact_grid_conversion():
         # compare
         vals_approx = approx_sdf(pts)
         vals_analytical = analytical_sdf(pts)
-        np.testing.assert_almost_equal(vals_approx, vals_analytical)
+        np.testing.assert_almost_equal(vals_approx, vals_analytical, decimal=0.001)
 
 
 def test_solve_problem():
@@ -29,8 +29,9 @@ def test_solve_problem():
     for _ in range(10):
         while True:
             sample_count += 1
+            config = IKConfig(clearance=0.03)
             problem = TabletopIKProblem.sample()
-            res = problem.solve(av_init)
+            res = problem.solve(av_init, config=config)
             if res.success:
                 efkin, colkin = problem.setup_kinmaps()
                 assert not colkin.is_colliding(problem.get_sdf(), res.x)
