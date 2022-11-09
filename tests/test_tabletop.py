@@ -1,6 +1,6 @@
 import numpy as np
 
-from hifuku.threedim.tabletop import TabletopIKProblem, IKConfig
+from hifuku.threedim.tabletop import IKConfig, TabletopIKProblem
 
 
 def test_exact_grid_conversion():
@@ -19,7 +19,7 @@ def test_exact_grid_conversion():
         # compare
         vals_approx = approx_sdf(pts)
         vals_analytical = analytical_sdf(pts)
-        np.testing.assert_almost_equal(vals_approx, vals_analytical, decimal=0.001)
+        np.testing.assert_almost_equal(vals_approx, vals_analytical, decimal=3)
 
 
 def test_solve_problem():

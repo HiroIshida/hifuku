@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Generic, List, Optional, Protocol, Type, TypeVar
+from typing import Any, Generic, Optional, Protocol, Tuple, Type, TypeVar
 
 import numpy as np
+import torch
+from llazy.dataset import PicklableChunkBase
 
 ProblemT = TypeVar("ProblemT", bound="ProblemInterface")
 ResultT = TypeVar("ResultT", bound="ResultProtocol")
@@ -23,9 +25,25 @@ class ProblemInterface(ABC):
     def solve(self, sol_init: np.ndarray, config: Optional[Any] = None) -> ResultProtocol:
         ...
 
+    @abstractmethod
+    def get_mesh(self) -> np.ndarray:
+        ...
+
+    @abstractmethod
+    def get_description(self) -> np.ndarray:
+        ...
+
 
 @dataclass
-class RawDataset(Generic[ProblemT, ResultT]):
-    problems: List[ProblemT]
-    results: List[ResultT]
-    init_solution: np.ndarray
+class RawData(Generic[ProblemT, ResultT], PicklableChunkBase):
+    problem: ProblemT
+    result: ResultT
+
+    def __len__(self) -> int:
+        return 1
+
+    def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        mesh = torch.from_numpy(self.problem.get_mesh()).float()
+        description = torch.from_numpy(self.problem.get_description()).float()
+        nit = torch.tensor(self.result.nit, dtype=torch.float32)
+        return mesh, description, nit

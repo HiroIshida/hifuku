@@ -21,8 +21,8 @@ from skrobot.sdf import UnionSDF
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
-from hifuku.types import ProblemInterface, RawDataset
 from hifuku.threedim.utils import skcoords_to_pose_vec
+from hifuku.types import ProblemInterface, RawData
 
 
 @dataclass
@@ -194,6 +194,13 @@ class TabletopIKProblem(ProblemInterface):
         sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
         return sdf
 
+    def get_description(self) -> np.ndarray:
+        return skcoords_to_pose_vec(self.target_pose)
+
+    def get_mesh(self) -> np.ndarray:
+        grid_sdf = self.grid_sdf
+        return grid_sdf.values.reshape(grid_sdf.grid.sizes)
+
     @classmethod
     def sample(cls) -> "TabletopIKProblem":
         pr2 = cls.setup_pr2()
@@ -246,5 +253,6 @@ class TabletopIKProblem(ProblemInterface):
 
 
 @dataclass
-class TabletopIKDataset(RawDataset[TabletopIKProblem, IKResult]):
-    ...
+class TabletopIKData(RawData[TabletopIKProblem, IKResult]):
+    problem: TabletopIKProblem
+    result: IKResult
