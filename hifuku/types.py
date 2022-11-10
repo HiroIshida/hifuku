@@ -54,13 +54,17 @@ class RawData(ChunkBase):
         assert path.name.endswith(".npz")
         table = {}
         table["mesh"] = self.mesh
-        table["description"] = np.array(self.descriptions)
-        table["nit"] = np.array(self.nits)
+        table["descriptions"] = np.array(self.descriptions)
+        table["nits"] = np.array(self.nits)
         np.savez(str(path), **table)
 
     @classmethod
     def load(cls, path: Path) -> "RawData":
-        kwargs = np.load(path)
+        loaded = np.load(path)
+        kwargs = {}
+        kwargs["mesh"] = loaded["mesh"]
+        kwargs["descriptions"] = list(loaded["descriptions"])
+        kwargs["nits"] = list(loaded["nits"])
         return cls(**kwargs)
 
     def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
