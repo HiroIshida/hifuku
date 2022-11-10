@@ -43,6 +43,9 @@ class RawData(ChunkBase):
     descriptions: List[np.ndarray]
     nits: List[int]
 
+    def __post_init__(self):
+        assert len(self.descriptions) == len(self.nits)
+
     @classmethod
     def create(cls, problem: ProblemInterface, results: Tuple[ResultProtocol, ...]):
         mesh = problem.get_mesh()
@@ -68,11 +71,15 @@ class RawData(ChunkBase):
         return cls(**kwargs)
 
     def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        assert False
-        mesh = torch.from_numpy(self.mesh).float()
-        description = torch.from_numpy(self.descriptions).float()
-        nit = torch.tensor(self.nits, dtype=torch.float32)
-        return mesh, description, nit
+        n_actual_problem = len(self.descriptions)
+
+        mesh = torch.from_numpy(self.mesh).float().unsqueeze(dim=0)
+        meshes = mesh.expand(n_actual_problem, -1, -1, -1)
+
+        descriptions_np = np.stack(self.descriptions)
+        description = torch.from_numpy(descriptions_np).float()
+        nits = torch.tensor(self.nits, dtype=torch.float32)
+        return meshes, description, nits
 
     def __len__(self) -> int:
         return 1
