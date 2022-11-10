@@ -31,7 +31,7 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
 
 if __name__ == "__main__":
     # n_problem = 300000
-    n_problem = 20000
+    n_problem = 10000
 
     av_init = np.zeros(10)
 

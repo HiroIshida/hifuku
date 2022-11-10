@@ -80,11 +80,15 @@ class RawData(ChunkBase):
         return cls(**kwargs)
 
     def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        mesh = torch.from_numpy(self.mesh).float().unsqueeze(dim=0)
+        n_pose = len(self.nits)
+        meshes = np.array([np.expand_dims(self.mesh, axis=0) for _ in range(n_pose)])
+        mesh = torch.from_numpy(meshes).float()
+
         descriptions_np = np.stack(self.descriptions)
         description = torch.from_numpy(descriptions_np).float()
 
-        nits = np.minimum(np.array(self.nits) + np.array(self.successes, dtype=bool) * 200, 200)
+        # nits = np.minimum(np.array(self.nits) + np.array(self.successes, dtype=bool) * 200, 200)
+        nits = np.array(self.nits)
         nits = torch.tensor(nits, dtype=torch.float32)
 
         solution_np = np.array(self.solutions)

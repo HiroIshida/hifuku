@@ -13,8 +13,8 @@ logger = create_default_logger(pp, "iteration_predictor")
 
 dataset = LazyDecomplessDataset.load(chunk_dir_path, RawData, n_worker=-1)
 dataset_train, dataset_valid = dataset.random_split(0.1)
-train_loader = LazyDecomplessDataLoader(dataset_train, batch_size=500)
-valid_loader = LazyDecomplessDataLoader(dataset_valid, batch_size=50, shuffle=False)
+train_loader = LazyDecomplessDataLoader(dataset_train, batch_size=30)
+valid_loader = LazyDecomplessDataLoader(dataset_valid, batch_size=30, shuffle=False)
 
 model_conf = IterationPredictorConfig(6, 10)
 tcache = TrainCache.from_model(IterationPredictor(model_conf))

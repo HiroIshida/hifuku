@@ -89,7 +89,39 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         else:
             self.solution_linears = None
 
-    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
+    def naive_forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
+        mesh, descriptors = sample
+        # descriptor: (n_batch x n_pose x dim_descriptor)
+        n_batch, n_pose, _ = descriptors.shape
+        if self.config.dim_conv == 3:
+            # mesh: n_batch x 1 x (3d-size)
+            assert mesh.dim() == 5
+        elif self.config.dim_conv == 2:
+            assert mesh.dim() == 4
+
+        #mesh_feature: torch.Tensor = self.convnet(mesh)  # (n_batch x dim_feature)
+        mesh_feature = torch.zeros(n_batch, 1000).to(self.device)
+
+        iter_pred_list =[]
+        for i in range(n_pose):
+            descriptor = descriptors[:, i]  # (n_batch x dim_descriptor)
+
+            vectors = torch.concat([mesh_feature, descriptor], dim=1)
+            tmp = self.linears(vectors)
+
+            # iter_pred: (n_batch * n_pose)
+            iter_pred_part = self.iter_linears(tmp).squeeze()
+            iter_pred_list.append(iter_pred_part)
+
+        iter_pred = torch.stack(iter_pred_list, dim=1)
+
+        if self.solution_linears is not None:
+            assert False
+        else:
+            solution_pred = None
+        return iter_pred, solution_pred
+
+    def tmp_forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
         mesh, descriptor = sample
         # descriptor: (n_batch x n_pose x dim_descriptor)
         n_batch, n_pose, _ = descriptor.shape
@@ -99,10 +131,13 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         elif self.config.dim_conv == 2:
             assert mesh.dim() == 4
 
-        # mesh_features: (n_batch x 1 x dim_feature)
+        mesh = mesh.unsqueeze(dim=1).expand(-1, n_pose, -1, -1, -1, -1)
+
+        # mesh_features: (n_batch x dim_feature)
         mesh_features: torch.Tensor = self.convnet(mesh)
         # mesh_features_rep: (n_batch * n_pose x dim_feature)
-        mesh_features_rep = mesh_features.repeat(n_pose, 1)
+        # DO NOT USE repeat or tile
+        mesh_features_rep = mesh_features.unsqueeze(dim=1).expand(-1, n_pose, -1).reshape(n_batch * n_pose, -1)
 
         # descriptor_flatten: (n_batch * n_pose x dim_descriptor)
         descriptor_flatten = descriptor.reshape(n_batch * n_pose, -1)
@@ -123,6 +158,28 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         else:
             solution_pred = None
         return iter_pred, solution_pred
+
+    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor]:
+        mesh, descriptor = sample
+        # descriptor: (n_batch x n_pose x dim_descriptor)
+        n_batch, n_pose, _ = descriptor.shape
+        if self.config.dim_conv == 3:
+            # mesh: n_batch x 1 x (3d-size)
+            assert mesh.dim() == 6
+        elif self.config.dim_conv == 2:
+            assert mesh.dim() == 5
+
+        mesh = mesh.reshape((n_batch * n_pose, 1, 56, 56, 28))
+        mesh_features: torch.Tensor = self.convnet(mesh)
+        #mesh_features = mesh_features.reshape(n_batch, n_pose, -1)
+
+        f = descriptor.reshape(n_batch * n_pose, -1)
+
+        vectors = torch.concat([mesh_features, f], dim=1)
+        tmp = self.linears(vectors)
+        iter_pred = self.iter_linears(tmp)
+        return iter_pred.reshape(n_batch, n_pose, -1), None
+
 
     def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
         mesh, descriptor, iterval, solution = sample
