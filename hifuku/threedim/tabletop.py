@@ -22,7 +22,7 @@ from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
 from hifuku.threedim.utils import skcoords_to_pose_vec
-from hifuku.types import ProblemInterface, RawData
+from hifuku.types import ProblemInterface
 
 
 @dataclass
@@ -167,7 +167,7 @@ _cache = {"kinmap": None, "pr2": None}
 class TabletopIKProblem(ProblemInterface):
     world: TableTopWorld
     grid_sdf: GridSDF
-    target_pose: Coordinates
+    target_pose_list: List[Coordinates]
 
     @classmethod
     def setup_pr2(cls) -> PR2:
@@ -194,15 +194,15 @@ class TabletopIKProblem(ProblemInterface):
         sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
         return sdf
 
-    def get_description(self) -> np.ndarray:
-        return skcoords_to_pose_vec(self.target_pose)
+    def get_descriptions(self) -> List[np.ndarray]:
+        return [skcoords_to_pose_vec(pose) for pose in self.target_pose_list]
 
     def get_mesh(self) -> np.ndarray:
         grid_sdf = self.grid_sdf
         return grid_sdf.values.reshape(grid_sdf.grid.sizes)
 
     @classmethod
-    def sample(cls) -> "TabletopIKProblem":
+    def sample(cls, n_pose: int) -> "TabletopIKProblem":
         pr2 = cls.setup_pr2()
         efkin, colkin = cls.setup_kinmaps()
 
@@ -218,41 +218,37 @@ class TabletopIKProblem(ProblemInterface):
             if not is_collision_init_config(world):
                 gridsdf = world.compute_exact_gridsdf(fill_value=2.0)
                 gridsdf = gridsdf.get_quantized()
-                target_pose = world.sample_pose()
-
-                problem = TabletopIKProblem(world, gridsdf, target_pose)
+                target_pose_list = [world.sample_pose() for _ in range(n_pose)]
+                problem = TabletopIKProblem(world, gridsdf, target_pose_list)
                 return problem
 
-    def solve(self, av_init: np.ndarray, config: Optional[IKConfig] = None) -> IKResult:
+    def solve(self, av_init: np.ndarray, config: Optional[IKConfig] = None) -> Tuple[IKResult, ...]:
         if config is None:
             config = IKConfig()
         efkin, colkin = self.setup_kinmaps()
         tspace = TaskSpace(3, sdf=self.get_sdf())  # type: ignore
         cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
 
-        target_pose = skcoords_to_pose_vec(self.target_pose)
-        solver = InverseKinematicsSolver([target_pose], efkin, cspace, config=config)
-        result = solver.solve(avoid_obstacle=True)
-        return result
+        result_list = []
+        for target_pose in self.target_pose_list:
+            target_pose = skcoords_to_pose_vec(target_pose)
+            solver = InverseKinematicsSolver([target_pose], efkin, cspace, config=config)
+            result = solver.solve(avoid_obstacle=True)
+            result_list.append(result)
+        return tuple(result_list)
 
     def visualize(self, av: np.ndarray):
         pr2 = copy.deepcopy(self.setup_pr2())
         efkin, colkin = self.setup_kinmaps()
         set_robot_config(pr2, efkin.control_joint_names, av, with_base=True)
 
-        axis = Axis()
-        axis.newcoords(self.target_pose)
-
         viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
         viewer.add(pr2)
         viewer.add(self.world.table)
-        viewer.add(axis)
         for obs in self.world.obstacles:
             viewer.add(obs)
+        for target_pose in self.target_pose_list:
+            axis = Axis()
+            axis.newcoords(target_pose)
+            viewer.add(axis)
         viewer.show()
-
-
-@dataclass
-class TabletopIKData(RawData[TabletopIKProblem, IKResult]):
-    problem: TabletopIKProblem
-    result: IKResult

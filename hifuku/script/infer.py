@@ -19,15 +19,15 @@ best_model = tcache.best_model
 best_model.put_on_device(device)
 
 while True:
-    problem = TabletopIKProblem.sample()
+    problem = TabletopIKProblem.sample(n_pose=1)
     ik_config = IKConfig(disp=False)
-    ret = problem.solve(np.zeros(10), config=ik_config)
+    ret = problem.solve(np.zeros(10), config=ik_config)[0]
     if ret.nit > 50:
         print(ret.nit)
         break
 
 mesh = torch.from_numpy(problem.get_mesh()).float().to(device)
-description = torch.from_numpy(problem.get_description()).float().to(device)
+description = torch.from_numpy(problem.get_descriptions()).float().to(device)
 sample = (mesh.unsqueeze(dim=0), description.unsqueeze(dim=0))
 
 ts = time.time()

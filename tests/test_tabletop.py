@@ -5,7 +5,7 @@ from hifuku.threedim.tabletop import IKConfig, TabletopIKProblem
 
 def test_exact_grid_conversion():
     for _ in range(3):
-        problem = TabletopIKProblem.sample()
+        problem = TabletopIKProblem.sample(n_pose=5)
 
         # create points
         grid = problem.grid_sdf.grid
@@ -19,7 +19,7 @@ def test_exact_grid_conversion():
         # compare
         vals_approx = approx_sdf(pts)
         vals_analytical = analytical_sdf(pts)
-        np.testing.assert_almost_equal(vals_approx, vals_analytical, decimal=3)
+        np.testing.assert_almost_equal(vals_approx, vals_analytical, decimal=2)
 
 
 def test_solve_problem():
@@ -30,8 +30,8 @@ def test_solve_problem():
         while True:
             sample_count += 1
             config = IKConfig(clearance=0.03)
-            problem = TabletopIKProblem.sample()
-            res = problem.solve(av_init, config=config)
+            problem = TabletopIKProblem.sample(n_pose=1)
+            res = problem.solve(av_init, config=config)[0]
             if res.success:
                 efkin, colkin = problem.setup_kinmaps()
                 assert not colkin.is_colliding(problem.get_sdf(), res.x)
