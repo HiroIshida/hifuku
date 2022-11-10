@@ -78,7 +78,8 @@ class RawData(ChunkBase):
         mesh = torch.from_numpy(self.mesh).float().unsqueeze(dim=0)
         descriptions_np = np.stack(self.descriptions)
         description = torch.from_numpy(descriptions_np).float()
-        nits = torch.tensor(self.nits, dtype=torch.float32)
+        nits = np.minimum(np.array(self.nits) + np.array(self.successes, dtype=bool) * 200, 200)
+        nits = torch.tensor(nits, dtype=torch.float32)
         return mesh, description, nits
 
     def __len__(self) -> int:

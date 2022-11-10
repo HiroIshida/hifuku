@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from torch import Tensor
+
+from hifuku.types import ProblemInterface
 
 
 @dataclass
@@ -109,3 +112,16 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         pred = self.forward((mesh, descriptor))
         loss = nn.MSELoss()(pred, value)
         return LossDict({"prediction": loss})
+
+    def infer(self, problem: ProblemInterface) -> np.ndarray:
+        mesh_np = problem.get_mesh()
+        mesh = torch.from_numpy(mesh_np).float().unsqueeze(dim=0)
+        mesh = mesh.unsqueeze(0).to(self.device)
+
+        descriptions_np = np.stack(problem.get_descriptions())
+        description = torch.from_numpy(descriptions_np).float()
+        description = description.unsqueeze(0).to(self.device)
+
+        out = self.forward((mesh, description))
+        out_np = out.cpu().detach().numpy().flatten()
+        return out_np
