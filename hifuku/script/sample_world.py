@@ -47,15 +47,20 @@ if __name__ == "__main__":
     assert n_process is not None
     numbers = split_number(n_problem, n_process)
 
-    process_list = []
-    for idx_process, number in enumerate(numbers):
-        show_process_bar = idx_process == 1
-        arg = DataGenerationTaskArg(
-            idx_process, number, show_process_bar, chunk_dir_path, extension=".npz"
-        )
-        p = TabletopIKGenerationTask(arg)
-        p.start()
-        process_list.append(p)
+    if n_process > 1:
+        process_list = []
+        for idx_process, number in enumerate(numbers):
+            show_process_bar = idx_process == 1
+            arg = DataGenerationTaskArg(
+                idx_process, number, show_process_bar, chunk_dir_path, extension=".npz"
+            )
+            p = TabletopIKGenerationTask(arg)
+            p.start()
+            process_list.append(p)
 
-    for p in process_list:
-        p.join()
+        for p in process_list:
+            p.join()
+    else:
+        arg = DataGenerationTaskArg(0, n_problem, True, chunk_dir_path, extension=".npz")
+        task = TabletopIKGenerationTask(arg)
+        task.run()
