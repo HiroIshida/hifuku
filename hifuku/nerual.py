@@ -13,6 +13,7 @@ from hifuku.types import ProblemInterface
 @dataclass
 class IterationPredictorConfig(ModelConfigBase):
     dim_problem_descriptor: int
+    dim_solution: int
     dim_conv: int = 3
 
     def __post_init__(self):
@@ -22,6 +23,8 @@ class IterationPredictorConfig(ModelConfigBase):
 class IterationPredictor(ModelBase[IterationPredictorConfig]):
     convnet: nn.Sequential
     linears: nn.Sequential
+    iter_linears: nn.Sequential
+    solution_linears: nn.Sequential
     margin: Optional[float] = None
 
     def _setup_from_config(self, config: IterationPredictorConfig) -> None:
@@ -74,12 +77,15 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             nn.ReLU(),
             nn.Linear(500, 100),
             nn.ReLU(),
-            nn.Linear(100, 50),
-            nn.ReLU(),
-            nn.Linear(50, 1),
         )
 
-    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tensor:
+        self.iter_linears = nn.Sequential(nn.Linear(100, 50), nn.ReLU(), nn.Linear(50, 1))
+
+        self.solution_linears = nn.Sequential(
+            nn.Linear(100, 50), nn.ReLU(), nn.Linear(50, config.dim_solution)
+        )
+
+    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tensor]:
         mesh, descriptor = sample
         # descriptor: (n_batch x n_pose x dim_descriptor)
         n_batch, n_pose, _ = descriptor.shape
@@ -98,20 +104,29 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         descriptor_flatten = descriptor.reshape(n_batch * n_pose, -1)
 
         vectors = torch.concat([mesh_features_rep, descriptor_flatten], dim=1)
-        # out: (b_batch * n_pose)
-        out = self.linears(vectors)
-        out_original = out.reshape(n_batch, n_pose)
-        return out_original
+        tmp = self.linears(vectors)
 
-    def loss(self, sample: Tuple[Tensor, Tensor, Tensor]):
-        mesh, descriptor, value = sample
+        # iter_pred: (n_batch * n_pose)
+        iter_pred = self.iter_linears(tmp)
+        # iter_pred: (n_batch x n_pose)
+        iter_pred = iter_pred.reshape(n_batch, n_pose)
+
+        # solution_pred: (n_batch * n_pose x dim_solution)
+        solution_pred = self.solution_linears(tmp)
+        # solution_pred: (n_batch x n_pose x dim_solution)
+        solution_pred = solution_pred.reshape(n_batch, n_pose, -1)
+        return iter_pred, solution_pred
+
+    def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> Tensor:
+        mesh, descriptor, iterval, solution = sample
         # mesh: (n_batch, (mesh_size))
         # descriptors: (n_batch, n_pose, (descriptor_dim))
-        # values: (n_batch, n_pose, (,))
+        # iterval: (n_batch, n_pose, (,))
 
-        pred = self.forward((mesh, descriptor))
-        loss = nn.MSELoss()(pred, value)
-        return LossDict({"prediction": loss})
+        iter_pred, solution_pred = self.forward((mesh, descriptor))
+        iter_loss = nn.MSELoss()(iter_pred, iterval)
+        solution_loss = nn.MSELoss()(solution_pred, solution) * 1000
+        return LossDict({"iter": iter_loss, "solution": solution_loss})
 
     def infer(self, problem: ProblemInterface) -> np.ndarray:
         mesh_np = problem.get_mesh()

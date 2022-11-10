@@ -16,7 +16,7 @@ dataset_train, dataset_valid = dataset.random_split(0.1)
 train_loader = LazyDecomplessDataLoader(dataset_train, batch_size=500)
 valid_loader = LazyDecomplessDataLoader(dataset_valid, batch_size=50, shuffle=False)
 
-model_conf = IterationPredictorConfig(6)
+model_conf = IterationPredictorConfig(6, 10)
 tcache = TrainCache.from_model(IterationPredictor(model_conf))
 train_conf = TrainConfig(n_epoch=30)
 train_lower(pp, tcache, train_loader, valid_loader, train_conf)

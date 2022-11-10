@@ -14,6 +14,7 @@ ResultT = TypeVar("ResultT", bound="ResultProtocol")
 class ResultProtocol(Protocol):
     nit: int
     success: bool
+    x: np.ndarray
 
 
 class ProblemInterface(ABC):
@@ -43,6 +44,7 @@ class RawData(ChunkBase):
     descriptions: List[np.ndarray]
     nits: List[int]
     successes: List[bool]
+    solutions: List[np.ndarray]
 
     def __post_init__(self):
         assert len(self.descriptions) == len(self.nits)
@@ -53,7 +55,8 @@ class RawData(ChunkBase):
         descriptions = problem.get_descriptions()
         nits = [result.nit for result in results]
         successes = [result.success for result in results]
-        return cls(mesh, descriptions, nits, successes)
+        solutions = [result.x for result in results]
+        return cls(mesh, descriptions, nits, successes, solutions)
 
     def dump_impl(self, path: Path) -> None:
         assert path.name.endswith(".npz")
@@ -62,6 +65,7 @@ class RawData(ChunkBase):
         table["descriptions"] = np.array(self.descriptions)
         table["nits"] = np.array(self.nits)
         table["successes"] = np.array(self.successes)
+        table["solutions"] = np.array(self.solutions)
         np.savez(str(path), **table)
 
     @classmethod
@@ -72,15 +76,20 @@ class RawData(ChunkBase):
         kwargs["descriptions"] = list(loaded["descriptions"])
         kwargs["nits"] = list(loaded["nits"])
         kwargs["successes"] = list(loaded["successes"].astype(bool))
+        kwargs["solutions"] = list(loaded["solutions"])
         return cls(**kwargs)
 
-    def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         mesh = torch.from_numpy(self.mesh).float().unsqueeze(dim=0)
         descriptions_np = np.stack(self.descriptions)
         description = torch.from_numpy(descriptions_np).float()
+
         nits = np.minimum(np.array(self.nits) + np.array(self.successes, dtype=bool) * 200, 200)
         nits = torch.tensor(nits, dtype=torch.float32)
-        return mesh, description, nits
+
+        solution_np = np.array(self.solutions)
+        solutions = torch.from_numpy(solution_np).float().unsqueeze(dim=0)
+        return mesh, description, nits, solutions
 
     def __len__(self) -> int:
         return 1
