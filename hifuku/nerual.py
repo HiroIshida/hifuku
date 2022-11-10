@@ -149,6 +149,6 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         description = torch.from_numpy(descriptions_np).float()
         description = description.unsqueeze(0).to(self.device)
 
-        out = self.forward((mesh, description))
+        out, _ = self.forward((mesh, description))
         out_np = out.cpu().detach().numpy().flatten()
         return out_np
