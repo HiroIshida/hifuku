@@ -15,6 +15,7 @@ class IterationPredictorConfig(ModelConfigBase):
     dim_problem_descriptor: int
     dim_solution: int
     dim_conv: int = 3
+    dim_description_expand: int = 300
     use_solution_pred: bool = False
 
     def __post_init__(self):
@@ -26,6 +27,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
     linears: nn.Sequential
     iter_linears: nn.Sequential
     solution_linears: Optional[nn.Sequential]
+    description_expand_lineras: nn.Sequential
     margin: Optional[float] = None
 
     def _setup_from_config(self, config: IterationPredictorConfig) -> None:
@@ -69,7 +71,14 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             ]
             self.convnet = nn.Sequential(*encoder_layers)
 
-        n_input = n_conv_out_dim + config.dim_problem_descriptor
+        self.description_expand_lineras = nn.Sequential(
+            nn.Linear(config.dim_problem_descriptor, config.dim_description_expand),
+            nn.ReLU(),
+            nn.Linear(config.dim_description_expand, config.dim_description_expand),
+            nn.ReLU(),
+        )
+
+        n_input = n_conv_out_dim + config.dim_description_expand
 
         self.linears = nn.Sequential(
             nn.Linear(n_input, n_conv_out_dim),
@@ -106,8 +115,9 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
 
         # descriptor_flatten: (n_batch * n_pose x dim_descriptor)
         descriptor_flatten = descriptor.reshape(n_batch * n_pose, -1)
+        expanded = self.description_expand_lineras(descriptor_flatten)
 
-        vectors = torch.concat([mesh_features_rep, descriptor_flatten], dim=1)
+        vectors = torch.concat([mesh_features_rep, expanded], dim=1)
         tmp = self.linears(vectors)
 
         # iter_pred: (n_batch * n_pose)
