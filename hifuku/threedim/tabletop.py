@@ -233,7 +233,7 @@ class TabletopIKProblem(ProblemInterface):
         for target_pose in self.target_pose_list:
             target_pose = skcoords_to_pose_vec(target_pose)
             solver = InverseKinematicsSolver([target_pose], efkin, cspace, config=config)
-            result = solver.solve(avoid_obstacle=True)
+            result = solver.solve(x_cspace_init=av_init, avoid_obstacle=True)
             result_list.append(result)
         return tuple(result_list)
 
