@@ -42,6 +42,7 @@ class RawData(ChunkBase):
     mesh: np.ndarray
     descriptions: List[np.ndarray]
     nits: List[int]
+    successes: List[bool]
 
     def __post_init__(self):
         assert len(self.descriptions) == len(self.nits)
@@ -51,7 +52,8 @@ class RawData(ChunkBase):
         mesh = problem.get_mesh()
         descriptions = problem.get_descriptions()
         nits = [result.nit for result in results]
-        return cls(mesh, descriptions, nits)
+        successes = [result.success for result in results]
+        return cls(mesh, descriptions, nits, successes)
 
     def dump_impl(self, path: Path) -> None:
         assert path.name.endswith(".npz")
@@ -59,6 +61,7 @@ class RawData(ChunkBase):
         table["mesh"] = self.mesh
         table["descriptions"] = np.array(self.descriptions)
         table["nits"] = np.array(self.nits)
+        table["successes"] = np.array(self.successes)
         np.savez(str(path), **table)
 
     @classmethod
@@ -68,6 +71,7 @@ class RawData(ChunkBase):
         kwargs["mesh"] = loaded["mesh"]
         kwargs["descriptions"] = list(loaded["descriptions"])
         kwargs["nits"] = list(loaded["nits"])
+        kwargs["successes"] = list(loaded["successes"].astype(bool))
         return cls(**kwargs)
 
     def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

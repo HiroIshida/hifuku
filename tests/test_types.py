@@ -29,6 +29,7 @@ def test_rawdata_dump_and_load():
         np.array(data.descriptions), np.array(data_again.descriptions), decimal=5
     )
     np.testing.assert_almost_equal(np.array(data.nits), np.array(data_again.nits), decimal=5)
+    assert np.array(data.successes) == np.array(data_again.successes)
 
 
 def test_rawdata_to_tensor():
