@@ -39,6 +39,31 @@ class ProblemInterface(ABC):
 
 
 @dataclass
+class RawMeshData(ChunkBase):
+    mesh: np.ndarray
+
+    def dump_impl(self, path: Path) -> None:
+        assert path.name.endswith(".npz")
+        table = {}
+        table["mesh"] = self.mesh
+        np.savez(str(path), **table)
+
+    @classmethod
+    def load(cls, path: Path) -> "RawMeshData":
+        loaded = np.load(path)
+        kwargs = {}
+        kwargs["mesh"] = loaded["mesh"]
+        return cls(**kwargs)
+
+    def to_tensors(self) -> Tuple[torch.Tensor]:
+        mesh = torch.from_numpy(self.mesh).float().unsqueeze(dim=0)
+        return (mesh,)
+
+    def __len__(self) -> int:
+        return 1
+
+
+@dataclass
 class RawData(ChunkBase):
     mesh: np.ndarray
     descriptions: List[np.ndarray]

@@ -206,3 +206,64 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         out, _, _ = self.forward((mesh, description))
         out_np = out.cpu().detach().numpy().flatten()
         return out_np
+
+
+@dataclass
+class VoxelAutoEncoderConfig(ModelConfigBase):
+    dim_bottleneck: int = 1024
+
+
+class VoxelAutoEncoder:
+    encoder: nn.Sequential
+    decoder: nn.Sequential
+
+    class Reshape(nn.Module):
+        def __init__(self, *args):
+            super().__init__()
+            self.shape = args
+
+        def forward(self, x):
+            return x.view(self.shape)
+
+    def _setup_from_config(self, config: VoxelAutoEncoderConfig) -> None:
+        n_channel = 1
+        encoder_layers = [
+            nn.Conv3d(n_channel, 8, (3, 3, 2), padding=1, stride=(2, 2, 1)),
+            nn.BatchNorm3d(8),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(8, 16, (3, 3, 3), padding=1, stride=(2, 2, 2)),
+            nn.BatchNorm3d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(16, 32, (3, 3, 3), padding=1, stride=(2, 2, 2)),
+            nn.BatchNorm3d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(32, 64, (3, 3, 3), padding=1, stride=(2, 2, 2)),
+            nn.BatchNorm3d(64),
+            nn.ReLU(inplace=True),
+            nn.Flatten(),
+            nn.Linear(4096, config.dim_bottleneck),
+            nn.ReLU(inplace=True),
+        ]
+        self.encoder = nn.Sequential(*encoder_layers)
+
+        decoder_layers = [
+            nn.Linear(config.dim_bottleneck, 4096),
+            nn.ReLU(inplace=True),
+            self.Reshape(-1, 64, 4, 4, 4),
+            nn.ConvTranspose3d(64, 32, 3, padding=1, stride=2),
+            nn.BatchNorm3d(32),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose3d(32, 16, 4, padding=1, stride=2),
+            nn.BatchNorm3d(16),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose3d(16, 8, 4, padding=1, stride=2),
+            nn.BatchNorm3d(8),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose3d(8, 1, (4, 4, 3), padding=1, stride=(2, 2, 1)),
+        ]
+        self.decoder = nn.Sequential(*decoder_layers)
+
+    def loss(self, sample: Tensor) -> LossDict:
+        reconst = self.decoder(self.encoder(sample))
+        loss = nn.MSELoss()(sample, reconst)
+        return LossDict({"reconstruction": loss})
