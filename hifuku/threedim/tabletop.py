@@ -195,11 +195,19 @@ class TabletopIKProblem(ProblemInterface):
         return sdf
 
     def get_descriptions(self) -> List[np.ndarray]:
-        return [skcoords_to_pose_vec(pose) for pose in self.target_pose_list]
+        table_pose = skcoords_to_pose_vec(self.world.table.worldcoords())
+        # description vector is composed of 6 + 6 dimension
+        return [
+            np.hstack([skcoords_to_pose_vec(pose), table_pose]) for pose in self.target_pose_list
+        ]
 
     def get_mesh(self) -> np.ndarray:
         grid_sdf = self.grid_sdf
         return grid_sdf.values.reshape(grid_sdf.grid.sizes)
+
+    @classmethod
+    def get_description_dim(cls) -> int:
+        return 12
 
     @classmethod
     def sample(cls, n_pose: int) -> "TabletopIKProblem":
