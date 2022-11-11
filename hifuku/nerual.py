@@ -187,7 +187,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
 
         if mesh_decoded is not None:
             reconstruction_loss = nn.MSELoss()(mesh, mesh_decoded)
-            dic["reconstruction"] = reconstruction_loss
+            dic["reconstruction"] = reconstruction_loss * 1000**2
 
         if solution_pred is not None:
             solution_loss = nn.MSELoss()(solution_pred, solution) * 1000
