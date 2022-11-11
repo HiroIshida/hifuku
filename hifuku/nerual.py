@@ -17,13 +17,16 @@ class IterationPredictorConfig(ModelConfigBase):
     dim_conv: int = 3
     dim_description_expand: int = 300
     use_solution_pred: bool = False
+    use_reconstruction: bool = True
 
     def __post_init__(self):
         assert self.dim_conv in [2, 3]
 
 
 class IterationPredictor(ModelBase[IterationPredictorConfig]):
-    convnet: nn.Sequential
+    encoder: nn.Sequential
+    post_encoder: nn.Sequential
+    decoder: Optional[nn.Sequential]
     linears: nn.Sequential
     iter_linears: nn.Sequential
     solution_linears: Optional[nn.Sequential]
@@ -34,24 +37,30 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         n_channel = 1
         n_conv_out_dim = 1000
         if config.dim_conv == 2:
+            assert False, "under construction"
             # use simple cnn
-            encoder_layers = [
-                nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 14x14
-                nn.BatchNorm2d(8),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),
-                nn.BatchNorm2d(16),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),
-                nn.BatchNorm2d(32),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),
-                nn.BatchNorm2d(64),
-                nn.Flatten(),
-                nn.Linear(1024, n_conv_out_dim),
-                nn.ReLU(inplace=True),
-            ]
-            self.convnet = nn.Sequential(*encoder_layers)
+            # encoder_layers = [
+            #    nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 14x14
+            #    nn.BatchNorm2d(8),
+            #    nn.ReLU(inplace=True),
+            #    nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),
+            #    nn.BatchNorm2d(16),
+            #    nn.ReLU(inplace=True),
+            #    nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),
+            #    nn.BatchNorm2d(32),
+            #    nn.ReLU(inplace=True),
+            #    nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),
+            #    nn.BatchNorm2d(64),
+            #    nn.Flatten(),
+            #    nn.Linear(1024, n_conv_out_dim),
+            #    nn.ReLU(inplace=True),
+            # ]
+            # self.encoder = nn.Sequential(*encoder_layers)
+
+            # if config.use_reconstruction:
+            #    assert False
+            # else:
+            #    self.decoder = None
         else:
             encoder_layers = [
                 nn.Conv3d(n_channel, 8, (3, 3, 2), padding=1, stride=(2, 2, 1)),
@@ -65,11 +74,33 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
                 nn.ReLU(inplace=True),
                 nn.Conv3d(32, 64, (3, 3, 3), padding=1, stride=(2, 2, 2)),
                 nn.BatchNorm3d(64),
+                nn.ReLU(inplace=True),
+            ]
+            self.encoder = nn.Sequential(*encoder_layers)
+
+            post_encoder_layers = [
                 nn.Flatten(),
                 nn.Linear(4096, n_conv_out_dim),
                 nn.ReLU(inplace=True),
             ]
-            self.convnet = nn.Sequential(*encoder_layers)
+            self.post_encoder = nn.Sequential(*post_encoder_layers)
+
+            if config.use_reconstruction:
+                decoder_layers = [
+                    nn.ConvTranspose3d(64, 32, 3, padding=1, stride=2),
+                    nn.BatchNorm3d(32),
+                    nn.ReLU(inplace=True),
+                    nn.ConvTranspose3d(32, 16, 4, padding=1, stride=2),
+                    nn.BatchNorm3d(16),
+                    nn.ReLU(inplace=True),
+                    nn.ConvTranspose3d(16, 8, 4, padding=1, stride=2),
+                    nn.BatchNorm3d(8),
+                    nn.ReLU(inplace=True),
+                    nn.ConvTranspose3d(8, 1, (4, 4, 3), padding=1, stride=(2, 2, 1)),
+                ]
+                self.decoder = nn.Sequential(*decoder_layers)
+            else:
+                self.decoder = None
 
         self.description_expand_lineras = nn.Sequential(
             nn.Linear(config.dim_problem_descriptor, config.dim_description_expand),
@@ -98,7 +129,9 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         else:
             self.solution_linears = None
 
-    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
+    def forward(
+        self, sample: Tuple[Tensor, Tensor]
+    ) -> Tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
         mesh, descriptor = sample
         # descriptor: (n_batch x n_pose x dim_descriptor)
         n_batch, n_pose, _ = descriptor.shape
@@ -108,8 +141,10 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         elif self.config.dim_conv == 2:
             assert mesh.dim() == 4
 
+        encoded = self.encoder(mesh)
+
         # mesh_features: (n_batch x 1 x dim_feature)
-        mesh_features: torch.Tensor = self.convnet(mesh)
+        mesh_features: torch.Tensor = self.post_encoder(encoded)
         # mesh_features_rep: (n_batch * n_pose x dim_feature)
         mesh_features_rep = mesh_features.repeat(n_pose, 1)
 
@@ -125,6 +160,11 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         # iter_pred: (n_batch x n_pose)
         iter_pred = iter_pred.reshape(n_batch, n_pose)
 
+        if self.decoder is not None:
+            mesh_decoded = self.decoder(encoded)
+        else:
+            mesh_decoded = None
+
         if self.solution_linears is not None:
             # solution_pred: (n_batch * n_pose x dim_solution)
             solution_pred = self.solution_linears(tmp)
@@ -132,7 +172,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             solution_pred = solution_pred.reshape(n_batch, n_pose, -1)
         else:
             solution_pred = None
-        return iter_pred, solution_pred
+        return iter_pred, mesh_decoded, solution_pred
 
     def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
         mesh, descriptor, iterval, solution = sample
@@ -141,9 +181,13 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         # iterval: (n_batch, n_pose, (,))
 
         dic = {}
-        iter_pred, solution_pred = self.forward((mesh, descriptor))
+        iter_pred, mesh_decoded, solution_pred = self.forward((mesh, descriptor))
         iter_loss = nn.MSELoss()(iter_pred, iterval)
         dic["iter"] = iter_loss
+
+        if mesh_decoded is not None:
+            reconstruction_loss = nn.MSELoss()(mesh, mesh_decoded)
+            dic["reconstruction"] = reconstruction_loss
 
         if solution_pred is not None:
             solution_loss = nn.MSELoss()(solution_pred, solution) * 1000
@@ -159,6 +203,6 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         description = torch.from_numpy(descriptions_np).float()
         description = description.unsqueeze(0).to(self.device)
 
-        out, _ = self.forward((mesh, description))
+        out, _, _ = self.forward((mesh, description))
         out_np = out.cpu().detach().numpy().flatten()
         return out_np
