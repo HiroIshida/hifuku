@@ -84,7 +84,9 @@ class RawData(ChunkBase):
         descriptions_np = np.stack(self.descriptions)
         description = torch.from_numpy(descriptions_np).float()
 
-        nits = np.minimum(np.array(self.nits) + np.array(self.successes, dtype=bool) * 200, 200)
+        # nits = np.minimum(np.array(self.nits) + np.array(self.successes, dtype=bool) * 200, 200)
+        # nits = np.array(self.nits)
+        nits = np.array(self.successes, dtype=bool) * 200
         nits = torch.tensor(nits, dtype=torch.float32)
 
         solution_np = np.array(self.solutions)

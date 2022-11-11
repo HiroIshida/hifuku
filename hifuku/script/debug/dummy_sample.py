@@ -12,8 +12,6 @@ from hifuku.types import RawData
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
 warnings.filterwarnings("ignore", message="texture specified in URDF is not supported")
 
-from typing import List
-
 
 def split_number(num, div):
     return [num // div + (1 if x < num % div else 0) for x in range(div)]
@@ -31,23 +29,19 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
         pass
 
     def generate_single_data(self) -> RawData:
-        problem = TabletopIKProblem.sample(n_pose=50)
-        sdf = problem.get_sdf()
-
-        ress: List[Result] = []
+        problem = TabletopIKProblem.sample(n_pose=1)
+        ress = []
         for pose in problem.target_pose_list:
-            val = sdf(np.expand_dims(pose.worldpos(), axis=0))
-            success = val > 0.0
-            res = Result(0, bool(success), pose.worldpos())
+            success = len(problem.world.obstacles) > 5
+            res = Result(0, bool(success), np.zeros(6))
             ress.append(res)
-
         data = RawData.create(problem, tuple(ress))
         return data
 
 
 if __name__ == "__main__":
     # n_problem = 300000
-    n_problem = 20000
+    n_problem = 100000
 
     av_init = np.zeros(10)
 
