@@ -227,18 +227,15 @@ class VoxelAutoEncoder(ModelBase):
 
     def _setup_from_config(self, config: VoxelAutoEncoderConfig) -> None:
         n_channel = 1
+        # NOTE: DO NOT add bath normalization layer
         encoder_layers = [
             nn.Conv3d(n_channel, 8, (3, 3, 2), padding=1, stride=(2, 2, 1)),
-            nn.BatchNorm3d(8),
             nn.ReLU(inplace=True),
             nn.Conv3d(8, 16, (3, 3, 3), padding=1, stride=(2, 2, 2)),
-            nn.BatchNorm3d(16),
             nn.ReLU(inplace=True),
             nn.Conv3d(16, 32, (3, 3, 3), padding=1, stride=(2, 2, 2)),
-            nn.BatchNorm3d(32),
             nn.ReLU(inplace=True),
             nn.Conv3d(32, 64, (3, 3, 3), padding=1, stride=(2, 2, 2)),
-            nn.BatchNorm3d(64),
             nn.ReLU(inplace=True),
             nn.Flatten(),
             nn.Linear(4096, config.dim_bottleneck),
@@ -246,18 +243,16 @@ class VoxelAutoEncoder(ModelBase):
         ]
         self.encoder = nn.Sequential(*encoder_layers)
 
+        # NOTE: DO NOT add bath normalization layer
         decoder_layers = [
             nn.Linear(config.dim_bottleneck, 4096),
             nn.ReLU(inplace=True),
             self.Reshape(-1, 64, 4, 4, 4),
             nn.ConvTranspose3d(64, 32, 3, padding=1, stride=2),
-            nn.BatchNorm3d(32),
             nn.ReLU(inplace=True),
             nn.ConvTranspose3d(32, 16, 4, padding=1, stride=2),
-            nn.BatchNorm3d(16),
             nn.ReLU(inplace=True),
             nn.ConvTranspose3d(16, 8, 4, padding=1, stride=2),
-            nn.BatchNorm3d(8),
             nn.ReLU(inplace=True),
             nn.ConvTranspose3d(8, 1, (4, 4, 3), padding=1, stride=(2, 2, 1)),
         ]
