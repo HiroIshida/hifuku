@@ -213,7 +213,7 @@ class VoxelAutoEncoderConfig(ModelConfigBase):
     dim_bottleneck: int = 1024
 
 
-class VoxelAutoEncoder:
+class VoxelAutoEncoder(ModelBase):
     encoder: nn.Sequential
     decoder: nn.Sequential
 
@@ -264,6 +264,8 @@ class VoxelAutoEncoder:
         self.decoder = nn.Sequential(*decoder_layers)
 
     def loss(self, sample: Tensor) -> LossDict:
-        reconst = self.decoder(self.encoder(sample))
-        loss = nn.MSELoss()(sample, reconst)
+        mesh = sample[0]
+        encoded = self.encoder(mesh)
+        reconst = self.decoder(encoded)
+        loss = nn.MSELoss()(mesh, reconst)
         return LossDict({"reconstruction": loss})
