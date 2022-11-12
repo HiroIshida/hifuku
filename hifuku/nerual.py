@@ -77,7 +77,6 @@ class IterationPredictorConfig(ModelConfigBase):
 
 
 class IterationPredictor(ModelBase[IterationPredictorConfig]):
-    encoder: nn.Sequential
     linears: nn.Sequential
     iter_linears: nn.Sequential
     solution_linears: Optional[nn.Sequential]
