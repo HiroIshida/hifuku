@@ -101,7 +101,6 @@ class PostHandler(BaseHTTPRequestHandler, ABC):
             resp = self.process_CreateDatasetRequest(request)
         else:
             assert False
-        print(resp)
         self.wfile.write(pickle.dumps(resp))
         print("elapsed time to handle request: {}".format(time.time() - ts))
 

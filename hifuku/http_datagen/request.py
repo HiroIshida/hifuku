@@ -1,6 +1,7 @@
-import http.client
+import contextlib
 import pickle
 from dataclasses import dataclass
+from http.client import HTTPConnection
 from typing import List, Optional, overload
 
 
@@ -45,22 +46,30 @@ class CreateDatasetResponse(Response):
 
 
 @overload
-def send_request(request: GetCPUInfoRequest, port: int) -> GetCPUInfoResponse:
+def send_request(conn: HTTPConnection, request: GetCPUInfoRequest) -> GetCPUInfoResponse:
     pass
 
 
 @overload
-def send_request(request: GetModuleHashValueRequest, port: int) -> GetModuleHashValueResponse:
+def send_request(
+    conn: HTTPConnection, request: GetModuleHashValueRequest
+) -> GetModuleHashValueResponse:
     pass
 
 
 @overload
-def send_request(request: CreateDatasetRequest, port: int) -> CreateDatasetResponse:
+def send_request(conn: HTTPConnection, request: CreateDatasetRequest) -> CreateDatasetResponse:
     pass
 
 
-def send_request(request, port: int):
-    conn = http.client.HTTPConnection("localhost", port)
+@contextlib.contextmanager
+def http_connection(host: str = "localhost", port: int = 8080):
+    conn = HTTPConnection(host, port)
+    yield conn
+    conn.close()
+
+
+def send_request(conn: HTTPConnection, request):
     headers = {"Content-type": "application/json"}
     conn.request("POST", "/post", pickle.dumps(request), headers)
     response = pickle.loads(conn.getresponse().read())
