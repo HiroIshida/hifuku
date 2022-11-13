@@ -7,7 +7,7 @@ try:
     this_dir_path = Path(__file__).parent
     assert (this_dir_path / "datagen_pb2_grpc.py").exists()
     assert (this_dir_path / "datagen_pb2.py").exists()
-except:
+except AssertionError:
     this_dir_path = Path(__file__).parent
     proto_path = this_dir_path / "datagen.proto"
     out_path = this_dir_path
