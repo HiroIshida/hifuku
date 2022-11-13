@@ -1,6 +1,6 @@
 import copy
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Type, TypeVar
 
 import numpy as np
 import skrobot
@@ -163,8 +163,11 @@ def create_simple_tabletop_world(with_obstacle: bool = False) -> TableTopWorld:
 _cache = {"kinmap": None, "pr2": None}
 
 
+TableTopProblemT = TypeVar("TableTopProblemT", bound="TabletopProblem")
+
+
 @dataclass
-class TabletopIKProblem(ProblemInterface):
+class TabletopProblem(ProblemInterface):
     world: TableTopWorld
     grid_sdf: GridSDF
     target_pose_list: List[Coordinates]
@@ -210,7 +213,7 @@ class TabletopIKProblem(ProblemInterface):
         return 12
 
     @classmethod
-    def sample(cls, n_pose: int) -> "TabletopIKProblem":
+    def sample(cls: Type[TableTopProblemT], n_pose: int) -> TableTopProblemT:
         pr2 = cls.setup_pr2()
         efkin, colkin = cls.setup_kinmaps()
 
@@ -227,9 +230,28 @@ class TabletopIKProblem(ProblemInterface):
                 gridsdf = world.compute_exact_gridsdf(fill_value=2.0)
                 gridsdf = gridsdf.get_quantized()
                 target_pose_list = [world.sample_pose() for _ in range(n_pose)]
-                problem = TabletopIKProblem(world, gridsdf, target_pose_list)
+                problem = cls(world, gridsdf, target_pose_list)
                 return problem
 
+    def visualize(self, av: np.ndarray):
+        pr2 = copy.deepcopy(self.setup_pr2())
+        efkin, colkin = self.setup_kinmaps()
+        set_robot_config(pr2, efkin.control_joint_names, av, with_base=True)
+
+        viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
+        viewer.add(pr2)
+        viewer.add(self.world.table)
+        for obs in self.world.obstacles:
+            viewer.add(obs)
+        for target_pose in self.target_pose_list:
+            axis = Axis()
+            axis.newcoords(target_pose)
+            viewer.add(axis)
+        viewer.show()
+
+
+@dataclass
+class TabletopIKProblem(TabletopProblem):
     def solve(self, av_init: np.ndarray, config: Optional[IKConfig] = None) -> Tuple[IKResult, ...]:
         if config is None:
             config = IKConfig()
@@ -264,19 +286,3 @@ class TabletopIKProblem(ProblemInterface):
             val = sdf(point)[0]
             results.append(DummyResult(val > 0.0))
         return tuple(results)
-
-    def visualize(self, av: np.ndarray):
-        pr2 = copy.deepcopy(self.setup_pr2())
-        efkin, colkin = self.setup_kinmaps()
-        set_robot_config(pr2, efkin.control_joint_names, av, with_base=True)
-
-        viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
-        viewer.add(pr2)
-        viewer.add(self.world.table)
-        for obs in self.world.obstacles:
-            viewer.add(obs)
-        for target_pose in self.target_pose_list:
-            axis = Axis()
-            axis.newcoords(target_pose)
-            viewer.add(axis)
-        viewer.show()
