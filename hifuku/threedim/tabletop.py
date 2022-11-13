@@ -22,7 +22,7 @@ from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
 from hifuku.threedim.utils import skcoords_to_pose_vec
-from hifuku.types import ProblemInterface
+from hifuku.types import ProblemInterface, ResultProtocol
 
 
 @dataclass
@@ -244,6 +244,26 @@ class TabletopIKProblem(ProblemInterface):
             result = solver.solve(x_cspace_init=av_init, avoid_obstacle=True)
             result_list.append(result)
         return tuple(result_list)
+
+    def solve_dummy(
+        self, av_init: np.ndarray, config: Optional[IKConfig] = None
+    ) -> Tuple[ResultProtocol, ...]:
+        """solve dummy problem"""
+
+        @dataclass
+        class DummyResult:
+            success: bool
+            nit: int = 0
+            x: np.ndarray = np.zeros(10)
+
+        sdf = self.get_sdf()
+        descriptions = self.get_descriptions()
+        results = []
+        for desc in descriptions:
+            point = np.expand_dims(desc[:3], axis=0)
+            val = sdf(point)[0]
+            results.append(DummyResult(val > 0.0))
+        return tuple(results)
 
     def visualize(self, av: np.ndarray):
         pr2 = copy.deepcopy(self.setup_pr2())
