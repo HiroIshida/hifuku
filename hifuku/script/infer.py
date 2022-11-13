@@ -24,13 +24,14 @@ pred: IterationPredictor = TrainCache.load_latest(pp, IterationPredictor).best_m
 
 
 def infer(problem: ProblemInterface):
-    mesh = problem.get_mesh()
-    mesh = torch.from_numpy(np.expand_dims(mesh, axis=(0, 1))).float()
-    encoded = ae_model.encoder(mesh)
+    mesh_np = problem.get_mesh()
+    mesh = torch.from_numpy(np.expand_dims(mesh_np, axis=(0, 1))).float()
+    encoded: torch.Tensor = ae_model.encoder(mesh)
 
-    desc = problem.get_descriptions()
-    desc = torch.from_numpy(np.expand_dims(desc, axis=0)).float()
+    desc_np = problem.get_descriptions()
+    desc = torch.from_numpy(np.expand_dims(desc_np, axis=0)).float()
     iterval, _ = pred.forward((encoded, desc))
     print(iterval)
+
 
 infer(problem)
