@@ -41,29 +41,38 @@ class IterationPredictorDataset(Dataset):
         loader = LazyDecomplessDataLoader(dataset, batch_size=1000, shuffle=False)
 
         encoded_list = []
-        descriptions_list = []
-        itervals_list = []
-        solutions_list = []
+        description_list = []
+        iterval_list = []
+        solution_list = []
 
         # create minibatch list
         for sample in tqdm.tqdm(loader):
             mesh, description, iterval, solution = sample
 
-            # process mesh (compress by autoenocoder)
-            mesh = mesh.to(device)  # n_mini_batch x (*shape)
-            encoded = ae_model.encoder(mesh)
-            encoded_list.append(encoded.detach().cpu())
+            mesh = mesh.to(device)  # n_batch x (*shape)
+            encoded: torch.Tensor = ae_model.encoder(mesh).detach().cpu()
+            n_batch, n_problem, _ = description.shape
 
-            # process others
-            descriptions_list.append(description)
-            itervals_list.append(iterval)
-            solutions_list.append(solution)
+            # NOTE: only encoded shape is (n_batch x dim) and others have (n_batch x n_problem x dim)
+            # Thus, we must copy encoded[i_batch] n_problem times
+            for i in range(n_batch):
+                encoded_repeated = encoded[i].unsqueeze(dim=0).repeat(n_problem, 1)
+
+                encoded_list.append(encoded_repeated)
+                description_list.append(description[i])
+                iterval_list.append(iterval[i])
+                solution_list.append(solution[i])
 
         mesh_encodeds_concat = torch.cat(encoded_list, dim=0)  # n_batch x n_bottleneck
-        descriptions_concat = torch.cat(descriptions_list, dim=0)
-        itervals_concat = torch.cat(itervals_list, dim=0)
-        solutsions_concat = torch.cat(solutions_list, dim=0)
-        return cls(mesh_encodeds_concat, descriptions_concat, itervals_concat, solutsions_concat)
+        descriptions_concat = torch.cat(description_list, dim=0)
+        itervals_concat = torch.cat(iterval_list, dim=0)
+        solutions_concat = torch.cat(solution_list, dim=0)
+
+        n_data = len(mesh_encodeds_concat)
+        assert len(descriptions_concat) == n_data
+        assert len(itervals_concat) == n_data
+        assert len(solutions_concat) == n_data
+        return cls(mesh_encodeds_concat, descriptions_concat, itervals_concat, solutions_concat)
 
 
 @dataclass
@@ -110,7 +119,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         else:
             self.solution_linears = None
 
-    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
+    def forward_nested(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
         mesh_features, descriptor = sample
         # descriptor: (n_batch x n_pose x dim_descriptor)
         n_batch, n_pose, _ = descriptor.shape
@@ -139,6 +148,18 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             solution_pred = None
         return iter_pred, solution_pred
 
+    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
+        mesh_features, descriptor = sample
+        expanded = self.description_expand_lineras(descriptor)
+
+        vectors = torch.concat([mesh_features, expanded], dim=1)
+        tmp = self.linears(vectors)
+        iter_pred = self.iter_linears(tmp)
+
+        assert self.solution_linears is None, "under construction"
+        solution_pred = None
+        return iter_pred, solution_pred
+
     def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
         mesh_encoded, descriptor, iterval, solution = sample
         # mesh: (n_batch, (mesh_size))
@@ -146,6 +167,8 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         # iterval: (n_batch, n_pose, (,))
         dic = {}
         iter_pred, solution_pred = self.forward((mesh_encoded, descriptor))
+        if iterval.ndim == 1:
+            iterval = iterval.unsqueeze(dim=1)
         iter_loss = nn.MSELoss()(iter_pred, iterval)
         dic["iter"] = iter_loss
 
