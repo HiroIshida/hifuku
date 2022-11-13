@@ -21,13 +21,17 @@ class IterationPredictorDataset(Dataset):
     descriptions: torch.Tensor
     itervals: torch.Tensor
     solutions: torch.Tensor
+    _problem_per_sample: int
 
     def __len__(self) -> int:
-        return len(self.meshe_encodeds)
+        return len(self.descriptions)
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor, ...]:
+        # Note: mesh_encoded is (n_sample, size) shape, though
+        # otheres have shape of (n_sample * n_problem, size).
+        # Thus we must devide the dix by n_problem
         return (
-            self.meshe_encodeds[idx],
+            self.meshe_encodeds[idx // self._problem_per_sample],
             self.descriptions[idx],
             self.itervals[idx],
             self.solutions[idx],
@@ -46,6 +50,7 @@ class IterationPredictorDataset(Dataset):
         solution_list = []
 
         # create minibatch list
+        n_problem: int = 0
         for sample in tqdm.tqdm(loader):
             mesh, description, iterval, solution = sample
 
@@ -53,26 +58,24 @@ class IterationPredictorDataset(Dataset):
             encoded: torch.Tensor = ae_model.encoder(mesh).detach().cpu()
             n_batch, n_problem, _ = description.shape
 
-            # NOTE: only encoded shape is (n_batch x dim) and others have (n_batch x n_problem x dim)
-            # Thus, we must copy encoded[i_batch] n_problem times
             for i in range(n_batch):
-                encoded_repeated = encoded[i].unsqueeze(dim=0).repeat(n_problem, 1)
-
-                encoded_list.append(encoded_repeated)
+                encoded_list.append(encoded[i].unsqueeze(dim=0))
                 description_list.append(description[i])
                 iterval_list.append(iterval[i])
                 solution_list.append(solution[i])
+        assert n_problem > 0
 
         mesh_encodeds_concat = torch.cat(encoded_list, dim=0)  # n_batch x n_bottleneck
         descriptions_concat = torch.cat(description_list, dim=0)
         itervals_concat = torch.cat(iterval_list, dim=0)
         solutions_concat = torch.cat(solution_list, dim=0)
 
-        n_data = len(mesh_encodeds_concat)
-        assert len(descriptions_concat) == n_data
+        n_data = len(descriptions_concat)
         assert len(itervals_concat) == n_data
         assert len(solutions_concat) == n_data
-        return cls(mesh_encodeds_concat, descriptions_concat, itervals_concat, solutions_concat)
+        return cls(
+            mesh_encodeds_concat, descriptions_concat, itervals_concat, solutions_concat, n_problem
+        )
 
 
 @dataclass
