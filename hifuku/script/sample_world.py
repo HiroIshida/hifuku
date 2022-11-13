@@ -23,15 +23,15 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
 
     def generate_single_data(self) -> RawData:
         ik_config = IKConfig(disp=False)
-        problem = TabletopIKProblem.sample(n_pose=50)
-        results = problem.solve(av_init, config=ik_config)
+        problem = TabletopIKProblem.sample(n_pose=2000)
+        results = problem.solve_dummy(av_init, config=ik_config)
         data = RawData.create(problem, results)
         return data
 
 
 if __name__ == "__main__":
     # n_problem = 300000
-    n_problem = 20000
+    n_problem = 1000
 
     av_init = np.zeros(10)
 
