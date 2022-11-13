@@ -9,9 +9,16 @@ from skplan.kinematics import (
     ArticulatedEndEffectorKinematicsMap,
 )
 from skplan.robot.pr2 import PR2Paramter
-from skplan.solver.optimization import IKConfig, IKResult, InverseKinematicsSolver
+from skplan.solver.constraint import PoseConstraint, TrajectoryEqualityConstraint
+from skplan.solver.inverse_kinematics import IKConfig, IKResult, InverseKinematicsSolver
+from skplan.solver.optimization import (
+    OptimizationBasedPlanner,
+    PlannerConfig,
+    PlanningResult,
+)
 from skplan.space import ConfigurationSpace, TaskSpace
-from skplan.viewer.skrobot_viewer import set_robot_config
+from skplan.trajectory import Trajectory
+from skplan.viewer.skrobot_viewer import get_robot_config, set_robot_config
 from skrobot.coordinates import Coordinates
 from skrobot.model import Axis
 from skrobot.model.link import Link
@@ -252,7 +259,9 @@ class TabletopProblem(ProblemInterface):
 
 @dataclass
 class TabletopIKProblem(TabletopProblem):
-    def solve(self, av_init: np.ndarray, config: Optional[IKConfig] = None) -> Tuple[IKResult, ...]:
+    def solve(
+        self, av_init: Optional[np.ndarray] = None, config: Optional[IKConfig] = None
+    ) -> Tuple[IKResult, ...]:
         if config is None:
             config = IKConfig()
         efkin, colkin = self.setup_kinmaps()
@@ -276,6 +285,7 @@ class TabletopIKProblem(TabletopProblem):
         class DummyResult:
             success: bool
             nit: int = 0
+            nfev: int = 0
             x: np.ndarray = np.zeros(10)
 
         sdf = self.get_sdf()
@@ -286,3 +296,36 @@ class TabletopIKProblem(TabletopProblem):
             val = sdf(point)[0]
             results.append(DummyResult(val > 0.0))
         return tuple(results)
+
+
+@dataclass
+class TabletopPlanningProblem(TabletopProblem):
+    def solve(
+        self, traj_vec_init: Optional[np.ndarray] = None, config: Optional[PlannerConfig] = None
+    ) -> Tuple[PlanningResult, ...]:
+
+        if config is None:
+            config = PlannerConfig()
+
+        n_wp = 10
+        pr2 = self.setup_pr2()
+        efkin, colkin = self.setup_kinmaps()
+        start = get_robot_config(pr2, efkin.control_joint_names, with_base=True)
+
+        tspace = TaskSpace(3, sdf=self.get_sdf())  # type: ignore
+        cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
+
+        if traj_vec_init is not None:
+            traj_init = Trajectory(list(traj_vec_init.reshape(n_wp, -1)))
+        else:
+            traj_init = None
+
+        result_list = []
+        for target_pose in self.target_pose_list:
+            eq_const = TrajectoryEqualityConstraint.from_start(start, 10)
+            pose_const = PoseConstraint.from_skrobot_coords(target_pose, efkin, cspace=cspace)
+            eq_const.add_goal_constraint(pose_const)
+            planner = OptimizationBasedPlanner(eq_const, cspace, config=config)
+            result = planner.solve(traj_init)
+            result_list.append(result)
+        return tuple(result_list)

@@ -4,9 +4,9 @@ import warnings
 import numpy as np
 from llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from mohou.file import get_project_path
-from skplan.solver.optimization import IKConfig
+from skplan.solver.optimization import PlannerConfig
 
-from hifuku.threedim.tabletop import TabletopIKProblem
+from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
@@ -22,10 +22,13 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
         pass
 
     def generate_single_data(self) -> RawData:
-        ik_config = IKConfig(disp=False)
-        problem = TabletopIKProblem.sample(n_pose=2000)
-        results = problem.solve_dummy(av_init, config=ik_config)
-        data = RawData.create(problem, results)
+        assert self.arg.info is not None
+        x_init = self.arg.info["init_solution"]
+        config = PlannerConfig(disp=True, maxfev=100)
+        problem = TabletopPlanningProblem.sample(n_pose=10)
+        results = problem.solve(x_init, config=config)
+        print([r.success for r in results])
+        data = RawData.create(problem, results, config)
         return data
 
 
@@ -47,11 +50,21 @@ if __name__ == "__main__":
     assert n_process is not None
     numbers = split_number(n_problem, n_process)
 
+    # create initial solution
+    np.random.seed(0)
+    problem = TabletopPlanningProblem.sample(n_pose=1)
+    result = problem.solve()[0]
+    x_init = result.x.flatten()
+    print(x_init)
+    info = {"init_solution": x_init}
+
     if n_process > 1:
         process_list = []
         for idx_process, number in enumerate(numbers):
             show_process_bar = idx_process == 1
-            arg = DataGenerationTaskArg(number, show_process_bar, chunk_dir_path, extension=".npz")
+            arg = DataGenerationTaskArg(
+                number, show_process_bar, chunk_dir_path, extension=".npz", info=info
+            )
             p = TabletopIKGenerationTask(arg)
             p.start()
             process_list.append(p)
@@ -59,6 +72,6 @@ if __name__ == "__main__":
         for p in process_list:
             p.join()
     else:
-        arg = DataGenerationTaskArg(n_problem, True, chunk_dir_path, extension=".npz")
+        arg = DataGenerationTaskArg(n_problem, True, chunk_dir_path, extension=".npz", info=info)
         task = TabletopIKGenerationTask(arg)
         task.run()
