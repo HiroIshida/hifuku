@@ -40,12 +40,12 @@ def test_rawdata_to_tensor():
     av_init = np.zeros(10)
     results = problem.solve(av_init)
     data = RawData.create(problem, results, PlannerConfig())
-    meshes, descriptions, nits = data.to_tensors()
+    meshes, descriptions, nfevs, solutions = data.to_tensors()
 
     assert meshes.ndim == 4
     assert descriptions.ndim == 2
-    assert nits.ndim == 1
+    assert nfevs.ndim == 1
 
     assert len(meshes) == 1
     assert len(descriptions) == n_actual_problem
-    assert len(nits) == n_actual_problem
+    assert len(nfevs) == n_actual_problem

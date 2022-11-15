@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any, List, Optional, Protocol, Tuple, Type, TypeVar
+from typing import Any, Dict, List, Optional, Protocol, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import torch
@@ -77,7 +77,8 @@ class RawData(ChunkBase):
     nfevs: List[int]
     successes: List[bool]
     solutions: List[np.ndarray]
-    solver_config: SolverConfigProtocol
+    maxiter: int
+    maxfev: int
 
     def __post_init__(self):
         assert len(self.descriptions) == len(self.nfevs)
@@ -95,17 +96,26 @@ class RawData(ChunkBase):
         nfevs = [result.nfev for result in results]
         successes = [result.success for result in results]
         solutions = [result.x for result in results]
-        return cls(mesh, descriptions, nits, nfevs, successes, solutions, config)
+        maxiter = config.maxiter
+        maxfev = config.maxfev
+        return cls(mesh, descriptions, nits, nfevs, successes, solutions, maxiter, maxfev)
 
     def dump_impl(self, path: Path) -> None:
         assert path.name.endswith(".npz")
-        table = {}
+        # dump as npz rather than pkl for future data backward compatibility
+        table: Dict[str, Union[np.ndarray, int]] = {}
         table["mesh"] = self.mesh
         table["descriptions"] = np.array(self.descriptions)
         table["nits"] = np.array(self.nits)
         table["nfevs"] = np.array(self.nfevs)
         table["successes"] = np.array(self.successes)
         table["solutions"] = np.array(self.solutions)
+        table["maxiter"] = self.maxiter
+        table["maxfev"] = self.maxfev
+
+        for field in fields(self):
+            assert field.name in table
+
         np.savez(str(path), **table)
 
     @classmethod
@@ -118,6 +128,12 @@ class RawData(ChunkBase):
         kwargs["nfevs"] = list(loaded["nfevs"])
         kwargs["successes"] = list(loaded["successes"].astype(bool))
         kwargs["solutions"] = list(loaded["solutions"])
+        kwargs["maxiter"] = loaded["maxiter"]
+        kwargs["maxfev"] = loaded["maxfev"]
+
+        for field in fields(cls):
+            assert field.name in kwargs
+
         return cls(**kwargs)
 
     def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -125,10 +141,11 @@ class RawData(ChunkBase):
         descriptions_np = np.stack(self.descriptions)
         description = torch.from_numpy(descriptions_np).float()
 
-        crop_nfev = self.solver_config.maxfev
-        nfevs = np.minimum(
+        crop_nfev = self.maxfev
+        nfevs_np = np.minimum(
             np.array(self.nfevs) + np.array(self.successes, dtype=bool) * crop_nfev, crop_nfev
         )
+        nfevs = torch.from_numpy(nfevs_np).float()
 
         solution_np = np.array(self.solutions)
         solutions = torch.from_numpy(solution_np).float()
