@@ -77,6 +77,7 @@ class RawData(ChunkBase):
     nfevs: List[int]
     successes: List[bool]
     solutions: List[np.ndarray]
+    init_solution: np.ndarray
     maxiter: int
     maxfev: int
 
@@ -88,6 +89,7 @@ class RawData(ChunkBase):
         cls,
         problem: ProblemInterface,
         results: Tuple[ResultProtocol, ...],
+        init_solution: np.ndarray,
         config: SolverConfigProtocol,
     ):
         mesh = problem.get_mesh()
@@ -98,7 +100,9 @@ class RawData(ChunkBase):
         solutions = [result.x for result in results]
         maxiter = config.maxiter
         maxfev = config.maxfev
-        return cls(mesh, descriptions, nits, nfevs, successes, solutions, maxiter, maxfev)
+        return cls(
+            mesh, descriptions, nits, nfevs, successes, solutions, init_solution, maxiter, maxfev
+        )
 
     def dump_impl(self, path: Path) -> None:
         assert path.name.endswith(".npz")
@@ -106,10 +110,11 @@ class RawData(ChunkBase):
         table: Dict[str, Union[np.ndarray, int]] = {}
         table["mesh"] = self.mesh
         table["descriptions"] = np.array(self.descriptions)
-        table["nits"] = np.array(self.nits)
-        table["nfevs"] = np.array(self.nfevs)
-        table["successes"] = np.array(self.successes)
+        table["nits"] = np.array(self.nits, dtype=int)
+        table["nfevs"] = np.array(self.nfevs, dtype=int)
+        table["successes"] = np.array(self.successes, dtype=bool)
         table["solutions"] = np.array(self.solutions)
+        table["init_solution"] = np.array(self.init_solution)
         table["maxiter"] = self.maxiter
         table["maxfev"] = self.maxfev
 
@@ -124,12 +129,13 @@ class RawData(ChunkBase):
         kwargs = {}
         kwargs["mesh"] = loaded["mesh"]
         kwargs["descriptions"] = list(loaded["descriptions"])
-        kwargs["nits"] = list(loaded["nits"])
-        kwargs["nfevs"] = list(loaded["nfevs"])
-        kwargs["successes"] = list(loaded["successes"].astype(bool))
+        kwargs["nits"] = [int(e) for e in loaded["nits"]]
+        kwargs["nfevs"] = [int(e) for e in loaded["nfevs"]]
+        kwargs["successes"] = list([bool(e) for e in loaded["successes"]])
         kwargs["solutions"] = list(loaded["solutions"])
-        kwargs["maxiter"] = loaded["maxiter"]
-        kwargs["maxfev"] = loaded["maxfev"]
+        kwargs["init_solution"] = loaded["init_solution"]
+        kwargs["maxiter"] = int(loaded["maxiter"].item())
+        kwargs["maxfev"] = int(loaded["maxfev"].item())
 
         for field in fields(cls):
             assert field.name in kwargs
