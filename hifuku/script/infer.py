@@ -5,7 +5,7 @@ import torch
 from mohou.file import get_project_path
 from mohou.trainer import TrainCache
 from mohou.utils import detect_device
-from skplan.solver.optimization import IKConfig
+from skplan.solver.inverse_kinematics import IKConfig
 
 from hifuku.nerual import IterationPredictor, VoxelAutoEncoder
 from hifuku.threedim.tabletop import TabletopIKProblem

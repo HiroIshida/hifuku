@@ -1,6 +1,6 @@
 import numpy as np
 from llazy.generation import DataGenerationTask
-from skplan.solver.optimization import IKConfig
+from skplan.solver.inverse_kinematics import IKConfig
 
 from hifuku.http_datagen.server import run_server
 from hifuku.threedim.tabletop import TabletopIKProblem
@@ -16,7 +16,7 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
         ik_config = IKConfig(disp=False)
         problem = TabletopIKProblem.sample(n_pose=2000)
         results = problem.solve_dummy(av_init, config=ik_config)
-        data = RawData.create(problem, results)
+        data = RawData.create(problem, results, IKConfig())
         return data
 
 

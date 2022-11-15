@@ -3,7 +3,7 @@ import time
 import numpy as np
 import skrobot
 from skplan.robot.pr2 import PR2Paramter
-from skplan.solver.optimization import IKConfig, InverseKinematicsSolver
+from skplan.solver.inverse_kinematics import IKConfig, InverseKinematicsSolver
 from skplan.space import ConfigurationSpace, TaskSpace
 from skplan.viewer.skrobot_viewer import (
     CollisionSphereVisualizationManager,
