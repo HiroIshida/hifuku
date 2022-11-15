@@ -62,15 +62,15 @@ def send_request(conn: HTTPConnection, request: CreateDatasetRequest) -> CreateD
     pass
 
 
-@contextlib.contextmanager
-def http_connection(host: str = "localhost", port: int = 8080):
-    conn = HTTPConnection(host, port)
-    yield conn
-    conn.close()
-
-
 def send_request(conn: HTTPConnection, request):
     headers = {"Content-type": "application/json"}
     conn.request("POST", "/post", pickle.dumps(request), headers)
     response = pickle.loads(conn.getresponse().read())
     return response
+
+
+@contextlib.contextmanager
+def http_connection(host: str = "localhost", port: int = 8080):
+    conn = HTTPConnection(host, port)
+    yield conn
+    conn.close()
