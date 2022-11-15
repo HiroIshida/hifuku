@@ -3,6 +3,8 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+from skplan.solver.inverse_kinematics import IKConfig
+from skplan.solver.optimization import PlannerConfig
 
 from hifuku.threedim.tabletop import TabletopIKProblem
 from hifuku.types import RawData
@@ -12,7 +14,7 @@ def test_rawdata_dump_and_load():
     problem = TabletopIKProblem.sample(n_pose=1)
     av_init = np.zeros(10)
     results = problem.solve(av_init)
-    data = RawData.create(problem, results)
+    data = RawData.create(problem, results, IKConfig())
 
     with tempfile.TemporaryDirectory() as td:
         fp = Path(td) / "hoge.npz"
@@ -37,7 +39,7 @@ def test_rawdata_to_tensor():
     problem = TabletopIKProblem.sample(n_pose=n_actual_problem)
     av_init = np.zeros(10)
     results = problem.solve(av_init)
-    data = RawData.create(problem, results)
+    data = RawData.create(problem, results, PlannerConfig())
     meshes, descriptions, nits = data.to_tensors()
 
     assert meshes.ndim == 4

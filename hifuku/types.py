@@ -13,8 +13,14 @@ ResultT = TypeVar("ResultT", bound="ResultProtocol")
 
 class ResultProtocol(Protocol):
     nit: int
+    nfev: int
     success: bool
     x: np.ndarray
+
+
+class SolverConfigProtocol(Protocol):
+    maxiter: int
+    maxfev: int
 
 
 class ProblemInterface(ABC):
@@ -25,7 +31,7 @@ class ProblemInterface(ABC):
 
     @abstractmethod
     def solve(
-        self, sol_init: np.ndarray, config: Optional[Any] = None
+        self, sol_init: Optional[np.ndarray] = None, config: Optional[Any] = None
     ) -> Tuple[ResultProtocol, ...]:
         ...
 
@@ -68,20 +74,28 @@ class RawData(ChunkBase):
     mesh: np.ndarray
     descriptions: List[np.ndarray]
     nits: List[int]
+    nfevs: List[int]
     successes: List[bool]
     solutions: List[np.ndarray]
+    solver_config: SolverConfigProtocol
 
     def __post_init__(self):
-        assert len(self.descriptions) == len(self.nits)
+        assert len(self.descriptions) == len(self.nfevs)
 
     @classmethod
-    def create(cls, problem: ProblemInterface, results: Tuple[ResultProtocol, ...]):
+    def create(
+        cls,
+        problem: ProblemInterface,
+        results: Tuple[ResultProtocol, ...],
+        config: SolverConfigProtocol,
+    ):
         mesh = problem.get_mesh()
         descriptions = problem.get_descriptions()
         nits = [result.nit for result in results]
+        nfevs = [result.nfev for result in results]
         successes = [result.success for result in results]
         solutions = [result.x for result in results]
-        return cls(mesh, descriptions, nits, successes, solutions)
+        return cls(mesh, descriptions, nits, nfevs, successes, solutions, config)
 
     def dump_impl(self, path: Path) -> None:
         assert path.name.endswith(".npz")
@@ -89,6 +103,7 @@ class RawData(ChunkBase):
         table["mesh"] = self.mesh
         table["descriptions"] = np.array(self.descriptions)
         table["nits"] = np.array(self.nits)
+        table["nfevs"] = np.array(self.nfevs)
         table["successes"] = np.array(self.successes)
         table["solutions"] = np.array(self.solutions)
         np.savez(str(path), **table)
@@ -100,6 +115,7 @@ class RawData(ChunkBase):
         kwargs["mesh"] = loaded["mesh"]
         kwargs["descriptions"] = list(loaded["descriptions"])
         kwargs["nits"] = list(loaded["nits"])
+        kwargs["nfevs"] = list(loaded["nfevs"])
         kwargs["successes"] = list(loaded["successes"].astype(bool))
         kwargs["solutions"] = list(loaded["solutions"])
         return cls(**kwargs)
@@ -109,12 +125,14 @@ class RawData(ChunkBase):
         descriptions_np = np.stack(self.descriptions)
         description = torch.from_numpy(descriptions_np).float()
 
-        nits = np.minimum(np.array(self.nits) + np.array(self.successes, dtype=bool) * 200, 200)
-        nits = torch.tensor(nits, dtype=torch.float32)
+        crop_nfev = self.solver_config.maxfev
+        nfevs = np.minimum(
+            np.array(self.nfevs) + np.array(self.successes, dtype=bool) * crop_nfev, crop_nfev
+        )
 
         solution_np = np.array(self.solutions)
         solutions = torch.from_numpy(solution_np).float()
-        return mesh, description, nits, solutions
+        return mesh, description, nfevs, solutions
 
     def __len__(self) -> int:
         return 1
