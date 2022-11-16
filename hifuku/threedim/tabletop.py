@@ -12,11 +12,7 @@ from skplan.kinematics import (
 from skplan.robot.pr2 import PR2Paramter
 from skplan.solver.constraint import PoseConstraint, TrajectoryEqualityConstraint
 from skplan.solver.inverse_kinematics import IKConfig, IKResult, InverseKinematicsSolver
-from skplan.solver.optimization import (
-    OptimizationBasedPlanner,
-    PlannerConfig,
-    PlanningResult,
-)
+from skplan.solver.optimization import OsqpSqpPlanner
 from skplan.space import ConfigurationSpace, TaskSpace
 from skplan.trajectory import Trajectory
 from skplan.viewer.skrobot_viewer import get_robot_config, set_robot_config
@@ -305,11 +301,13 @@ class TabletopIKProblem(TabletopProblem):
 @dataclass
 class TabletopPlanningProblem(TabletopProblem):
     def solve(
-        self, traj_vec_init: Optional[np.ndarray] = None, config: Optional[PlannerConfig] = None
-    ) -> Tuple[PlanningResult, ...]:
+        self,
+        traj_vec_init: Optional[np.ndarray] = None,
+        config: Optional[OsqpSqpPlanner.SolverConfig] = None,
+    ) -> Tuple[OsqpSqpPlanner.Result, ...]:
 
         if config is None:
-            config = PlannerConfig()
+            config = OsqpSqpPlanner.SolverConfig()
 
         n_wp = 10
         pr2 = self.setup_pr2()
@@ -326,10 +324,10 @@ class TabletopPlanningProblem(TabletopProblem):
 
         result_list = []
         for target_pose in self.target_pose_list:
-            eq_const = TrajectoryEqualityConstraint.from_start(start, 10)
+            eq_const = TrajectoryEqualityConstraint.from_start(start, n_wp)
             pose_const = PoseConstraint.from_skrobot_coords(target_pose, efkin, cspace=cspace)
             eq_const.add_goal_constraint(pose_const)
-            planner = OptimizationBasedPlanner(eq_const, cspace, config=config)
-            result = planner.solve(traj_init)
+            planner = OsqpSqpPlanner(n_wp, eq_const, cspace)
+            result = planner.solve(traj_init, solver_config=config)
             result_list.append(result)
         return tuple(result_list)

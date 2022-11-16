@@ -3,7 +3,7 @@ import warnings
 
 import numpy as np
 from mohou.file import get_project_path
-from skplan.solver.optimization import PlannerConfig
+from skplan.solver.optimization import OsqpSqpPlanner
 
 from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from hifuku.threedim.tabletop import TabletopPlanningProblem
@@ -24,8 +24,8 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
     def generate_single_data(self) -> RawData:
         assert self.arg.info is not None
         x_init = self.arg.info["init_solution"]
-        config = PlannerConfig(disp=True, maxfev=100)
-        problem = TabletopPlanningProblem.sample(n_pose=10)
+        config = OsqpSqpPlanner.SolverConfig(verbose=False)
+        problem = TabletopPlanningProblem.sample(n_pose=50)
         results = problem.solve(x_init, config=config)
         print([r.success for r in results])
         data = RawData.create(problem, results, x_init, config)
@@ -47,6 +47,7 @@ if __name__ == "__main__":
     cpu_num = os.cpu_count()
     assert cpu_num is not None
     n_process = int(cpu_num * 0.5)
+    # n_process = 1
     assert n_process is not None
     numbers = split_number(n_problem, n_process)
 
