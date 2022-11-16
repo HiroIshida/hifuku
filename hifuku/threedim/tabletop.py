@@ -1,5 +1,6 @@
 import copy
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Callable, List, Optional, Tuple, Type, TypeVar
 
 import numpy as np
@@ -176,8 +177,13 @@ TableTopProblemT = TypeVar("TableTopProblemT", bound="TabletopProblem")
 @dataclass
 class TabletopProblem(ProblemInterface):
     world: TableTopWorld
-    grid_sdf: GridSDF
     target_pose_list: List[Coordinates]
+
+    @cached_property
+    def grid_sdf(self) -> GridSDF:
+        gridsdf = self.world.compute_exact_gridsdf(fill_value=2.0)
+        gridsdf = gridsdf.get_quantized()
+        return gridsdf
 
     @classmethod
     def setup_pr2(cls) -> PR2:
@@ -234,10 +240,8 @@ class TabletopProblem(ProblemInterface):
         while True:
             world = TableTopWorld.sample()
             if not is_collision_init_config(world):
-                gridsdf = world.compute_exact_gridsdf(fill_value=2.0)
-                gridsdf = gridsdf.get_quantized()
                 target_pose_list = [world.sample_pose() for _ in range(n_pose)]
-                problem = cls(world, gridsdf, target_pose_list)
+                problem = cls(world, target_pose_list)
                 return problem
 
     def visualize(self, av: np.ndarray):
@@ -312,7 +316,7 @@ class TabletopPlanningProblem(TabletopProblem):
         efkin, colkin = self.setup_kinmaps()
         start = get_robot_config(pr2, efkin.control_joint_names, with_base=True)
 
-        tspace = TaskSpace(3, sdf=self.get_sdf())  # type: ignore
+        tspace = TaskSpace(3, sdf=self.world.get_union_sdf())  # type: ignore
         cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
 
         if traj_vec_init is not None:
