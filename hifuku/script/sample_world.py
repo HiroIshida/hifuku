@@ -28,7 +28,7 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
         problem = TabletopPlanningProblem.sample(n_pose=10)
         results = problem.solve(x_init, config=config)
         print([r.success for r in results])
-        data = RawData.create(problem, results, config)
+        data = RawData.create(problem, results, x_init, config)
         return data
 
 
