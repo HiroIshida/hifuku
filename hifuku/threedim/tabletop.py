@@ -10,7 +10,12 @@ from skplan.kinematics import (
     ArticulatedEndEffectorKinematicsMap,
 )
 from skplan.robot.pr2 import PR2Paramter
-from skplan.solver.constraint import PoseConstraint, TrajectoryEqualityConstraint
+from skplan.solver.constraint import (
+    ObstacleAvoidanceConstraint,
+    PoseConstraint,
+    TrajectoryEqualityConstraint,
+    TrajectoryInequalityConstraint,
+)
 from skplan.solver.inverse_kinematics import IKConfig, IKResult, InverseKinematicsSolver
 from skplan.solver.optimization import OsqpSqpPlanner
 from skplan.space import ConfigurationSpace, TaskSpace
@@ -76,6 +81,13 @@ class TableTopWorld:
         table_tip.translate(diff)
         table_tip.rotate(-1.0 + np.random.rand() * 2.0, axis="z")
         return table_tip.copy_worldcoords()
+
+    def sample_standard_pose(self) -> Coordinates:
+        table = self.table
+        table_depth, table_width, table_height = table._extents
+        pose = table.copy_worldcoords()
+        pose.translate([0.0, 0.0, 0.5 * table_height + 0.1])
+        return pose.copy_worldcoords()
 
     @classmethod
     def sample(cls) -> "TableTopWorld":
@@ -327,7 +339,11 @@ class TabletopPlanningProblem(TabletopProblem):
             eq_const = TrajectoryEqualityConstraint.from_start(start, n_wp)
             pose_const = PoseConstraint.from_skrobot_coords(target_pose, efkin, cspace=cspace)
             eq_const.add_goal_constraint(pose_const)
-            planner = OsqpSqpPlanner(n_wp, eq_const, cspace)
+
+            obstacle_const = ObstacleAvoidanceConstraint(cspace)
+            ineq_const = TrajectoryInequalityConstraint.create_homogeneous(obstacle_const, n_wp, 10)
+
+            planner = OsqpSqpPlanner(n_wp, eq_const, ineq_const, cspace)
             result = planner.solve(traj_init, solver_config=config)
             result_list.append(result)
         return tuple(result_list)
