@@ -2,10 +2,10 @@ import os
 import warnings
 
 import numpy as np
-from llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from mohou.file import get_project_path
 from skplan.solver.optimization import PlannerConfig
 
+from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData
 

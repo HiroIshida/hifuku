@@ -2,9 +2,9 @@ import os
 import warnings
 
 import numpy as np
-from llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from mohou.file import get_project_path
 
+from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from hifuku.threedim.tabletop import TableTopWorld
 from hifuku.types import RawMeshData
 

@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup_requires = []
 
-install_requires = ["voxbloxpy", "skplan", "dill", "llazy"]
+install_requires = ["voxbloxpy", "skplan", "dill"]
 
 setup(
     name="hifuku",

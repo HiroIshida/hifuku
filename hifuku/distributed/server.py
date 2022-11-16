@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Type
 
 import grpc
-from llazy.generation import DataGenerationTask, DataGenerationTaskArg
 
 import hifuku.distributed.datagen_pb2 as datagen_pb2
 import hifuku.distributed.datagen_pb2_grpc as datagen_pb2_grpc
+from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
 
 
 def split_number(num, div):

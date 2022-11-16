@@ -1,8 +1,8 @@
 import numpy as np
-from llazy.generation import DataGenerationTask
 from skplan.solver.inverse_kinematics import IKConfig
 
 from hifuku.http_datagen.server import run_server
+from hifuku.llazy.generation import DataGenerationTask
 from hifuku.threedim.tabletop import TabletopIKProblem
 from hifuku.types import RawData
 

@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, Type, TypeVar, Un
 
 import numpy as np
 import torch
-from llazy.dataset import ChunkBase
+
+from hifuku.llazy.dataset import ChunkBase
 
 ProblemT = TypeVar("ProblemT", bound="ProblemInterface")
 ResultT = TypeVar("ResultT", bound="ResultProtocol")

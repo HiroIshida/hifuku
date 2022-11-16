@@ -6,12 +6,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import tqdm
-from llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from mohou.utils import detect_device
 from torch import Tensor
 from torch.utils.data import Dataset
 
+from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.types import ProblemInterface, RawData
 
 

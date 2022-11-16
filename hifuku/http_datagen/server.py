@@ -9,8 +9,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Type
 
-from llazy.generation import DataGenerationTask, DataGenerationTaskArg
-
 from hifuku.http_datagen.request import (
     CreateDatasetRequest,
     CreateDatasetResponse,
@@ -20,6 +18,7 @@ from hifuku.http_datagen.request import (
     GetModuleHashValueResponse,
     Response,
 )
+from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from hifuku.utils import get_module_source_hash
 
 
