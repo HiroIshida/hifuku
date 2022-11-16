@@ -54,6 +54,7 @@ if __name__ == "__main__":
     np.random.seed(0)
     problem = TabletopPlanningProblem.sample(n_pose=1)
     result = problem.solve()[0]
+    assert result.success
     x_init = result.x.flatten()
     print(x_init)
     info = {"init_solution": x_init}
@@ -62,8 +63,9 @@ if __name__ == "__main__":
         process_list = []
         for idx_process, number in enumerate(numbers):
             show_process_bar = idx_process == 1
+            core = [idx_process * 2, idx_process * 2 + 1]
             arg = DataGenerationTaskArg(
-                number, show_process_bar, chunk_dir_path, extension=".npz", info=info
+                number, show_process_bar, chunk_dir_path, extension=".npz", info=info, cpu_core=core
             )
             p = TabletopIKGenerationTask(arg)
             p.start()
@@ -72,6 +74,8 @@ if __name__ == "__main__":
         for p in process_list:
             p.join()
     else:
-        arg = DataGenerationTaskArg(n_problem, True, chunk_dir_path, extension=".npz", info=info)
+        arg = DataGenerationTaskArg(
+            n_problem, True, chunk_dir_path, extension=".npz", info=info, cpu_core=[0, 1]
+        )
         task = TabletopIKGenerationTask(arg)
         task.run()
