@@ -15,9 +15,11 @@ from skplan.solver.constraint import (
     PoseConstraint,
     TrajectoryEqualityConstraint,
     TrajectoryInequalityConstraint,
+    batch_project_to_manifold,
 )
 from skplan.solver.inverse_kinematics import IKConfig, IKResult, InverseKinematicsSolver
 from skplan.solver.optimization import OsqpSqpPlanner
+from skplan.solver.rrt import BidirectionalRRT, StartConstraintRRT
 from skplan.space import ConfigurationSpace, TaskSpace
 from skplan.trajectory import Trajectory
 from skplan.viewer.skrobot_viewer import get_robot_config, set_robot_config
@@ -86,7 +88,7 @@ class TableTopWorld:
         table = self.table
         table_depth, table_width, table_height = table._extents
         pose = table.copy_worldcoords()
-        pose.translate([0.0, 0.0, 0.5 * table_height + 0.1])
+        pose.translate([-0.1, 0.0, 0.5 * table_height + 0.1])
         return pose.copy_worldcoords()
 
     @classmethod
@@ -321,7 +323,7 @@ class TabletopPlanningProblem(TabletopProblem):
         if config is None:
             config = OsqpSqpPlanner.SolverConfig()
 
-        n_wp = 10
+        n_wp = 15
         pr2 = self.setup_pr2()
         efkin, colkin = self.setup_kinmaps()
         start = get_robot_config(pr2, efkin.control_joint_names, with_base=True)
@@ -342,6 +344,17 @@ class TabletopPlanningProblem(TabletopProblem):
 
             obstacle_const = ObstacleAvoidanceConstraint(cspace)
             ineq_const = TrajectoryInequalityConstraint.create_homogeneous(obstacle_const, n_wp, 10)
+
+            if traj_init is None:
+                # creat init traj
+                samples = batch_project_to_manifold(
+                    20, cspace, eq_const=pose_const, ineq_const=obstacle_const, focus_weight=0.0
+                )
+                goal_tree = StartConstraintRRT.from_samples(samples, cspace)
+                rrt = BidirectionalRRT.create_default(start, goal_tree, cspace)
+                rrt_solution = rrt.solve()
+                assert rrt_solution is not None
+                traj_init = rrt_solution.resample(n_wp)
 
             planner = OsqpSqpPlanner(n_wp, eq_const, ineq_const, cspace)
             result = planner.solve(traj_init, solver_config=config)
