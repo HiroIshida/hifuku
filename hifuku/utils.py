@@ -1,8 +1,19 @@
+import ast
+import inspect
+import pickle
 import shutil
 import subprocess
 import tempfile
+from hashlib import md5
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+
+
+def get_source_code_hash(any: Any) -> str:
+    source_code = inspect.getsource(any)
+    tree = ast.parse(source_code)
+    hash_value = md5(pickle.dumps(tree)).hexdigest()
+    return hash_value
 
 
 def get_module_source_hash(module_name: str) -> Optional[str]:
