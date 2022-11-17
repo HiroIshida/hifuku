@@ -6,10 +6,7 @@ from mohou.file import get_project_path
 from skplan.solver.optimization import OsqpSqpPlanner
 
 from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
-from hifuku.threedim.tabletop import (
-    TabletopPlanningProblem,
-    create_simple_tabletop_world,
-)
+from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
@@ -37,7 +34,7 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
 
 if __name__ == "__main__":
     # n_problem = 300000
-    n_problem = 1000
+    n_problem = 100
 
     av_init = np.zeros(10)
 
@@ -56,10 +53,7 @@ if __name__ == "__main__":
 
     # create initial solution
     np.random.seed(0)
-
-    world = create_simple_tabletop_world(with_obstacle=False)
-    pose = world.sample_standard_pose()
-    problem = TabletopPlanningProblem(world, [pose])
+    problem = TabletopPlanningProblem.create_standard()
     result = problem.solve()[0]
     assert result.success
     x_init = result.x.flatten()

@@ -325,6 +325,12 @@ class TabletopIKProblem(TabletopProblem):
 
 @dataclass
 class TabletopPlanningProblem(TabletopProblem):
+    @classmethod
+    def create_standard(cls: Type["TabletopPlanningProblem"]) -> "TabletopPlanningProblem":
+        world = create_simple_tabletop_world(with_obstacle=False)
+        pose = world.sample_standard_pose()
+        return cls(world, [pose])
+
     def solve(
         self,
         traj_vec_init: Optional[np.ndarray] = None,

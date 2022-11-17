@@ -30,6 +30,11 @@ class ProblemInterface(ABC):
     def sample(cls: Type[ProblemT], n_sample: int) -> ProblemT:
         ...
 
+    @classmethod
+    @abstractmethod
+    def create_standard(cls: Type[ProblemT]) -> ProblemT:
+        ...
+
     @abstractmethod
     def solve(
         self, sol_init: Optional[np.ndarray] = None, config: Optional[Any] = None
