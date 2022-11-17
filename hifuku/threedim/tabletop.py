@@ -242,6 +242,9 @@ class TabletopProblem(ProblemInterface):
         grid_sdf = self.grid_sdf
         return grid_sdf.values.reshape(grid_sdf.grid.sizes)
 
+    def n_problem(self) -> int:
+        return len(self.target_pose_list)
+
     @classmethod
     def get_description_dim(cls) -> int:
         return 12

@@ -49,6 +49,10 @@ class ProblemInterface(ABC):
     def get_descriptions(self) -> List[np.ndarray]:
         ...
 
+    @abstractmethod
+    def n_problem(self) -> int:
+        ...
+
 
 @dataclass
 class RawMeshData(ChunkBase):
