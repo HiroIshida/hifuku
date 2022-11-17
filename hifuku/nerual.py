@@ -94,6 +94,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
     solution_linears: Optional[nn.Sequential]
     description_expand_lineras: nn.Sequential
     margin: Optional[float] = None
+    initial_solution: Optional[np.ndarray] = None
 
     def _setup_from_config(self, config: IterationPredictorConfig) -> None:
 

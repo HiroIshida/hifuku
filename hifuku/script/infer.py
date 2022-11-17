@@ -5,10 +5,9 @@ import torch
 from mohou.file import get_project_path
 from mohou.trainer import TrainCache
 from mohou.utils import detect_device
-from skplan.solver.inverse_kinematics import IKConfig
 
 from hifuku.nerual import IterationPredictor, VoxelAutoEncoder
-from hifuku.threedim.tabletop import TabletopIKProblem
+from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import ProblemInterface
 
 pp = get_project_path("tabletop_ik")
@@ -16,20 +15,17 @@ pp = get_project_path("tabletop_ik")
 device = detect_device()
 
 
-problem = TabletopIKProblem.sample(n_pose=1000)
-ik_config = IKConfig(disp=False)
-
-ts = time.time()
-ret = problem.solve_dummy(np.zeros(10), config=ik_config)
-print("time to solve problem {}".format((time.time() - ts) / len(problem.target_pose_list)))
-
-print([e.success for e in ret])
-
 ae_model: VoxelAutoEncoder = TrainCache.load(pp, VoxelAutoEncoder).best_model
 pred: IterationPredictor = TrainCache.load_latest(pp, IterationPredictor).best_model
 
 ae_model.put_on_device(device)
 pred.put_on_device(device)
+
+
+problem = TabletopPlanningProblem.sample(n_pose=20)
+assert pred.initial_solution is not None
+results = problem.solve(pred.initial_solution)
+print([r.success for r in results])
 
 
 def infer(problem: ProblemInterface):
@@ -51,6 +47,7 @@ def infer(problem: ProblemInterface):
 
     ts = time.time()
     iterval, _ = pred.forward((encoded_repeated, desc))
+    print(iterval.detach().cpu().numpy() < 80.0)
     print("time to inference {}".format(time.time() - ts))
     time.sleep(10)
 
