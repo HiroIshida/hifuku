@@ -6,7 +6,7 @@ from mohou.file import get_project_path
 from mohou.trainer import TrainCache
 from mohou.utils import detect_device
 
-from hifuku.nerual import IterationPredictor, VoxelAutoEncoder
+from hifuku.neuralnet import IterationPredictor, VoxelAutoEncoder
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import ProblemInterface
 

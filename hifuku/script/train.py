@@ -4,7 +4,7 @@ from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train
 
 from hifuku.llazy.dataset import LazyDecomplessDataset
-from hifuku.nerual import (
+from hifuku.neuralnet import (
     IterationPredictor,
     IterationPredictorConfig,
     IterationPredictorDataset,

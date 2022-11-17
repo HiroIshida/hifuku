@@ -4,7 +4,7 @@ from mohou.file import get_project_path
 from mohou.trainer import TrainCache
 from voxbloxpy.core import Grid, GridSDF
 
-from hifuku.nerual import VoxelAutoEncoder
+from hifuku.neuralnet import VoxelAutoEncoder
 from hifuku.threedim.tabletop import TableTopWorld
 
 

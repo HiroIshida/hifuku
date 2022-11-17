@@ -1,6 +1,6 @@
 import torch
 
-from hifuku.nerual import (
+from hifuku.neuralnet import (
     IterationPredictor,
     IterationPredictorConfig,
     VoxelAutoEncoder,

@@ -3,7 +3,7 @@ from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train_lower
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
-from hifuku.nerual import VoxelAutoEncoder, VoxelAutoEncoderConfig
+from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.types import RawMeshData
 
 pp = get_project_path("tabletop_ik")
