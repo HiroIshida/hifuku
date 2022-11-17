@@ -29,6 +29,7 @@ from skrobot.model.link import Link
 from skrobot.model.primitives import Box, Cylinder
 from skrobot.models.pr2 import PR2
 from skrobot.sdf import UnionSDF
+from skrobot.viewers import TrimeshSceneViewer
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
@@ -215,6 +216,15 @@ class TabletopProblem(ProblemInterface):
             colkin.reflect_skrobot_model(pr2)
             _cache["kinmap"] = (efkin, colkin)  # type: ignore
         return _cache["kinmap"]  # type: ignore
+
+    def add_elements_to_viewer(self, viewer: TrimeshSceneViewer) -> None:
+        viewer.add(self.world.table)
+        for obs in self.world.obstacles:
+            viewer.add(obs)
+        for pose in self.target_pose_list:
+            axis = Axis()
+            axis.newcoords(pose)
+            viewer.add(axis)
 
     def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
         sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
