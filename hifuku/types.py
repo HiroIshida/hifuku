@@ -150,7 +150,8 @@ class RawData(ChunkBase):
 
         crop_nfev = self.maxfev
         nfevs_np = np.minimum(
-            np.array(self.nfevs) + np.array(self.successes, dtype=bool) * crop_nfev, crop_nfev
+            np.array(self.nfevs) + np.array(np.logical_not(self.successes, dtype=bool)) * crop_nfev,
+            crop_nfev,
         )
         nfevs = torch.from_numpy(nfevs_np).float()
 
