@@ -70,9 +70,8 @@ if __name__ == "__main__":
         process_list = []
         for idx_process, number in enumerate(numbers):
             show_process_bar = idx_process == 1
-            core = [idx_process * 2, idx_process * 2 + 1]
             arg = DataGenerationTaskArg(
-                number, show_process_bar, chunk_dir_path, extension=".npz", info=info, cpu_core=core
+                number, show_process_bar, chunk_dir_path, extension=".npz", info=info
             )
             p = TabletopIKGenerationTask(arg)
             p.start()
@@ -81,8 +80,6 @@ if __name__ == "__main__":
         for p in process_list:
             p.join()
     else:
-        arg = DataGenerationTaskArg(
-            n_problem, True, chunk_dir_path, extension=".npz", info=info, cpu_core=[0, 1]
-        )
+        arg = DataGenerationTaskArg(n_problem, True, chunk_dir_path, extension=".npz", info=info)
         task = TabletopIKGenerationTask(arg)
         task.run()
