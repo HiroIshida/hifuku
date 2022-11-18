@@ -3,7 +3,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, Iterator, Optional, Type
+from typing import Generic, Iterable, Iterator, Optional, Sized, Type
 
 import numpy as np
 import torch
@@ -24,16 +24,39 @@ from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import List, ProblemT, RawData, ResultProtocol
 
 
-class ProblemPool(Iterator[ProblemT]):
+class ProblemPool(Iterable[ProblemT]):
     problem_type: Type[ProblemT]
 
 
 @dataclass
-class SimpleProblemPool(ProblemPool[ProblemT]):
+class SimpleProblemPool(Iterator[ProblemT], ProblemPool[ProblemT]):
     problem_type: Type[ProblemT]
 
     def __next__(self) -> ProblemT:
         return self.problem_type.sample(1)
+
+
+class FixedProblemPool(Sized, ProblemPool[ProblemT]):
+    @abstractmethod
+    def __len__(self) -> int:
+        ...
+
+
+@dataclass
+class SimpleFixedProblemPool(FixedProblemPool[ProblemT]):
+    problem_type: Type[ProblemT]
+    problem_list: List[ProblemT]
+
+    @classmethod
+    def initialize(cls, problem_type: Type[ProblemT], n_problem: int) -> "SimpleFixedProblemPool":
+        problem_list = [problem_type.sample(1) for _ in range(n_problem)]
+        return cls(problem_type, problem_list)
+
+    def __len__(self) -> int:
+        return len(self.problem_list)
+
+    def __iter__(self) -> Iterator[ProblemT]:
+        return self.problem_list.__iter__()
 
 
 class HifukuDataGenerationTask(DataGenerationTask[RawData]):
