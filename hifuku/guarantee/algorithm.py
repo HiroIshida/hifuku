@@ -88,6 +88,7 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
         self, init_solution: np.ndarray, n_problem: int, n_problem_inner, cache_dir_path: Path
     ) -> None:
         n_problem_per_process_list = self.split_number(n_problem, self.n_process)
+        assert cache_dir_path.exists()
 
         if self.n_process > 1:
             process_list = []
