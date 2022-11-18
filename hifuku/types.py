@@ -16,14 +16,12 @@ ResultT = TypeVar("ResultT", bound="ResultProtocol")
 
 class ResultProtocol(Protocol):
     nit: int
-    nfev: int
     success: bool
     x: np.ndarray
 
 
 class SolverConfigProtocol(Protocol):
     maxiter: int
-    maxfev: int
 
 
 class ProblemInterface(ABC):
@@ -91,15 +89,13 @@ class RawData(ChunkBase):
     mesh: np.ndarray
     descriptions: List[np.ndarray]
     nits: List[int]
-    nfevs: List[int]
     successes: List[bool]
     solutions: List[np.ndarray]
     init_solution: np.ndarray
     maxiter: int
-    maxfev: int
 
     def __post_init__(self):
-        assert len(self.descriptions) == len(self.nfevs)
+        assert len(self.descriptions) == len(self.nits)
 
     @classmethod
     def create(
@@ -111,16 +107,11 @@ class RawData(ChunkBase):
         mesh = problem.get_mesh()
         descriptions = problem.get_descriptions()
         nits = [result.nit for result in results]
-        nfevs = [result.nfev for result in results]
         successes = [result.success for result in results]
         solutions = [result.x for result in results]
         config = problem.get_solver_config()
         maxiter = config.maxiter
-        maxfev = config.maxfev
-        assert maxiter == maxfev
-        return cls(
-            mesh, descriptions, nits, nfevs, successes, solutions, init_solution, maxiter, maxfev
-        )
+        return cls(mesh, descriptions, nits, successes, solutions, init_solution, maxiter)
 
     def dump_impl(self, path: Path) -> None:
         assert path.name.endswith(".npz")
@@ -129,12 +120,10 @@ class RawData(ChunkBase):
         table["mesh"] = self.mesh
         table["descriptions"] = np.array(self.descriptions)
         table["nits"] = np.array(self.nits, dtype=int)
-        table["nfevs"] = np.array(self.nfevs, dtype=int)
         table["successes"] = np.array(self.successes, dtype=bool)
         table["solutions"] = np.array(self.solutions)
         table["init_solution"] = np.array(self.init_solution)
         table["maxiter"] = self.maxiter
-        table["maxfev"] = self.maxfev
 
         for field in fields(self):
             assert field.name in table
@@ -161,12 +150,10 @@ class RawData(ChunkBase):
         kwargs["mesh"] = loaded["mesh"]
         kwargs["descriptions"] = list(loaded["descriptions"])
         kwargs["nits"] = [int(e) for e in loaded["nits"]]
-        kwargs["nfevs"] = [int(e) for e in loaded["nfevs"]]
         kwargs["successes"] = list([bool(e) for e in loaded["successes"]])
         kwargs["solutions"] = list(loaded["solutions"])
         kwargs["init_solution"] = loaded["init_solution"]
         kwargs["maxiter"] = int(loaded["maxiter"].item())
-        kwargs["maxfev"] = int(loaded["maxfev"].item())
 
         for field in fields(cls):
             assert field.name in kwargs
@@ -178,7 +165,7 @@ class RawData(ChunkBase):
         descriptions_np = np.stack(self.descriptions)
         description = torch.from_numpy(descriptions_np).float()
 
-        crop_nit = self.maxfev
+        crop_nit = self.maxiter
         nits_np = np.minimum(
             np.array(self.nits) + np.array(np.logical_not(self.successes, dtype=bool)) * crop_nit,
             crop_nit,

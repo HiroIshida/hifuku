@@ -16,7 +16,7 @@ class TabletopIKGenerationTask(DataGenerationTask[RawData]):
         ik_config = IKConfig(disp=False)
         problem = TabletopIKProblem.sample(n_pose=2000)
         results = problem.solve_dummy(av_init, config=ik_config)
-        data = RawData.create(problem, results, IKConfig())
+        data = RawData.create(problem, results, av_init)
         return data
 
 
