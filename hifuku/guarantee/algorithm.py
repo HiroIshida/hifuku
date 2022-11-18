@@ -3,7 +3,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Generic, Iterator, Optional, Type
+from typing import Generic, Iterator, Optional, Type
 
 import numpy as np
 import torch
@@ -156,11 +156,20 @@ class SolutionLibrary(Generic[ProblemT]):
 
 
 @dataclass
+class LibraryGenConfig:
+    n_problem: int
+    n_problem_inner: int
+    train_config: TrainConfig
+    n_difficult_problem: int
+    difficult_threshold: float
+
+
+@dataclass
 class SolutionLibraryGen(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT]
-    difficult_threshold: float
-    dataset_gen: Callable[[np.ndarray], Path]
+    dataset_gen: DatasetGenerator
+    config: LibraryGenConfig
 
     @classmethod
     def initialize(
@@ -168,14 +177,17 @@ class SolutionLibraryGen(Generic[ProblemT], ABC):
         problem_type: Type[ProblemT],
         ae_model: VoxelAutoEncoder,
         difficult_thrshold: float,
-        dataset_gen: Callable[[np.ndarray], Path],
+        dataset_gen: DatasetGenerator,
+        config: LibraryGenConfig,
     ) -> "SolutionLibraryGen[ProblemT]":
         library = SolutionLibrary.initialize(problem_type, ae_model)
-        return cls(problem_type, library, difficult_thrshold, dataset_gen)
+        return cls(problem_type, library, dataset_gen, config)
 
     def learn_predictors(self, init_solution: np.ndarray, project_path: Path) -> IterationPredictor:
         pp = project_path
-        dataset_path = self.dataset_gen(init_solution)
+        dataset_path = self.dataset_gen.generate(
+            init_solution, self.config.n_problem, self.config.n_problem_inner
+        )
         dataset = IterationPredictorDataset.load(dataset_path, self.library.ae_model)
         raw_dataset = LazyDecomplessDataset.load(dataset_path, RawData, n_worker=-1)
 
@@ -187,8 +199,7 @@ class SolutionLibraryGen(Generic[ProblemT], ABC):
         model = IterationPredictor(model_conf)
         model.initial_solution = init_solution
         tcache = TrainCache.from_model(model)
-        train_conf = TrainConfig(n_epoch=100, batch_size=100)
-        train(pp, tcache, dataset, train_conf)
+        train(pp, tcache, dataset, self.config.train_config)
         return model
 
     def _solve_problem(self, problem: ProblemT, n_trial: int) -> Optional[ResultProtocol]:
@@ -210,12 +221,12 @@ class SolutionLibraryGen(Generic[ProblemT], ABC):
             difficult_problems: List[ProblemT] = []
             solution_candidates: List[np.ndarray] = []
 
-            while len(difficult_problems) > 100:
+            while len(difficult_problems) > self.config.n_difficult_problem:
                 problem = next(problem_pool)
                 assert problem.n_problem == 1
                 iterval = self.library.infer_iteration_num(problem)[0]
 
-                is_difficult = iterval > self.difficult_threshold
+                is_difficult = iterval > self.config.difficult_threshold
                 if not is_difficult:
                     continue
 
