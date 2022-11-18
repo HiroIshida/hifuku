@@ -156,7 +156,7 @@ class SolutionLibrary(Generic[ProblemT]):
 
 
 @dataclass
-class LibraryGenConfig:
+class LibrarySamplerConfig:
     n_problem: int
     n_problem_inner: int
     train_config: TrainConfig
@@ -165,21 +165,20 @@ class LibraryGenConfig:
 
 
 @dataclass
-class SolutionLibraryGen(Generic[ProblemT], ABC):
+class SolutionLibrarySampler(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT]
     dataset_gen: DatasetGenerator
-    config: LibraryGenConfig
+    config: LibrarySamplerConfig
 
     @classmethod
     def initialize(
         cls,
         problem_type: Type[ProblemT],
         ae_model: VoxelAutoEncoder,
-        difficult_thrshold: float,
         dataset_gen: DatasetGenerator,
-        config: LibraryGenConfig,
-    ) -> "SolutionLibraryGen[ProblemT]":
+        config: LibrarySamplerConfig,
+    ) -> "SolutionLibrarySampler[ProblemT]":
         library = SolutionLibrary.initialize(problem_type, ae_model)
         return cls(problem_type, library, dataset_gen, config)
 
@@ -210,7 +209,13 @@ class SolutionLibraryGen(Generic[ProblemT], ABC):
                 return res
         return None
 
-    def step_active_sampling(self, project_path: Path, problem_pool: ProblemPool[ProblemT]):
+    def step_active_sampling(
+        self, project_path: Path, problem_pool: Optional[ProblemPool[ProblemT]] = None
+    ):
+
+        if problem_pool is None:
+            problem_pool = SimpleProblemPool(self.problem_type)
+
         is_initialized = len(self.library.predictors) > 0
         if not is_initialized:
             problem = self.problem_type.create_standard()

@@ -1,4 +1,14 @@
-from hifuku.guarantee.algorithm import MultiProcessDatasetGenerator
+import tempfile
+from pathlib import Path
+
+from mohou.trainer import TrainConfig
+
+from hifuku.guarantee.algorithm import (
+    LibrarySamplerConfig,
+    MultiProcessDatasetGenerator,
+    SolutionLibrarySampler,
+)
+from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData
 
@@ -20,5 +30,19 @@ def test_MultiProcessDatasetGenerator():
         assert len(rawdata.descriptions) == n_problem_inner
 
 
+def test_SolutionLibrarySampler():
+    gen = MultiProcessDatasetGenerator(TabletopPlanningProblem, n_process=2)
+    tconfig = TrainConfig(n_epoch=1)
+    lconfig = LibrarySamplerConfig(10, 1, tconfig, 5, 10.0)
+    ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        lib_sampler = SolutionLibrarySampler.initialize(
+            TabletopPlanningProblem, ae_model, gen, lconfig
+        )
+        lib_sampler.step_active_sampling(td_path)
+
+
 if __name__ == "__main__":
-    test_MultiProcessDatasetGenerator()
+    test_SolutionLibrarySampler()
