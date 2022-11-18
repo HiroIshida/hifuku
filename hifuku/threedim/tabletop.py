@@ -11,6 +11,7 @@ from skplan.kinematics import (
 )
 from skplan.robot.pr2 import PR2Paramter
 from skplan.solver.constraint import (
+    ConstraintSatisfactionFail,
     ObstacleAvoidanceConstraint,
     PoseConstraint,
     TrajectoryEqualityConstraint,
@@ -19,7 +20,7 @@ from skplan.solver.constraint import (
 )
 from skplan.solver.inverse_kinematics import IKConfig, IKResult, InverseKinematicsSolver
 from skplan.solver.optimization import OsqpSqpPlanner
-from skplan.solver.rrt import BidirectionalRRT, StartConstraintRRT
+from skplan.solver.rrt import BidirectionalRRT, RRTConfig, StartConstraintRRT
 from skplan.space import ConfigurationSpace, TaskSpace
 from skplan.trajectory import Trajectory
 from skplan.viewer.skrobot_viewer import get_robot_config, set_robot_config
@@ -367,13 +368,24 @@ class TabletopPlanningProblem(TabletopProblem):
 
             if traj_init is None:
                 # creat init traj
-                samples = batch_project_to_manifold(
-                    20, cspace, eq_const=pose_const, ineq_const=obstacle_const, focus_weight=0.0
-                )
+                try:
+                    samples = batch_project_to_manifold(
+                        20,
+                        cspace,
+                        eq_const=pose_const,
+                        ineq_const=obstacle_const,
+                        focus_weight=0.0,
+                        max_sample_per_sample=20,
+                    )
+                except ConstraintSatisfactionFail:
+                    raise self.SamplingBasedInitialguessFail
+
                 goal_tree = StartConstraintRRT.from_samples(samples, cspace)
-                rrt = BidirectionalRRT.create_default(start, goal_tree, cspace)
+                rrt_config = RRTConfig(n_max_iter=2000)
+                rrt = BidirectionalRRT.create_default(start, goal_tree, cspace, rrt_config)
                 rrt_solution = rrt.solve()
-                assert rrt_solution is not None
+                if rrt_solution is None:
+                    raise self.SamplingBasedInitialguessFail
                 traj_init = rrt_solution.resample(n_wp)
 
             planner = OsqpSqpPlanner(n_wp, eq_const, ineq_const, cspace)

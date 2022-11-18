@@ -27,6 +27,9 @@ class SolverConfigProtocol(Protocol):
 
 
 class ProblemInterface(ABC):
+    class SamplingBasedInitialguessFail(Exception):
+        pass
+
     @classmethod
     @abstractmethod
     def sample(cls: Type[ProblemT], n_sample: int) -> ProblemT:
