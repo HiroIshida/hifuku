@@ -1,4 +1,3 @@
-import logging
 import warnings
 
 from mohou.file import get_project_path
@@ -24,7 +23,7 @@ warnings.filterwarnings(
 if __name__ == "__main__":
     pp = get_project_path("tabletop_solution_library")
     pp.mkdir(exist_ok=True)
-    logger = create_default_logger(pp, "library_gen", logging.DEBUG)
+    logger = create_default_logger(pp, "library_gen")
 
     gen = MultiProcessDatasetGenerator(TabletopPlanningProblem)
     tconfig = TrainConfig(n_epoch=100)

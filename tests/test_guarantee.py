@@ -14,6 +14,7 @@ from hifuku.guarantee.algorithm import (
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData
+from hifuku.utils import create_default_logger
 
 
 def test_MultiProcessDatasetGenerator():
@@ -62,6 +63,7 @@ def test_SolutionLibrarySampler():
 
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
+            create_default_logger(td_path, "test_trajectorylib")
             lib_sampler = SolutionLibrarySampler.initialize(
                 problem_type, ae_model, gen, lconfig, validation_pool
             )

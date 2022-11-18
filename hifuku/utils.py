@@ -39,9 +39,7 @@ def get_module_source_hash(module_name: str) -> Optional[str]:
     return hash_value
 
 
-def create_default_logger(
-    project_path: Path, prefix: str, level: Optional[int] = logging.INFO
-) -> Logger:
+def create_default_logger(project_path: Path, prefix: str) -> Logger:
     timestr = "_" + time.strftime("%Y%m%d%H%M%S")
     log_dir_path = project_path / "log"
     log_dir_path.mkdir(parents=True, exist_ok=True)
