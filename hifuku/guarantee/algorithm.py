@@ -58,29 +58,22 @@ class HifukuDataGenerationTask(DataGenerationTask[RawData]):
 
 class DatasetGenerator(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
-    cache_base_dir: Path
 
     def __init__(self, problem_type: Type[ProblemT], cache_base_dir: Optional[Path] = None):
         self.problem_type = problem_type
-        if cache_base_dir is None:
-            cache_base_dir = Path("/tmp/hifuku_dataset_cache")
-        self.cache_base_dir = cache_base_dir
 
     @abstractmethod
-    def generate(self, init_solution: np.ndarray, n_problem: int, n_problem_inner) -> Path:
+    def generate(
+        self, init_solution: np.ndarray, n_problem: int, n_problem_inner, cache_dir_path: Path
+    ) -> None:
         pass
 
 
 class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
     n_process: int
 
-    def __init__(
-        self,
-        problem_type: Type[ProblemT],
-        cache_base_dir: Optional[Path] = None,
-        n_process: Optional[int] = None,
-    ):
-        super().__init__(problem_type, cache_base_dir)
+    def __init__(self, problem_type: Type[ProblemT], n_process: Optional[int] = None):
+        super().__init__(problem_type)
         if n_process is None:
             cpu_num = os.cpu_count()
             assert cpu_num is not None
@@ -91,11 +84,9 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
     def split_number(num, div):
         return [num // div + (1 if x < num % div else 0) for x in range(div)]
 
-    def generate(self, init_solution: np.ndarray, n_problem: int, n_problem_inner) -> Path:
-        cache_dir_name = "{}-{}".format(self.problem_type.__name__, str(uuid.uuid4())[-8:])
-        cache_dir_path = self.cache_base_dir / cache_dir_name
-        cache_dir_path.mkdir(parents=True, exist_ok=False)
-
+    def generate(
+        self, init_solution: np.ndarray, n_problem: int, n_problem_inner, cache_dir_path: Path
+    ) -> None:
         n_problem_per_process_list = self.split_number(n_problem, self.n_process)
 
         if self.n_process > 1:
@@ -115,7 +106,6 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
             arg = DataGenerationTaskArg(n_problem, True, cache_dir_path, extension=".npz")
             task = HifukuDataGenerationTask(arg, n_problem_inner, init_solution)
             task.run()
-        return cache_dir_path
 
 
 @dataclass
@@ -184,11 +174,19 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
     def learn_predictors(self, init_solution: np.ndarray, project_path: Path) -> IterationPredictor:
         pp = project_path
-        dataset_path = self.dataset_gen.generate(
-            init_solution, self.config.n_problem, self.config.n_problem_inner
+        cache_dir_base = pp / "dataset_cache"
+        cache_dir_base.mkdir(exist_ok=True, parents=True)
+
+        cache_dir_name = "{}-{}".format(self.problem_type.__name__, str(uuid.uuid4())[-8:])
+        cache_dir_path = cache_dir_base / cache_dir_name
+        assert not cache_dir_path.exists()
+        cache_dir_path.mkdir()
+
+        self.dataset_gen.generate(
+            init_solution, self.config.n_problem, self.config.n_problem_inner, cache_dir_path
         )
-        dataset = IterationPredictorDataset.load(dataset_path, self.library.ae_model)
-        raw_dataset = LazyDecomplessDataset.load(dataset_path, RawData, n_worker=-1)
+        dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
+        raw_dataset = LazyDecomplessDataset.load(cache_dir_path, RawData, n_worker=-1)
 
         rawdata = raw_dataset.get_data(np.array([0]))[0]
         init_solution = rawdata.init_solution

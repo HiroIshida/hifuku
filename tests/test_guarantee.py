@@ -20,14 +20,17 @@ def test_MultiProcessDatasetGenerator():
     assert sol.success
     n_problem = 4
     n_problem_inner = 10
-    dataset_path = gen.generate(sol.x, n_problem, n_problem_inner)
 
-    file_path_list = list(dataset_path.iterdir())
-    assert len(file_path_list) == n_problem
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        gen.generate(sol.x, n_problem, n_problem_inner, td_path)
 
-    for file_path in file_path_list:
-        rawdata = RawData.load(file_path, decompress=True)
-        assert len(rawdata.descriptions) == n_problem_inner
+        file_path_list = list(td_path.iterdir())
+        assert len(file_path_list) == n_problem
+
+        for file_path in file_path_list:
+            rawdata = RawData.load(file_path, decompress=True)
+            assert len(rawdata.descriptions) == n_problem_inner
 
 
 def test_SolutionLibrarySampler():
