@@ -3,7 +3,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Tuple, Type, TypeVar, Union
+from typing import Dict, List, Optional, Protocol, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import torch
@@ -41,9 +41,7 @@ class ProblemInterface(ABC):
         ...
 
     @abstractmethod
-    def solve(
-        self, sol_init: Optional[np.ndarray] = None, config: Optional[Any] = None
-    ) -> Tuple[ResultProtocol, ...]:
+    def solve(self, sol_init: Optional[np.ndarray] = None) -> Tuple[ResultProtocol, ...]:
         ...
 
     @abstractmethod
@@ -56,6 +54,10 @@ class ProblemInterface(ABC):
 
     @abstractmethod
     def n_problem(self) -> int:
+        ...
+
+    @abstractmethod
+    def get_solver_config(self) -> SolverConfigProtocol:
         ...
 
 
@@ -105,7 +107,6 @@ class RawData(ChunkBase):
         problem: ProblemInterface,
         results: Tuple[ResultProtocol, ...],
         init_solution: np.ndarray,
-        config: SolverConfigProtocol,
     ):
         mesh = problem.get_mesh()
         descriptions = problem.get_descriptions()
@@ -113,8 +114,10 @@ class RawData(ChunkBase):
         nfevs = [result.nfev for result in results]
         successes = [result.success for result in results]
         solutions = [result.x for result in results]
+        config = problem.get_solver_config()
         maxiter = config.maxiter
         maxfev = config.maxfev
+        assert maxiter == maxfev
         return cls(
             mesh, descriptions, nits, nfevs, successes, solutions, init_solution, maxiter, maxfev
         )
@@ -175,16 +178,16 @@ class RawData(ChunkBase):
         descriptions_np = np.stack(self.descriptions)
         description = torch.from_numpy(descriptions_np).float()
 
-        crop_nfev = self.maxfev
-        nfevs_np = np.minimum(
-            np.array(self.nfevs) + np.array(np.logical_not(self.successes, dtype=bool)) * crop_nfev,
-            crop_nfev,
+        crop_nit = self.maxfev
+        nits_np = np.minimum(
+            np.array(self.nits) + np.array(np.logical_not(self.successes, dtype=bool)) * crop_nit,
+            crop_nit,
         )
-        nfevs = torch.from_numpy(nfevs_np).float()
+        nits = torch.from_numpy(nits_np).float()
 
         solution_np = np.array(self.solutions)
         solutions = torch.from_numpy(solution_np).float()
-        return mesh, description, nfevs, solutions
+        return mesh, description, nits, solutions
 
     def __len__(self) -> int:
         return 1

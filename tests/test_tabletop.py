@@ -1,6 +1,6 @@
 import numpy as np
 
-from hifuku.threedim.tabletop import IKConfig, TabletopIKProblem
+from hifuku.threedim.tabletop import TabletopIKProblem
 
 
 def test_exact_grid_conversion():
@@ -29,9 +29,8 @@ def test_solve_problem():
     for _ in range(10):
         while True:
             sample_count += 1
-            config = IKConfig(clearance=0.03)
             problem = TabletopIKProblem.sample(n_pose=1)
-            res = problem.solve(av_init, config=config)[0]
+            res = problem.solve(av_init)[0]
             if res.success:
                 efkin, colkin = problem.setup_kinmaps()
                 assert not colkin.is_colliding(problem.get_sdf(), res.x)

@@ -288,19 +288,20 @@ class TabletopProblem(ProblemInterface):
 
 @dataclass
 class TabletopIKProblem(TabletopProblem):
-    def solve(
-        self, av_init: Optional[np.ndarray] = None, config: Optional[IKConfig] = None
-    ) -> Tuple[IKResult, ...]:
-        if config is None:
-            config = IKConfig()
+    def get_solver_config(self) -> IKConfig:
+        config = IKConfig(disp=False)
+        return config
+
+    def solve(self, av_init: Optional[np.ndarray] = None) -> Tuple[IKResult, ...]:
         efkin, colkin = self.setup_kinmaps()
         tspace = TaskSpace(3, sdf=self.get_sdf())  # type: ignore
         cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
 
         result_list = []
+        solver_config = self.get_solver_config()
         for target_pose in self.target_pose_list:
             target_pose = skcoords_to_pose_vec(target_pose)
-            solver = InverseKinematicsSolver([target_pose], efkin, cspace, config=config)
+            solver = InverseKinematicsSolver([target_pose], efkin, cspace, config=solver_config)
             result = solver.solve(x_cspace_init=av_init, avoid_obstacle=True)
             result_list.append(result)
         return tuple(result_list)
@@ -335,15 +336,13 @@ class TabletopPlanningProblem(TabletopProblem):
         pose = world.sample_standard_pose()
         return cls(world, [pose])
 
+    def get_solver_config(self) -> OsqpSqpPlanner.SolverConfig:
+        config = OsqpSqpPlanner.SolverConfig(verbose=False)
+        return config
+
     def solve(
-        self,
-        traj_vec_init: Optional[np.ndarray] = None,
-        config: Optional[OsqpSqpPlanner.SolverConfig] = None,
+        self, traj_vec_init: Optional[np.ndarray] = None
     ) -> Tuple[OsqpSqpPlanner.Result, ...]:
-
-        if config is None:
-            config = OsqpSqpPlanner.SolverConfig()
-
         n_wp = 15
         pr2 = self.setup_pr2()
         efkin, colkin = self.setup_kinmaps()
@@ -356,6 +355,8 @@ class TabletopPlanningProblem(TabletopProblem):
             traj_init = Trajectory(list(traj_vec_init.reshape(n_wp, -1)))
         else:
             traj_init = None
+
+        solver_config = self.get_solver_config()
 
         result_list = []
         for target_pose in self.target_pose_list:
@@ -389,6 +390,6 @@ class TabletopPlanningProblem(TabletopProblem):
                 traj_init = rrt_solution.resample(n_wp)
 
             planner = OsqpSqpPlanner(n_wp, eq_const, ineq_const, cspace)
-            result = planner.solve(traj_init, solver_config=config)
+            result = planner.solve(traj_init, solver_config=solver_config)
             result_list.append(result)
         return tuple(result_list)
