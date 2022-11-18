@@ -100,9 +100,9 @@ class LazyDecomplessDataset(Generic[ChunkT]):
 
     def get_data(self, indices: np.ndarray) -> List[ChunkT]:
         command = "xargs -n 1 -P {0} {1} --keep --force".format(self.n_worker, _unzip_command)
-        paths = [self.compressed_path_list[i] for i in indices]
-        paths_as_string = "\n".join([str(p) for p in paths]).encode()
-        subprocess.run(command, shell=True, input=paths_as_string, text=False)
+        paths_compressed = [self.compressed_path_list[i] for i in indices]
+        paths_compressed_as_byte = "\n".join([str(p) for p in paths_compressed]).encode()
+        subprocess.run(command, shell=True, input=paths_compressed_as_byte, text=False, check=True)
 
         def index_to_uncompressed_path(idx: int) -> Path:
             path = self.compressed_path_list[idx]
@@ -113,9 +113,8 @@ class LazyDecomplessDataset(Generic[ChunkT]):
         chunk_list = [self.chunk_type.load(path) for path in paths]
 
         # remove trash
-        string_paths = [str(path) for path in paths]
-        command = "rm %s" % " ".join(string_paths)
-        subprocess.run(command, shell=True)
+        paths_as_byte = "\n".join([str(p) for p in paths]).encode()
+        subprocess.run("xargs rm", shell=True, input=paths_as_byte, text=False, check=True)
         return chunk_list
 
     @staticmethod
