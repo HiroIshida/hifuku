@@ -251,6 +251,12 @@ class TabletopProblem(ProblemInterface):
         return 12
 
     @classmethod
+    def create_standard(cls: Type[TableTopProblemT]) -> TableTopProblemT:
+        world = create_simple_tabletop_world(with_obstacle=False)
+        pose = world.sample_standard_pose()
+        return cls(world, [pose])
+
+    @classmethod
     def sample(cls: Type[TableTopProblemT], n_pose: int) -> TableTopProblemT:
         pr2 = cls.setup_pr2()
         efkin, colkin = cls.setup_kinmaps()
@@ -331,12 +337,6 @@ class TabletopIKProblem(TabletopProblem):
 
 @dataclass
 class TabletopPlanningProblem(TabletopProblem):
-    @classmethod
-    def create_standard(cls: Type["TabletopPlanningProblem"]) -> "TabletopPlanningProblem":
-        world = create_simple_tabletop_world(with_obstacle=False)
-        pose = world.sample_standard_pose()
-        return cls(world, [pose])
-
     @classmethod
     def get_solver_config(self) -> OsqpSqpPlanner.SolverConfig:
         config = OsqpSqpPlanner.SolverConfig(verbose=False)
