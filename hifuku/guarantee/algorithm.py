@@ -148,12 +148,16 @@ class SolutionLibrary(Generic[ProblemT]):
     ae_model: VoxelAutoEncoder
     predictors: List[IterationPredictor]
     margins: List[float]
+    solvable_threshold_factor: float
 
     @classmethod
     def initialize(
-        cls, problem_type: Type[ProblemT], ae_model: VoxelAutoEncoder
+        cls,
+        problem_type: Type[ProblemT],
+        ae_model: VoxelAutoEncoder,
+        solvable_threshold_factor: float,
     ) -> "SolutionLibrary[ProblemT]":
-        return cls(problem_type, ae_model, [], [])
+        return cls(problem_type, ae_model, [], [], solvable_threshold_factor)
 
     @property
     def device(self) -> torch.device:
@@ -178,10 +182,26 @@ class SolutionLibrary(Generic[ProblemT]):
         for pred, margin in zip(self.predictors, self.margins):
             # margin is for correcting the overestimated inference
             itervals, _ = pred.forward((encoded_repeated, desc))
+            itervals = itervals.squeeze(dim=0)
             itervals_np = itervals.detach().cpu().numpy() + margin
             itervals_list.append(itervals_np)
         itervals_min = np.min(np.array(itervals_list), axis=0)
         return itervals_min
+
+    def success_iter_threshold(self) -> float:
+        config = self.problem_type.get_solver_config()
+        threshold = config.maxiter * self.solvable_threshold_factor
+        return threshold
+
+    def measure_coverage(self, problem_pool: FixedProblemPool[ProblemT]) -> float:
+        threshold = self.success_iter_threshold()
+        count = 0
+        for problem in problem_pool:
+            assert problem.n_problem() == 1
+            vals_min = self.infer_iteration_num(problem)[0].item()
+            vals_min < threshold
+            count += 1
+        return count / float(len(problem_pool))
 
     def add(self, predictor: IterationPredictor, margin: float):
         self.predictors.append(predictor)
@@ -218,7 +238,9 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         config: LibrarySamplerConfig,
         validation_problem_pool: FixedProblemPool[ProblemT],
     ) -> "SolutionLibrarySampler[ProblemT]":
-        library = SolutionLibrary.initialize(problem_type, ae_model)
+        library = SolutionLibrary.initialize(
+            problem_type, ae_model, config.solvable_threshold_factor
+        )
         return cls(problem_type, library, dataset_gen, config, validation_problem_pool, [])
 
     def step_active_sampling(
@@ -234,7 +256,11 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         predictor = self.learn_predictors(init_solution, project_path)
 
         singleton_library = SolutionLibrary(
-            self.problem_type, self.library.ae_model, [predictor], [0.0]
+            self.problem_type,
+            self.library.ae_model,
+            [predictor],
+            [0.0],
+            self.config.solvable_threshold_factor,
         )
 
         logger.info("start measuring coverage")
@@ -243,7 +269,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         maxiter = self.problem_type.get_solver_config().maxiter
         for problem in tqdm.tqdm(self.validation_problem_pool):
             assert problem.n_problem() == 1
-            iterval_est = singleton_library.infer_iteration_num(problem)[0].item()
+            iterval_est = singleton_library.infer_iteration_num(problem)[0]
             iterval_est_list.append(iterval_est)
 
             result = problem.solve(init_solution)[0]
@@ -257,10 +283,13 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         logger.info(coverage_result)
 
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
-        logger.info("margin is set to {}".format(margin))
 
+        logger.info("margin is set to {}".format(margin))
         self.coverage_result_list.append(coverage_result)
         self.library.add(predictor, margin)
+
+        coverage = self.library.measure_coverage(self.validation_problem_pool)
+        logger.info("current library's coverage estimate: {}".format(coverage))
 
     def learn_predictors(self, init_solution: np.ndarray, project_path: Path) -> IterationPredictor:
         pp = project_path
