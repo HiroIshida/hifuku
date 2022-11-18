@@ -12,6 +12,7 @@ import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 
 from hifuku.guarantee.margin import CoverageResult
+from hifuku.guarantee.utils import compute_real_itervals
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from hifuku.neuralnet import (
@@ -255,33 +256,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         init_solution = self._determine_init_solution(problem_pool)
         predictor = self.learn_predictors(init_solution, project_path)
 
-        singleton_library = SolutionLibrary(
-            self.problem_type,
-            self.library.ae_model,
-            [predictor],
-            [0.0],
-            self.config.solvable_threshold_factor,
-        )
-
-        logger.info("start measuring coverage")
-        iterval_est_list = []
-        iterval_real_list = []
-        maxiter = self.problem_type.get_solver_config().maxiter
-        for problem in tqdm.tqdm(self.validation_problem_pool):
-            assert problem.n_problem() == 1
-            iterval_est = singleton_library.infer_iteration_num(problem)[0]
-            iterval_est_list.append(iterval_est)
-
-            result = problem.solve(init_solution)[0]
-            iterval_real = result.nit if result.success else maxiter
-            iterval_real_list.append(iterval_real)
-
-        success_iter_threshold = maxiter * self.config.difficult_threshold_factor
-        coverage_result = CoverageResult(
-            np.array(iterval_real_list), np.array(iterval_est_list), success_iter_threshold
-        )
-        logger.info(coverage_result)
-
+        coverage_result = self._compute_coverage(predictor, init_solution)
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
         logger.info("margin is set to {}".format(margin))
@@ -290,6 +265,37 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         coverage = self.library.measure_coverage(self.validation_problem_pool)
         logger.info("current library's coverage estimate: {}".format(coverage))
+
+    def _compute_coverage(
+        self, predictor: IterationPredictor, init_solution: np.ndarray
+    ) -> CoverageResult:
+
+        logger.info("start measuring coverage")
+        singleton_library = SolutionLibrary(
+            self.problem_type,
+            self.library.ae_model,
+            [predictor],
+            [0.0],
+            self.config.solvable_threshold_factor,
+        )
+
+        maxiter = self.problem_type.get_solver_config().maxiter
+
+        iterval_est_list = []
+        for problem in tqdm.tqdm(self.validation_problem_pool):
+            assert problem.n_problem() == 1
+            iterval_est = singleton_library.infer_iteration_num(problem)[0]
+            iterval_est_list.append(iterval_est)
+
+        problems = [p for p in self.validation_problem_pool]
+        iterval_real_list = compute_real_itervals(problems, init_solution, maxiter)
+
+        success_iter_threshold = maxiter * self.config.difficult_threshold_factor
+        coverage_result = CoverageResult(
+            np.array(iterval_real_list), np.array(iterval_est_list), success_iter_threshold
+        )
+        logger.info(coverage_result)
+        return coverage_result
 
     def learn_predictors(self, init_solution: np.ndarray, project_path: Path) -> IterationPredictor:
         pp = project_path
