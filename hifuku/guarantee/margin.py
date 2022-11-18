@@ -58,3 +58,12 @@ class CoverageResult:
 
         sorted_diffs = np.sort(diffs)[::-1]  # decreasing order
         return sorted_diffs[num_acceptable] + 1e-6
+
+    def __str__(self) -> str:
+        string = "coverage result => "
+        string += "n_sample: {}, ".format(len(self))
+        string += "true positive: {}, ".format(sum(self.true_positive_bools))
+        string += "true negative: {}, ".format(sum(self.true_negative_bools))
+        string += "false positive: {}, ".format(sum(self.false_postive_bools))
+        string += "false negative: {}".format(sum(self.false_negative_bools))
+        return string

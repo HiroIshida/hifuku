@@ -207,6 +207,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
     dataset_gen: DatasetGenerator
     config: LibrarySamplerConfig
     validation_problem_pool: FixedProblemPool[ProblemT]
+    coverage_result_list: List[CoverageResult]
 
     @classmethod
     def initialize(
@@ -218,7 +219,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         validation_problem_pool: FixedProblemPool[ProblemT],
     ) -> "SolutionLibrarySampler[ProblemT]":
         library = SolutionLibrary.initialize(problem_type, ae_model)
-        return cls(problem_type, library, dataset_gen, config, validation_problem_pool)
+        return cls(problem_type, library, dataset_gen, config, validation_problem_pool, [])
 
     def step_active_sampling(
         self, project_path: Path, problem_pool: Optional[IteratorProblemPool[ProblemT]] = None
@@ -236,15 +237,15 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             self.problem_type, self.library.ae_model, [predictor], [0.0]
         )
 
+        logger.info("start measuring coverage")
         iterval_est_list = []
         iterval_real_list = []
         maxiter = self.problem_type.get_solver_config().maxiter
-        for problem in self.validation_problem_pool:
+        for problem in tqdm.tqdm(self.validation_problem_pool):
             assert problem.n_problem() == 1
             iterval_est = singleton_library.infer_iteration_num(problem)[0].item()
             iterval_est_list.append(iterval_est)
 
-            # hmm, it's bit dirty that the following clamping is applied here and also in RawData
             result = problem.solve(init_solution)[0]
             iterval_real = result.nit if result.success else maxiter
             iterval_real_list.append(iterval_real)
@@ -253,7 +254,12 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         coverage_result = CoverageResult(
             np.array(iterval_real_list), np.array(iterval_est_list), success_iter_threshold
         )
+        logger.info(coverage_result)
+
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+        logger.info("margin is set to {}".format(margin))
+
+        self.coverage_result_list.append(coverage_result)
         self.library.add(predictor, margin)
 
     def learn_predictors(self, init_solution: np.ndarray, project_path: Path) -> IterationPredictor:
@@ -270,7 +276,6 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         self.dataset_gen.generate(
             init_solution, self.config.n_problem, self.config.n_problem_inner, cache_dir_path
         )
-        logger.info("finish generating dataset")
 
         dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
         raw_dataset = LazyDecomplessDataset.load(cache_dir_path, RawData, n_worker=-1)
@@ -284,7 +289,6 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         model.initial_solution = init_solution
         tcache = TrainCache.from_model(model)
         train(pp, tcache, dataset, self.config.train_config)
-        logger.info("finish training model")
         return model
 
     def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
