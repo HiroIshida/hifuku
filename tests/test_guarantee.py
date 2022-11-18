@@ -1,6 +1,8 @@
 import tempfile
 from pathlib import Path
 
+import numpy as np
+import torch
 from mohou.trainer import TrainConfig
 
 from hifuku.guarantee.algorithm import (
@@ -36,9 +38,9 @@ def test_MultiProcessDatasetGenerator():
 def test_SolutionLibrarySampler():
     gen = MultiProcessDatasetGenerator(TabletopPlanningProblem, n_process=2)
     tconfig = TrainConfig(n_epoch=1)
-    difficult_threshold = 0.0  # all pass
+    difficult_threshold = -np.inf  # all pass
     lconfig = LibrarySamplerConfig(10, 1, tconfig, 5, difficult_threshold)
-    ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
+    ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig(), device=torch.device("cuda"))
 
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)

@@ -7,6 +7,7 @@ from typing import Generic, Iterator, Optional, Type
 
 import numpy as np
 import torch
+import tqdm
 from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train
 from skplan.solver.optimization import OsqpSqpPlanner
@@ -122,15 +123,20 @@ class SolutionLibrary(Generic[ProblemT]):
     ) -> "SolutionLibrary[ProblemT]":
         return cls(problem_type, ae_model, [], [])
 
+    @property
+    def device(self) -> torch.device:
+        return self.ae_model.device
+
     def infer_iteration_num(self, problem: ProblemT) -> np.ndarray:
         # TODO: consider margin
         assert len(self.predictors) > 0
 
-        mesh_np = problem.get_mesh()
-        mesh = torch.from_numpy(np.expand_dims(mesh_np, axis=(0, 1))).float()
+        mesh_np = np.expand_dims(problem.get_mesh(), axis=(0, 1))
+        mesh = torch.from_numpy(mesh_np).float().to(self.device)
 
         desc_np = np.array(problem.get_descriptions())
         desc = torch.from_numpy(desc_np).float()
+        desc = desc.to(self.device)
         n_batch, _ = desc_np.shape
 
         encoded: torch.Tensor = self.ae_model.encoder(mesh)
@@ -144,6 +150,10 @@ class SolutionLibrary(Generic[ProblemT]):
             itervals_list.append(itervals_np)
         itervals_min = np.min(np.array(itervals_list), axis=0)
         return itervals_min
+
+    def add(self, predictor: IterationPredictor, margin: float):
+        self.predictors.append(predictor)
+        self.margins.append(margin)
 
 
 @dataclass
@@ -201,45 +211,48 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         return model
 
     def _solve_problem(self, problem: ProblemT, n_trial: int) -> Optional[ResultProtocol]:
-        assert problem.n_problem == 1
+        assert problem.n_problem() == 1
         for _ in range(n_trial):
-            res = problem.solve()[0]
+            try:
+                res = problem.solve()[0]
+            except self.problem_type.SamplingBasedInitialguessFail:
+                continue
             if res.success:
                 return res
         return None
 
-    def step_active_sampling(
-        self, project_path: Path, problem_pool: Optional[ProblemPool[ProblemT]] = None
-    ):
-
-        if problem_pool is None:
-            problem_pool = SimpleProblemPool(self.problem_type)
+    def _determine_init_solution(
+        self, project_path: Path, problem_pool: ProblemPool[ProblemT]
+    ) -> np.ndarray:
 
         is_initialized = len(self.library.predictors) > 0
         if not is_initialized:
             problem = self.problem_type.create_standard()
             result = problem.solve()[0]
             assert result.success
-            self.learn_predictors(result.x, project_path)
+            return result.x
         else:
             difficult_problems: List[ProblemT] = []
             solution_candidates: List[np.ndarray] = []
 
-            while len(difficult_problems) > self.config.n_difficult_problem:
-                problem = next(problem_pool)
-                assert problem.n_problem == 1
-                iterval = self.library.infer_iteration_num(problem)[0]
+            with tqdm.tqdm(total=self.config.n_difficult_problem) as pbar:
+                while len(difficult_problems) < self.config.n_difficult_problem:
+                    problem = next(problem_pool)
+                    assert problem.n_problem() == 1
+                    iterval = self.library.infer_iteration_num(problem)[0]
 
-                is_difficult = iterval > self.config.difficult_threshold
-                if not is_difficult:
-                    continue
+                    is_difficult = iterval > self.config.difficult_threshold
+                    if not is_difficult:
+                        continue
 
-                # try solve problem 5 trial
-                res = self._solve_problem(problem, 5)
-                if res is not None:  # seems feasible
-                    difficult_problems.append(problem)
-                    assert res.success
-                    solution_candidates.append(res.x)
+                    # try solve problem 5 trial
+                    print("try solving...")
+                    res = self._solve_problem(problem, 5)
+                    if res is not None:  # seems feasible
+                        difficult_problems.append(problem)
+                        assert res.success
+                        solution_candidates.append(res.x)
+                        pbar.update(1)
 
             score_list = []
             for solution_guess in solution_candidates:
@@ -249,4 +262,16 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
                     score += int(res.success)
                 score_list.append(score)
             best_solution = solution_candidates[np.argmax(score_list)]
-            self.learn_predictors(best_solution, project_path)
+            return best_solution
+
+    def step_active_sampling(
+        self, project_path: Path, problem_pool: Optional[ProblemPool[ProblemT]] = None
+    ):
+
+        if problem_pool is None:
+            problem_pool = SimpleProblemPool(self.problem_type)
+
+        init_solution = self._determine_init_solution(project_path, problem_pool)
+        predictor = self.learn_predictors(init_solution, project_path)
+        margin = 0.0
+        self.library.add(predictor, margin)
