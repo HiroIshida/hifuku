@@ -54,6 +54,7 @@ class ProblemInterface(ABC):
     def n_problem(self) -> int:
         ...
 
+    @classmethod
     @abstractmethod
     def get_solver_config(self) -> SolverConfigProtocol:
         ...
