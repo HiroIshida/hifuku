@@ -39,18 +39,25 @@ def test_SolutionLibrarySampler():
     gen = MultiProcessDatasetGenerator(TabletopPlanningProblem, n_process=2)
     tconfig = TrainConfig(n_epoch=1)
     difficult_threshold = -np.inf  # all pass
-    lconfig = LibrarySamplerConfig(10, 1, tconfig, 5, difficult_threshold)
-    ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig(), device=torch.device("cuda"))
+    lconfig = LibrarySamplerConfig(10, 1, tconfig, 2, difficult_threshold)
 
-    with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        lib_sampler = SolutionLibrarySampler.initialize(
-            TabletopPlanningProblem, ae_model, gen, lconfig
-        )
-        # init
-        lib_sampler.step_active_sampling(td_path)
-        # active sampling
-        lib_sampler.step_active_sampling(td_path)
+    test_devices = [torch.device("cpu")]
+    if torch.cuda.is_available():
+        test_devices.append(torch.device("cuda"))
+
+    for device in test_devices:
+        ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
+        ae_model.put_on_device(device)
+
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            lib_sampler = SolutionLibrarySampler.initialize(
+                TabletopPlanningProblem, ae_model, gen, lconfig
+            )
+            # init
+            lib_sampler.step_active_sampling(td_path)
+            # active sampling
+            lib_sampler.step_active_sampling(td_path)
 
 
 if __name__ == "__main__":
