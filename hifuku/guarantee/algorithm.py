@@ -28,8 +28,12 @@ class ProblemPool(Iterable[ProblemT]):
     problem_type: Type[ProblemT]
 
 
+class IteratorProblemPool(Iterator[ProblemT], ProblemPool[ProblemT]):
+    pass
+
+
 @dataclass
-class SimpleProblemPool(Iterator[ProblemT], ProblemPool[ProblemT]):
+class SimpleProblemPool(IteratorProblemPool[ProblemT]):
     problem_type: Type[ProblemT]
 
     def __next__(self) -> ProblemT:
@@ -211,7 +215,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         return cls(problem_type, library, dataset_gen, config, validation_problem_pool)
 
     def step_active_sampling(
-        self, project_path: Path, problem_pool: Optional[ProblemPool[ProblemT]] = None
+        self, project_path: Path, problem_pool: Optional[IteratorProblemPool[ProblemT]] = None
     ):
 
         if problem_pool is None:
@@ -271,7 +275,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         train(pp, tcache, dataset, self.config.train_config)
         return model
 
-    def _determine_init_solution(self, problem_pool: ProblemPool[ProblemT]) -> np.ndarray:
+    def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
 
         is_initialized = len(self.library.predictors) > 0
         if not is_initialized:
@@ -300,7 +304,9 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             best_solution = solution_candidates[np.argmax(score_list)]
             return best_solution
 
-    def _sample_solution_canidates(self, problem_pool: ProblemPool[ProblemT]) -> List[np.ndarray]:
+    def _sample_solution_canidates(
+        self, problem_pool: IteratorProblemPool[ProblemT]
+    ) -> List[np.ndarray]:
         maxiter = self.problem_type.get_solver_config().maxiter
         difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
 
@@ -327,7 +333,9 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
                         pbar.update(1)
         return solution_candidates
 
-    def _sample_difficult_problems(self, problem_pool: ProblemPool[ProblemT]) -> List[ProblemT]:
+    def _sample_difficult_problems(
+        self, problem_pool: IteratorProblemPool[ProblemT]
+    ) -> List[ProblemT]:
         maxiter = self.problem_type.get_solver_config().maxiter
         difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
 
