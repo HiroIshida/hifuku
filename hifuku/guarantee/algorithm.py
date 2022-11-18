@@ -10,8 +10,8 @@ import torch
 import tqdm
 from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train
-from skplan.solver.optimization import OsqpSqpPlanner
 
+from hifuku.guarantee.margin import CoverageResult
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from hifuku.neuralnet import (
@@ -21,7 +21,7 @@ from hifuku.neuralnet import (
     VoxelAutoEncoder,
 )
 from hifuku.threedim.tabletop import TabletopPlanningProblem
-from hifuku.types import List, ProblemT, RawData, ResultProtocol
+from hifuku.types import List, ProblemT, RawData
 
 
 class ProblemPool(Iterable[ProblemT]):
@@ -72,11 +72,10 @@ class HifukuDataGenerationTask(DataGenerationTask[RawData]):
         pass
 
     def generate_single_data(self) -> RawData:
-        config = OsqpSqpPlanner.SolverConfig(verbose=False)
         problem = TabletopPlanningProblem.sample(n_pose=self.n_problem_inner)
-        results = problem.solve(self.init_solution, config=config)
+        results = problem.solve(self.init_solution)
         print([r.nit for r in results])
-        data = RawData.create(problem, results, self.init_solution, config)
+        data = RawData.create(problem, results, self.init_solution)
         return data
 
 
@@ -184,8 +183,10 @@ class LibrarySamplerConfig:
     n_problem: int
     n_problem_inner: int
     train_config: TrainConfig
-    n_difficult_problem: int
-    difficult_threshold: float
+    n_difficult_problem: int = 100
+    solvable_threshold_factor: float = 0.8
+    difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
+    acceptable_false_positive_rate: float = 0.05
 
 
 @dataclass
@@ -194,6 +195,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
     library: SolutionLibrary[ProblemT]
     dataset_gen: DatasetGenerator
     config: LibrarySamplerConfig
+    validation_problem_pool: FixedProblemPool[ProblemT]
 
     @classmethod
     def initialize(
@@ -202,9 +204,44 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         ae_model: VoxelAutoEncoder,
         dataset_gen: DatasetGenerator,
         config: LibrarySamplerConfig,
+        validation_problem_pool: FixedProblemPool[ProblemT],
     ) -> "SolutionLibrarySampler[ProblemT]":
         library = SolutionLibrary.initialize(problem_type, ae_model)
-        return cls(problem_type, library, dataset_gen, config)
+        return cls(problem_type, library, dataset_gen, config, validation_problem_pool)
+
+    def step_active_sampling(
+        self, project_path: Path, problem_pool: Optional[ProblemPool[ProblemT]] = None
+    ):
+
+        if problem_pool is None:
+            problem_pool = SimpleProblemPool(self.problem_type)
+
+        init_solution = self._determine_init_solution(project_path, problem_pool)
+        predictor = self.learn_predictors(init_solution, project_path)
+
+        singleton_library = SolutionLibrary(
+            self.problem_type, self.library.ae_model, [predictor], [0.0]
+        )
+
+        iterval_est_list = []
+        iterval_real_list = []
+        maxiter = self.problem_type.get_solver_config().maxiter
+        for problem in self.validation_problem_pool:
+            assert problem.n_problem() == 1
+            iterval_est = singleton_library.infer_iteration_num(problem)[0].item()
+            iterval_est_list.append(iterval_est)
+
+            # hmm, it's bit dirty that the following clamping is applied here and also in RawData
+            result = problem.solve(init_solution)[0]
+            iterval_real = result.nit if result.success else maxiter
+            iterval_real_list.append(iterval_real)
+
+        success_iter_threshold = maxiter * self.config.difficult_threshold_factor
+        coverage_result = CoverageResult(
+            np.array(iterval_real_list), np.array(iterval_est_list), success_iter_threshold
+        )
+        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+        self.library.add(predictor, margin)
 
     def learn_predictors(self, init_solution: np.ndarray, project_path: Path) -> IterationPredictor:
         pp = project_path
@@ -233,17 +270,6 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         train(pp, tcache, dataset, self.config.train_config)
         return model
 
-    def _solve_problem(self, problem: ProblemT, n_trial: int) -> Optional[ResultProtocol]:
-        assert problem.n_problem() == 1
-        for _ in range(n_trial):
-            try:
-                res = problem.solve()[0]
-            except self.problem_type.SamplingBasedInitialguessFail:
-                continue
-            if res.success:
-                return res
-        return None
-
     def _determine_init_solution(
         self, project_path: Path, problem_pool: ProblemPool[ProblemT]
     ) -> np.ndarray:
@@ -256,7 +282,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
                     result = problem.solve()[0]
                     assert result.success
                     return result.x
-                except problem.SamplingBasedInitialguessFail:
+                except self.problem_type.SamplingBasedInitialguessFail:
                     pass
             # assumes that standared problem is easy enough and must be solved
             assert False
@@ -264,19 +290,27 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             difficult_problems: List[ProblemT] = []
             solution_candidates: List[np.ndarray] = []
 
+            maxiter = self.problem_type.get_solver_config().maxiter
+            difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
             with tqdm.tqdm(total=self.config.n_difficult_problem) as pbar:
                 while len(difficult_problems) < self.config.n_difficult_problem:
                     problem = next(problem_pool)
                     assert problem.n_problem() == 1
                     iterval = self.library.infer_iteration_num(problem)[0]
 
-                    is_difficult = iterval > self.config.difficult_threshold
+                    is_difficult = iterval > difficult_iter_threshold
                     if not is_difficult:
                         continue
 
                     # try solve problem 5 trial
                     print("try solving...")
-                    res = self._solve_problem(problem, 5)
+                    assert problem.n_problem() == 1
+                    try:
+                        res = problem.solve()[0]
+                    except self.problem_type.SamplingBasedInitialguessFail:
+                        continue
+                    if not res.success:
+                        continue
                     if res is not None:  # seems feasible
                         difficult_problems.append(problem)
                         assert res.success
@@ -292,15 +326,3 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
                 score_list.append(score)
             best_solution = solution_candidates[np.argmax(score_list)]
             return best_solution
-
-    def step_active_sampling(
-        self, project_path: Path, problem_pool: Optional[ProblemPool[ProblemT]] = None
-    ):
-
-        if problem_pool is None:
-            problem_pool = SimpleProblemPool(self.problem_type)
-
-        init_solution = self._determine_init_solution(project_path, problem_pool)
-        predictor = self.learn_predictors(init_solution, project_path)
-        margin = 0.0
-        self.library.add(predictor, margin)

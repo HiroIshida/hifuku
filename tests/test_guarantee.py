@@ -8,6 +8,7 @@ from mohou.trainer import TrainConfig
 from hifuku.guarantee.algorithm import (
     LibrarySamplerConfig,
     MultiProcessDatasetGenerator,
+    SimpleFixedProblemPool,
     SolutionLibrarySampler,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
@@ -36,10 +37,18 @@ def test_MultiProcessDatasetGenerator():
 
 
 def test_SolutionLibrarySampler():
-    gen = MultiProcessDatasetGenerator(TabletopPlanningProblem, n_process=2)
+    problem_type = TabletopPlanningProblem
+    gen = MultiProcessDatasetGenerator(problem_type, n_process=2)
     tconfig = TrainConfig(n_epoch=1)
-    difficult_threshold = -np.inf  # all pass
-    lconfig = LibrarySamplerConfig(10, 1, tconfig, 2, difficult_threshold)
+    lconfig = LibrarySamplerConfig(
+        n_problem=10,
+        n_problem_inner=1,
+        train_config=tconfig,
+        n_difficult_problem=2,
+        solvable_threshold_factor=0.0,
+        difficult_threshold_factor=-np.inf,  # all pass
+        acceptable_false_positive_rate=1.0,
+    )  # all pass
 
     test_devices = [torch.device("cpu")]
     if torch.cuda.is_available():
@@ -48,11 +57,12 @@ def test_SolutionLibrarySampler():
     for device in test_devices:
         ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
         ae_model.put_on_device(device)
+        validation_pool = SimpleFixedProblemPool.initialize(problem_type, 10)
 
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             lib_sampler = SolutionLibrarySampler.initialize(
-                TabletopPlanningProblem, ae_model, gen, lconfig
+                problem_type, ae_model, gen, lconfig, validation_pool
             )
             # init
             lib_sampler.step_active_sampling(td_path)
