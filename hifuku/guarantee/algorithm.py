@@ -183,6 +183,7 @@ class LibrarySamplerConfig:
     n_problem: int
     n_problem_inner: int
     train_config: TrainConfig
+    n_solution_candidate: int = 10
     n_difficult_problem: int = 100
     solvable_threshold_factor: float = 0.8
     difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
@@ -216,7 +217,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         if problem_pool is None:
             problem_pool = SimpleProblemPool(self.problem_type)
 
-        init_solution = self._determine_init_solution(project_path, problem_pool)
+        init_solution = self._determine_init_solution(problem_pool)
         predictor = self.learn_predictors(init_solution, project_path)
 
         singleton_library = SolutionLibrary(
@@ -270,9 +271,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         train(pp, tcache, dataset, self.config.train_config)
         return model
 
-    def _determine_init_solution(
-        self, project_path: Path, problem_pool: ProblemPool[ProblemT]
-    ) -> np.ndarray:
+    def _determine_init_solution(self, problem_pool: ProblemPool[ProblemT]) -> np.ndarray:
 
         is_initialized = len(self.library.predictors) > 0
         if not is_initialized:
@@ -287,36 +286,10 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             # assumes that standared problem is easy enough and must be solved
             assert False
         else:
-            difficult_problems: List[ProblemT] = []
-            solution_candidates: List[np.ndarray] = []
+            solution_candidates = self._sample_solution_canidates(problem_pool)
+            difficult_problems = self._sample_difficult_problems(problem_pool)
 
-            maxiter = self.problem_type.get_solver_config().maxiter
-            difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
-            with tqdm.tqdm(total=self.config.n_difficult_problem) as pbar:
-                while len(difficult_problems) < self.config.n_difficult_problem:
-                    problem = next(problem_pool)
-                    assert problem.n_problem() == 1
-                    iterval = self.library.infer_iteration_num(problem)[0]
-
-                    is_difficult = iterval > difficult_iter_threshold
-                    if not is_difficult:
-                        continue
-
-                    # try solve problem 5 trial
-                    print("try solving...")
-                    assert problem.n_problem() == 1
-                    try:
-                        res = problem.solve()[0]
-                    except self.problem_type.SamplingBasedInitialguessFail:
-                        continue
-                    if not res.success:
-                        continue
-                    if res is not None:  # seems feasible
-                        difficult_problems.append(problem)
-                        assert res.success
-                        solution_candidates.append(res.x)
-                        pbar.update(1)
-
+            # then, sample difficult problems
             score_list = []
             for solution_guess in solution_candidates:
                 score = 0.0
@@ -326,3 +299,46 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
                 score_list.append(score)
             best_solution = solution_candidates[np.argmax(score_list)]
             return best_solution
+
+    def _sample_solution_canidates(self, problem_pool: ProblemPool[ProblemT]) -> List[np.ndarray]:
+        maxiter = self.problem_type.get_solver_config().maxiter
+        difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
+
+        solution_candidates: List[np.ndarray] = []
+        with tqdm.tqdm(total=self.config.n_solution_candidate) as pbar:
+            while len(solution_candidates) < self.config.n_solution_candidate:
+                problem = next(problem_pool)
+                assert problem.n_problem() == 1
+                iterval = self.library.infer_iteration_num(problem)[0]
+
+                is_difficult = iterval > difficult_iter_threshold
+                if is_difficult:
+                    print("try solving...")
+                    assert problem.n_problem() == 1
+                    try:
+                        res = problem.solve()[0]
+                    except self.problem_type.SamplingBasedInitialguessFail:
+                        continue
+                    if not res.success:
+                        continue
+                    if res is not None:  # seems feasible
+                        assert res.success
+                        solution_candidates.append(res.x)
+                        pbar.update(1)
+        return solution_candidates
+
+    def _sample_difficult_problems(self, problem_pool: ProblemPool[ProblemT]) -> List[ProblemT]:
+        maxiter = self.problem_type.get_solver_config().maxiter
+        difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
+
+        difficult_problems: List[ProblemT] = []
+        with tqdm.tqdm(total=self.config.n_difficult_problem) as pbar:
+            while len(difficult_problems) < self.config.n_difficult_problem:
+                problem = next(problem_pool)
+                assert problem.n_problem() == 1
+                iterval = self.library.infer_iteration_num(problem)[0]
+                is_difficult = iterval > difficult_iter_threshold
+                if is_difficult:
+                    difficult_problems.append(problem)
+                    pbar.update(1)
+        return difficult_problems

@@ -44,7 +44,8 @@ def test_SolutionLibrarySampler():
         n_problem=10,
         n_problem_inner=1,
         train_config=tconfig,
-        n_difficult_problem=2,
+        n_solution_candidate=2,
+        n_difficult_problem=5,
         solvable_threshold_factor=0.0,
         difficult_threshold_factor=-np.inf,  # all pass
         acceptable_false_positive_rate=1.0,
