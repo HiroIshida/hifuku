@@ -37,7 +37,7 @@ if __name__ == "__main__":
         n_solution_candidate=10,
         n_difficult_problem=100,
     )  # all pass
-    validation_pool = SimpleFixedProblemPool.initialize(TabletopPlanningProblem, 10)
+    validation_pool = SimpleFixedProblemPool.initialize(TabletopPlanningProblem, 3000)
     lib_sampler = SolutionLibrarySampler.initialize(
         TabletopPlanningProblem, ae_model, gen, lconfig, validation_pool
     )
