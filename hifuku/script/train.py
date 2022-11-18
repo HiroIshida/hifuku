@@ -13,7 +13,7 @@ from hifuku.neuralnet import (
 from hifuku.types import RawData
 
 pp = get_project_path("tabletop_ik")
-chunk_dir_path = pp / "chunk"
+chunk_dir_path = pp / "cache"
 
 ae_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
 dataset = IterationPredictorDataset.load(chunk_dir_path, ae_model)
