@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 import os
 import uuid
@@ -11,6 +12,8 @@ import numpy as np
 import tqdm
 
 from hifuku.llazy.dataset import ChunkT
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -41,10 +44,18 @@ class DataGenerationTask(ABC, Process, Generic[ChunkT]):
         pass
 
     def run(self) -> None:
+        logger.debug("DataGenerationTask.run with pid {}".format(os.getpid()))
+
         if self.arg.cpu_core is not None:
+            logger.debug("cpu core is specified => {}".format(self.arg.cpu_core))
             cores = ",".join([str(e) for e in self.arg.cpu_core])
-            os.system("taskset -p -c {} {}".format(cores, os.getpid()))
+            command = "taskset -p -c {} {}".format(cores, os.getpid())
+            logger.debug("command => {}".format(command))
+            os.system(command)
+
         unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
+        logger.debug("random seed set to {}".format(unique_id))
+
         np.random.seed(unique_id)
         disable_tqdm = not self.arg.show_process_bar
 

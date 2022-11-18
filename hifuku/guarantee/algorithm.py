@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from abc import ABC, abstractmethod
@@ -8,7 +9,6 @@ from typing import Generic, Iterable, Iterator, Optional, Sized, Type
 import numpy as np
 import torch
 import tqdm
-from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train
 
 from hifuku.guarantee.margin import CoverageResult
@@ -22,6 +22,8 @@ from hifuku.neuralnet import (
 )
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import List, ProblemT, RawData
+
+logger = logging.getLogger(__name__)
 
 
 class ProblemPool(Iterable[ProblemT]):
@@ -78,7 +80,9 @@ class HifukuDataGenerationTask(DataGenerationTask[RawData]):
     def generate_single_data(self) -> RawData:
         problem = TabletopPlanningProblem.sample(n_pose=self.n_problem_inner)
         results = problem.solve(self.init_solution)
-        print([r.nit for r in results])
+        logger.debug("generated single data")
+        logger.debug("success: {}".format([r.success for r in results]))
+        logger.debug("iteration: {}".format([r.nit for r in results]))
         data = RawData.create(problem, results, self.init_solution)
         return data
 
@@ -102,9 +106,11 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
     def __init__(self, problem_type: Type[ProblemT], n_process: Optional[int] = None):
         super().__init__(problem_type)
         if n_process is None:
+            logger.info("n_process is not set. automatically determine")
             cpu_num = os.cpu_count()
             assert cpu_num is not None
             n_process = int(cpu_num * 0.5)
+        logger.info("n_process is set to {}".format(n_process))
         self.n_process = n_process
 
     @staticmethod
@@ -217,8 +223,10 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
     def step_active_sampling(
         self, project_path: Path, problem_pool: Optional[IteratorProblemPool[ProblemT]] = None
     ):
+        logger.info("active sampling step")
 
         if problem_pool is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
             problem_pool = SimpleProblemPool(self.problem_type)
 
         init_solution = self._determine_init_solution(problem_pool)
@@ -258,42 +266,53 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         assert not cache_dir_path.exists()
         cache_dir_path.mkdir()
 
+        logger.info("start generating dataset")
         self.dataset_gen.generate(
             init_solution, self.config.n_problem, self.config.n_problem_inner, cache_dir_path
         )
+        logger.info("finish generating dataset")
+
         dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
         raw_dataset = LazyDecomplessDataset.load(cache_dir_path, RawData, n_worker=-1)
 
         rawdata = raw_dataset.get_data(np.array([0]))[0]
         init_solution = rawdata.init_solution
 
-        create_default_logger(pp, "iteration_predictor")
+        logger.info("start training model")
         model_conf = IterationPredictorConfig(12, self.library.ae_model.config.dim_bottleneck, 10)
         model = IterationPredictor(model_conf)
         model.initial_solution = init_solution
         tcache = TrainCache.from_model(model)
         train(pp, tcache, dataset, self.config.train_config)
+        logger.info("finish training model")
         return model
 
     def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
 
         is_initialized = len(self.library.predictors) > 0
         if not is_initialized:
+            logger.info("start determine init solution using standard problem")
             for _ in range(20):
                 try:
                     problem = self.problem_type.create_standard()
+                    logger.debug("try solving standard problem...")
                     result = problem.solve()[0]
                     assert result.success
+                    logger.info("solved! return")
                     return result.x
                 except self.problem_type.SamplingBasedInitialguessFail:
                     pass
-            # assumes that standared problem is easy enough and must be solved
             assert False
         else:
+            logger.info("start determine init solution len(lib) > 0")
+
+            logger.info("sample solution candidates")
             solution_candidates = self._sample_solution_canidates(problem_pool)
+
+            logger.info("sample difficult problems")
             difficult_problems = self._sample_difficult_problems(problem_pool)
 
-            # then, sample difficult problems
+            logger.info("compute scores")
             score_list = []
             for solution_guess in solution_candidates:
                 score = 0.0
@@ -319,7 +338,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
                 is_difficult = iterval > difficult_iter_threshold
                 if is_difficult:
-                    print("try solving...")
+                    logger.debug("try solving a difficult problem")
                     assert problem.n_problem() == 1
                     try:
                         res = problem.solve()[0]
@@ -330,12 +349,18 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
                     if res is not None:  # seems feasible
                         assert res.success
                         solution_candidates.append(res.x)
+                        logger.debug(
+                            "solved difficult problem. current num => {}".format(
+                                len(solution_candidates)
+                            )
+                        )
                         pbar.update(1)
         return solution_candidates
 
     def _sample_difficult_problems(
         self, problem_pool: IteratorProblemPool[ProblemT]
     ) -> List[ProblemT]:
+
         maxiter = self.problem_type.get_solver_config().maxiter
         difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
 
