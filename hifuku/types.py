@@ -1,3 +1,5 @@
+import os
+import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -134,8 +136,21 @@ class RawData(ChunkBase):
         np.savez(str(path), **table)
 
     @classmethod
-    def load(cls, path: Path) -> "RawData":
+    def load(cls, path: Path, decompress: bool = False) -> "RawData":
+        path_original = path
+        if decompress:
+            assert path.name.endswith(".gz")
+            subprocess.run("gunzip {} --keep --force".format(path), shell=True)
+            path.name
+            path = path.parent / path.stem
+
+        assert path.name.endswith(".npz")
         loaded = np.load(path)
+
+        if path_original.name.endswith(".gz"):
+            os.remove(path)
+        assert path_original.exists()
+
         kwargs = {}
         kwargs["mesh"] = loaded["mesh"]
         kwargs["descriptions"] = list(loaded["descriptions"])
