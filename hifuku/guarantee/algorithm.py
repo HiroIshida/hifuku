@@ -60,7 +60,8 @@ class DatasetGenerator(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     cache_base_dir: Path
 
-    def __init__(self, cache_base_dir: Optional[Path] = None):
+    def __init__(self, problem_type: Type[ProblemT], cache_base_dir: Optional[Path] = None):
+        self.problem_type = problem_type
         if cache_base_dir is None:
             cache_base_dir = Path("/tmp/hifuku_dataset_cache")
         self.cache_base_dir = cache_base_dir
@@ -73,8 +74,13 @@ class DatasetGenerator(Generic[ProblemT], ABC):
 class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
     n_process: int
 
-    def __init__(self, cache_base_dir: Optional[Path] = None, n_process: Optional[int] = None):
-        super().__init__(cache_base_dir)
+    def __init__(
+        self,
+        problem_type: Type[ProblemT],
+        cache_base_dir: Optional[Path] = None,
+        n_process: Optional[int] = None,
+    ):
+        super().__init__(problem_type, cache_base_dir)
         if n_process is None:
             cpu_num = os.cpu_count()
             assert cpu_num is not None
@@ -86,8 +92,9 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
         return [num // div + (1 if x < num % div else 0) for x in range(div)]
 
     def generate(self, init_solution: np.ndarray, n_problem: int, n_problem_inner) -> Path:
-        cache_dir_name = "{}-{}".format(str(self.problem_type), str(uuid.uuid4()))
+        cache_dir_name = "{}-{}".format(self.problem_type.__name__, str(uuid.uuid4())[-8:])
         cache_dir_path = self.cache_base_dir / cache_dir_name
+        cache_dir_path.mkdir(parents=True, exist_ok=False)
 
         n_problem_per_process_list = self.split_number(n_problem, self.n_process)
 
@@ -96,7 +103,7 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
             for idx_process, n_problem_per_process in enumerate(n_problem_per_process_list):
                 show_process_bar = idx_process == 1
                 arg = DataGenerationTaskArg(
-                    n_problem_per_process, show_process_bar, self.cache_base_dir, extension=".npz"
+                    n_problem_per_process, show_process_bar, cache_dir_path, extension=".npz"
                 )
                 p = HifukuDataGenerationTask(arg, n_problem_inner, init_solution)
                 p.start()
