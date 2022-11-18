@@ -33,7 +33,8 @@ def test_MultiProcessDatasetGenerator():
 def test_SolutionLibrarySampler():
     gen = MultiProcessDatasetGenerator(TabletopPlanningProblem, n_process=2)
     tconfig = TrainConfig(n_epoch=1)
-    lconfig = LibrarySamplerConfig(10, 1, tconfig, 5, 10.0)
+    difficult_threshold = 0.0  # all pass
+    lconfig = LibrarySamplerConfig(10, 1, tconfig, 5, difficult_threshold)
     ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
 
     with tempfile.TemporaryDirectory() as td:
@@ -41,6 +42,9 @@ def test_SolutionLibrarySampler():
         lib_sampler = SolutionLibrarySampler.initialize(
             TabletopPlanningProblem, ae_model, gen, lconfig
         )
+        # init
+        lib_sampler.step_active_sampling(td_path)
+        # active sampling
         lib_sampler.step_active_sampling(td_path)
 
 
