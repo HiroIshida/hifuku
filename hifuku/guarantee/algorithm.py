@@ -227,10 +227,16 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         is_initialized = len(self.library.predictors) > 0
         if not is_initialized:
-            problem = self.problem_type.create_standard()
-            result = problem.solve()[0]
-            assert result.success
-            return result.x
+            for _ in range(20):
+                try:
+                    problem = self.problem_type.create_standard()
+                    result = problem.solve()[0]
+                    assert result.success
+                    return result.x
+                except problem.SamplingBasedInitialguessFail:
+                    pass
+            # assumes that standared problem is easy enough and must be solved
+            assert False
         else:
             difficult_problems: List[ProblemT] = []
             solution_candidates: List[np.ndarray] = []
