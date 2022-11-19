@@ -80,8 +80,8 @@ def test_SolutionLibrarySampler():
             # compare
             for _ in range(10):
                 problem = problem_type.sample(1)
-                iters = lib_sampler.library.infer_iteration_num(problem)
-                iters_again = lib_load.infer_iteration_num(problem)
+                iters = lib_sampler.library._infer_iteration_num(problem)
+                iters_again = lib_load._infer_iteration_num(problem)
                 np.testing.assert_almost_equal(iters, iters_again)
 
 

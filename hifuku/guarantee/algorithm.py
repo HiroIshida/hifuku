@@ -169,8 +169,10 @@ class SolutionLibrary(Generic[ProblemT]):
     def device(self) -> torch.device:
         return self.ae_model.device
 
-    def infer_iteration_num(self, problem: ProblemT) -> np.ndarray:
-        # TODO: consider margin
+    def _infer_iteration_num(self, problem: ProblemT) -> np.ndarray:
+        """
+        itervals_arr: R^{n_solution, n_problem_inner}
+        """
         assert len(self.predictors) > 0
 
         mesh_np = np.expand_dims(problem.get_mesh(), axis=(0, 1))
@@ -191,7 +193,15 @@ class SolutionLibrary(Generic[ProblemT]):
             itervals = itervals.squeeze(dim=0)
             itervals_np = itervals.detach().cpu().numpy() + margin
             itervals_list.append(itervals_np)
-        itervals_min = np.min(np.array(itervals_list), axis=0)
+        itervals_arr = np.array(itervals_list)
+        return itervals_arr
+
+    def infer_iteration_num(self, problem: ProblemT) -> np.ndarray:
+        """
+        itervals_arr: R^{n_problem_inner}
+        """
+        itervals_arr = self._infer_iteration_num(problem)
+        itervals_min = np.min(itervals_arr, axis=0)
         return itervals_min
 
     def success_iter_threshold(self) -> float:
