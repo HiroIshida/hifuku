@@ -295,7 +295,7 @@ class TabletopProblem(ProblemInterface):
 @dataclass
 class TabletopIKProblem(TabletopProblem):
     @classmethod
-    def get_solver_config(self) -> IKConfig:
+    def get_solver_config(cls) -> IKConfig:
         config = IKConfig(disp=False)
         return config
 
@@ -338,7 +338,7 @@ class TabletopIKProblem(TabletopProblem):
 @dataclass
 class TabletopPlanningProblem(TabletopProblem):
     @classmethod
-    def get_solver_config(self) -> OsqpSqpPlanner.SolverConfig:
+    def get_solver_config(cls) -> OsqpSqpPlanner.SolverConfig:
         config = OsqpSqpPlanner.SolverConfig(verbose=False)
         return config
 
