@@ -210,12 +210,13 @@ class SolutionLibrary(Generic[ProblemT]):
         return threshold
 
     def measure_coverage(self, problem_pool: FixedProblemPool[ProblemT]) -> float:
-        self.success_iter_threshold()
+        threshold = self.success_iter_threshold()
         count = 0
         for problem in problem_pool:
             assert problem.n_problem() == 1
-            self.infer_iteration_num(problem)[0].item()
-            count += 1
+            iterval = self.infer_iteration_num(problem)[0].item()
+            if iterval < threshold:
+                count += 1
         return count / float(len(problem_pool))
 
     def add(
