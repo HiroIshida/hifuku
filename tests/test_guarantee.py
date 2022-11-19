@@ -9,6 +9,7 @@ from hifuku.guarantee.algorithm import (
     LibrarySamplerConfig,
     MultiProcessDatasetGenerator,
     SimpleFixedProblemPool,
+    SolutionLibrary,
     SolutionLibrarySampler,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
@@ -71,6 +72,17 @@ def test_SolutionLibrarySampler():
             lib_sampler.step_active_sampling(td_path)
             # active sampling
             lib_sampler.step_active_sampling(td_path)
+
+            # test dump and load
+            lib_sampler.library.dump(td_path)
+            lib_load = SolutionLibrary.load(td_path, problem_type)[0]
+
+            # compare
+            for _ in range(10):
+                problem = problem_type.sample(1)
+                iters = lib_sampler.library.infer_iteration_num(problem)
+                iters_again = lib_load.infer_iteration_num(problem)
+                np.testing.assert_almost_equal(iters, iters_again)
 
 
 if __name__ == "__main__":

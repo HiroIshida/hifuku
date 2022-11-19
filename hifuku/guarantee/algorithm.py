@@ -1,5 +1,7 @@
 import logging
 import os
+import pickle
+import re
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -149,7 +151,9 @@ class SolutionLibrary(Generic[ProblemT]):
     ae_model: VoxelAutoEncoder
     predictors: List[IterationPredictor]
     margins: List[float]
+    coverage_results: List[Optional[CoverageResult]]
     solvable_threshold_factor: float
+    uuidval: str
 
     @classmethod
     def initialize(
@@ -158,7 +162,8 @@ class SolutionLibrary(Generic[ProblemT]):
         ae_model: VoxelAutoEncoder,
         solvable_threshold_factor: float,
     ) -> "SolutionLibrary[ProblemT]":
-        return cls(problem_type, ae_model, [], [], solvable_threshold_factor)
+        uuidval = str(uuid.uuid4())[-8:]
+        return cls(problem_type, ae_model, [], [], [], solvable_threshold_factor, uuidval)
 
     @property
     def device(self) -> torch.device:
@@ -195,18 +200,43 @@ class SolutionLibrary(Generic[ProblemT]):
         return threshold
 
     def measure_coverage(self, problem_pool: FixedProblemPool[ProblemT]) -> float:
-        threshold = self.success_iter_threshold()
+        self.success_iter_threshold()
         count = 0
         for problem in problem_pool:
             assert problem.n_problem() == 1
-            vals_min = self.infer_iteration_num(problem)[0].item()
-            vals_min < threshold
+            self.infer_iteration_num(problem)[0].item()
             count += 1
         return count / float(len(problem_pool))
 
-    def add(self, predictor: IterationPredictor, margin: float):
+    def add(
+        self,
+        predictor: IterationPredictor,
+        margin: float,
+        coverage_reuslt: Optional[CoverageResult],
+    ):
         self.predictors.append(predictor)
         self.margins.append(margin)
+        self.coverage_results.append(coverage_reuslt)
+
+    def dump(self, base_path: Path) -> None:
+        name = "Library-{}-{}.pkl".format(self.problem_type.__name__, self.uuidval)
+        file_path = base_path / name
+        with file_path.open(mode="wb") as f:
+            pickle.dump(self, f)
+        logger.info("dumped library to {}".format(file_path))
+
+    @classmethod
+    def load(
+        cls, base_path: Path, problem_type: Type[ProblemT]
+    ) -> List["SolutionLibrary[ProblemT]"]:
+        libraries = []
+        for path in base_path.iterdir():
+            m = re.match(r"Library-(\w+)-(\w+).pkl", path.name)
+            if m is not None and m[1] == problem_type.__name__:
+                logger.info("library found at {}".format(path))
+                with path.open(mode="rb") as f:
+                    libraries.append(pickle.load(f))
+        return libraries  # type: ignore
 
 
 @dataclass
@@ -261,7 +291,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         logger.info("margin is set to {}".format(margin))
         self.coverage_result_list.append(coverage_result)
-        self.library.add(predictor, margin)
+        self.library.add(predictor, margin, coverage_result)
 
         coverage = self.library.measure_coverage(self.validation_problem_pool)
         logger.info("current library's coverage estimate: {}".format(coverage))
@@ -272,11 +302,13 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
-            self.problem_type,
-            self.library.ae_model,
-            [predictor],
-            [0.0],
-            self.config.solvable_threshold_factor,
+            problem_type=self.problem_type,
+            ae_model=self.library.ae_model,
+            predictors=[predictor],
+            margins=[0.0],
+            coverage_results=[None],
+            solvable_threshold_factor=self.config.solvable_threshold_factor,
+            uuidval="dummy",
         )
 
         maxiter = self.problem_type.get_solver_config().maxiter
