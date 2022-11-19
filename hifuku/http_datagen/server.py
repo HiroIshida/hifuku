@@ -4,10 +4,8 @@ import os
 import pickle
 import tempfile
 import time
-from abc import ABC, abstractmethod
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Type
 
 from hifuku.datagen import MultiProcessDatasetGenerator
 from hifuku.http_datagen.request import (
@@ -19,7 +17,6 @@ from hifuku.http_datagen.request import (
     GetModuleHashValueResponse,
     Response,
 )
-from hifuku.llazy.generation import DataGenerationTask
 from hifuku.utils import get_module_source_hash
 
 
@@ -27,12 +24,7 @@ def split_number(num, div):
     return [num // div + (1 if x < num % div else 0) for x in range(div)]
 
 
-class PostHandler(BaseHTTPRequestHandler, ABC):
-    @classmethod
-    @abstractmethod
-    def get_task_type(cls) -> Type[DataGenerationTask]:
-        ...
-
+class PostHandler(BaseHTTPRequestHandler):
     def _set_response(self):
         self.send_response(200)
         self.send_header("Content-type", "application/json")
@@ -97,15 +89,10 @@ class PostHandler(BaseHTTPRequestHandler, ABC):
         print("elapsed time to handle request: {}".format(time.time() - ts))
 
 
-def run_server(task_type: Type[DataGenerationTask], server_class=HTTPServer, port=8080):
-    class CustomHandler(PostHandler):
-        @classmethod
-        def get_task_type(cls) -> Type[DataGenerationTask]:
-            return task_type
-
+def run_server(server_class=HTTPServer, port=8080):
     logging.basicConfig(level=logging.INFO)
     server_address = ("", port)
-    httpd = server_class(server_address, CustomHandler)
+    httpd = server_class(server_address, PostHandler)
     logging.info("Starting httpd...\n")
     try:
         httpd.serve_forever()
@@ -120,4 +107,4 @@ if __name__ == "__main__":
     parser.add_argument("-port", type=int, default=8080, help="port number")
     args = parser.parse_args()
     port: int = args.port
-    # run_server(PostHandler, port=port)
+    run_server(port=port)
