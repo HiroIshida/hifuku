@@ -50,9 +50,10 @@ class CreateDatasetRequest(Request):
 
     def __str__(self) -> str:
         vis_dict = asdict(self)
-        vis_dict["init_solution"] = "[{}..(float)..{}]".format(
-            self.init_solution[0], self.init_solution[-1]
-        )
+        if len(self.init_solution) > 1:
+            vis_dict["init_solution"] = "[{}..(float)..{}]".format(
+                self.init_solution[0], self.init_solution[-1]
+            )
         return vis_dict.__str__()
 
 

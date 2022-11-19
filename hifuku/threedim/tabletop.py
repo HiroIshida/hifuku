@@ -294,6 +294,8 @@ class TabletopProblem(ProblemInterface):
             viewer.add(axis)
         viewer.show()
 
+
+class TabletopActualProblem(TabletopProblem):
     @classmethod
     def get_default_init_solution(cls) -> np.ndarray:
         problem_standard = cls.create_standard()
@@ -339,13 +341,12 @@ class TabletopMeshProblem(TabletopProblem):
         return ()
 
     @classmethod
-    def create_standard(cls) -> "TabletopMeshProblem":
-        world = create_simple_tabletop_world(with_obstacle=False)
-        return cls(world, [])
+    def get_default_init_solution(cls) -> np.ndarray:
+        return np.zeros(0)  # whatever
 
 
 @dataclass
-class TabletopIKProblem(TabletopProblem):
+class TabletopIKProblem(TabletopActualProblem):
     @classmethod
     def get_solver_config(cls) -> IKConfig:
         config = IKConfig(disp=False)
@@ -388,7 +389,7 @@ class TabletopIKProblem(TabletopProblem):
 
 
 @dataclass
-class TabletopPlanningProblem(TabletopProblem):
+class TabletopPlanningProblem(TabletopActualProblem):
     @classmethod
     def get_solver_config(cls) -> OsqpSqpPlanner.SolverConfig:
         config = OsqpSqpPlanner.SolverConfig(verbose=False)
