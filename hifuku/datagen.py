@@ -120,8 +120,8 @@ class DistributedDatasetGenerator(DatasetGenerator[ProblemT]):
     ):
         super().__init__(problem_type)
         self.hostport_cpuinfo_map = self._init_get_cpu_infos(host_port_pairs, use_available_host)
-        available_hostport_pairs = list(self.hostport_cpuinfo_map.keys())
-        self._init_check_dependent_module_hash(available_hostport_pairs, force_continue)
+        list(self.hostport_cpuinfo_map.keys())
+        # self._init_check_dependent_module_hash(available_hostport_pairs, force_continue)
         self.n_problem_measure = n_problem_measure
 
     @staticmethod  # called only in generate
@@ -204,6 +204,7 @@ class DistributedDatasetGenerator(DatasetGenerator[ProblemT]):
         logger.info("check dependent module hash matches to the client ones")
         invalid_pairs = []
         hash_list_client = [get_module_source_hash(name) for name in cls.check_module_names]
+        logger.debug("hash value client: {}".format(hash_list_client))
         for host, port in hostport_pairs:
             with http_connection(host, port) as conn:
                 req_hash = GetModuleHashValueRequest(list(cls.check_module_names))
