@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Type
 
+from hifuku.datagen import MultiProcessDatasetGenerator
 from hifuku.http_datagen.request import (
     CreateDatasetRequest,
     CreateDatasetResponse,
@@ -18,7 +19,7 @@ from hifuku.http_datagen.request import (
     GetModuleHashValueResponse,
     Response,
 )
-from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
+from hifuku.llazy.generation import DataGenerationTask
 from hifuku.utils import get_module_source_hash
 
 
@@ -55,31 +56,23 @@ class PostHandler(BaseHTTPRequestHandler, ABC):
     def process_CreateDatasetRequest(self, request: CreateDatasetRequest) -> CreateDatasetResponse:
         ts = time.time()
         logging.info("request: {}".format(request))
-        n_data_list = split_number(request.n_data, request.n_process)
+
+        gen = MultiProcessDatasetGenerator(request.problem_type, request.n_process)
+
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
-            process_list = []
-            for idx_process, n_data in enumerate(n_data_list):
-                show_process_bar = idx_process == 1
-                arg = DataGenerationTaskArg(n_data, show_process_bar, td_path, extension=".npz")
-                task_type = self.get_task_type()
-                p = task_type(arg)
-                print("start process")
-                p.start()
-                process_list.append(p)
-
-            for p in process_list:
-                p.join()
-            print("finish all processes")
+            gen.generate(request.init_solution, request.n_problem, request.n_problem_inner, td_path)
 
             byte_data_list = []
+            name_list = []
             for path in td_path.iterdir():
                 with path.open(mode="rb") as f:
                     byte_data = f.read()
                     byte_data_list.append(byte_data)
+                    name_list.append(path.name)
 
         elapsed_time = time.time() - ts
-        resp = CreateDatasetResponse(byte_data_list, elapsed_time)
+        resp = CreateDatasetResponse(byte_data_list, name_list, elapsed_time)
         return resp
 
     def do_POST(self):

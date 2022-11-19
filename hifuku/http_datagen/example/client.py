@@ -1,9 +1,22 @@
+import numpy as np
+
 from hifuku.http_datagen.request import http_connection, send_request
 from hifuku.http_datagen.server import (
     CreateDatasetRequest,
     GetCPUInfoRequest,
     GetModuleHashValueRequest,
 )
+from hifuku.threedim.tabletop import TabletopPlanningProblem
+
+with http_connection("localhost", 8081) as conn:
+    req1 = GetModuleHashValueRequest(["skrobot", "tinyfk", "skplan"])
+    try:
+        resp1 = send_request(conn, req1)
+        print(resp1.hash_values)
+    except Exception as e:
+        print(e)
+        print(type(e))
+
 
 with http_connection("localhost", 8080) as conn:
     req1 = GetModuleHashValueRequest(["skrobot", "tinyfk", "skplan"])
@@ -13,6 +26,7 @@ with http_connection("localhost", 8080) as conn:
     req2 = GetCPUInfoRequest()
     resp2 = send_request(conn, req2)
 
-    req3 = CreateDatasetRequest(84, resp2.n_cpu)
+    init_solution = np.zeros(10 * 15)
+    req3 = CreateDatasetRequest(TabletopPlanningProblem, init_solution, 12, 1, resp2.n_cpu)
     resp3 = send_request(conn, req3)
     print(resp3.elapsed_time)

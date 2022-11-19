@@ -1,14 +1,25 @@
 import logging
+import math
 import os
 from abc import ABC, abstractmethod
+from multiprocessing import Process
 from pathlib import Path
-from typing import Generic, Optional, Type
+from typing import ClassVar, Dict, Generic, List, Optional, Tuple, Type
 
 import numpy as np
 
+from hifuku.http_datagen.request import (
+    CreateDatasetRequest,
+    GetCPUInfoRequest,
+    GetCPUInfoResponse,
+    GetModuleHashValueRequest,
+    http_connection,
+    send_request,
+)
 from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import ProblemT, RawData
+from hifuku.utils import get_module_source_hash
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +58,10 @@ class DatasetGenerator(Generic[ProblemT], ABC):
     ) -> None:
         pass
 
+    @staticmethod
+    def split_number(num, div):
+        return [num // div + (1 if x < num % div else 0) for x in range(div)]
+
 
 class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
     n_process: int
@@ -60,10 +75,6 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
             n_process = int(cpu_num * 0.5)
         logger.info("n_process is set to {}".format(n_process))
         self.n_process = n_process
-
-    @staticmethod
-    def split_number(num, div):
-        return [num // div + (1 if x < num % div else 0) for x in range(div)]
 
     def generate(
         self, init_solution: np.ndarray, n_problem: int, n_problem_inner, cache_dir_path: Path
@@ -88,3 +99,163 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
             arg = DataGenerationTaskArg(n_problem, True, cache_dir_path, extension=".npz")
             task = HifukuDataGenerationTask(arg, n_problem_inner, init_solution)
             task.run()
+
+
+HostPortPair = Tuple[str, int]
+
+
+class DistributedDatasetGenerator(DatasetGenerator[ProblemT]):
+    hostport_cpuinfo_map: Dict[HostPortPair, GetCPUInfoResponse]
+    n_problem_measure: int
+    check_module_names: ClassVar[Tuple[str, ...]] = ("skplan", "voxbloxpy")
+
+    def __init__(
+        self,
+        problem_type: Type[ProblemT],
+        host_port_pairs: List[HostPortPair],
+        use_available_host: bool = False,
+        force_continue: bool = False,
+        n_problem_measure: int = 40,
+    ):
+        super().__init__(problem_type)
+        self.hostport_cpuinfo_map = self._init_get_cpu_infos(host_port_pairs, use_available_host)
+        available_hostport_pairs = list(self.hostport_cpuinfo_map.keys())
+        self._init_check_dependent_module_hash(available_hostport_pairs, force_continue)
+        self.n_problem_measure = n_problem_measure
+
+    @staticmethod
+    def send_and_recive_and_write(
+        hostport: HostPortPair, request: CreateDatasetRequest, cache_dir_path: Path
+    ) -> None:
+        logger.debug("send_and_recive_and_write called on pid: {}".format(os.getpid()))
+        with http_connection(*hostport) as conn:
+            response = send_request(conn, request)
+        for data, file_name in zip(response.data_list, response.name_list):
+            file_path = cache_dir_path / file_name
+            with file_path.open(mode="wb") as f:
+                f.write(data)
+        logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
+
+    def generate(
+        self, init_solution: np.ndarray, n_problem: int, n_problem_inner, cache_dir_path: Path
+    ) -> None:
+        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
+        performance_table = self._measure_performance_of_each_server(
+            self.n_problem_measure, n_problem_inner
+        )
+        logger.info("performance table: {}".format(performance_table))
+
+        n_problem_table: Dict[HostPortPair, int] = {}
+        for hostport in hostport_pairs:
+            n_problem_host = math.floor(n_problem * performance_table[hostport])
+            n_problem_table[hostport] = n_problem_host
+
+        # allocate remainders
+        remainder_sum = n_problem - sum(n_problem_table.values())
+        alloc_splitted = self.split_number(remainder_sum, len(hostport_pairs))
+        for hostport, alloc in zip(hostport_pairs, alloc_splitted):
+            n_problem_table[hostport] += alloc
+
+        assert sum(n_problem_table.values()) == n_problem
+        logger.info("n_problem_table: {}".format(n_problem_table))
+
+        # send request
+        process_list = []
+        for hostport in hostport_pairs:
+            n_problem_host = n_problem_table[hostport]
+            n_process = self.hostport_cpuinfo_map[hostport].n_cpu
+            req = CreateDatasetRequest(
+                self.problem_type, init_solution, n_problem_host, n_problem_inner, n_process
+            )
+            p = Process(target=self.send_and_recive_and_write, args=(hostport, req, cache_dir_path))
+            p.start()
+            process_list.append(p)
+        for p in process_list:
+            p.join()
+
+    @classmethod  # called only one in __init__
+    def _init_get_cpu_infos(
+        cls, host_port_pairs: List[HostPortPair], use_available_host: bool
+    ) -> Dict[HostPortPair, GetCPUInfoResponse]:
+        # this method also work as connection checker
+        logger.info("check connection by cpu request")
+        hostport_cpuinfo_map: Dict[Tuple[str, int], GetCPUInfoResponse] = {}
+        for host, port in host_port_pairs:
+            try:
+                with http_connection(host, port) as conn:
+                    req_cpu = GetCPUInfoRequest()
+                    resp_cpu = send_request(conn, req_cpu)
+                logger.info("cpu info of ({}, {}) is {}".format(host, port, resp_cpu))
+                hostport_cpuinfo_map[(host, port)] = resp_cpu
+            except ConnectionRefusedError:
+                logger.error("connection to ({}, {}) was refused ".format(host, port))
+
+        if not use_available_host:
+            if len(hostport_cpuinfo_map) != len(host_port_pairs):
+                logger.error("connection to some of the specified hosts are failed")
+                raise ConnectionRefusedError
+        return hostport_cpuinfo_map
+
+    @classmethod  # called only one in __init__
+    def _init_check_dependent_module_hash(
+        cls, hostport_pairs: List[HostPortPair], force_continue: bool
+    ):
+        logger.info("check dependent module hash matches to the client ones")
+        invalid_pairs = []
+        hash_list_client = [get_module_source_hash(name) for name in cls.check_module_names]
+        for host, port in hostport_pairs:
+            with http_connection(host, port) as conn:
+                req_hash = GetModuleHashValueRequest(list(cls.check_module_names))
+                resp_hash = send_request(conn, req_hash)
+                if resp_hash.hash_values != hash_list_client:
+                    invalid_pairs.append((host, port))
+
+        if len(invalid_pairs) > 0:
+            message = "hosts {} module is incompatble with client ones".format(invalid_pairs)
+            logger.error(message)
+            if not force_continue:
+                raise RuntimeError(message)
+
+    def _measure_performance_of_each_server(
+        self, n_problem: int, n_problem_inner: int
+    ) -> Dict[HostPortPair, float]:
+        n_max_trial = 10
+        count = 0
+        init_solution: Optional[np.ndarray] = None
+        problem_standard = self.problem_type.create_standard()
+        while True:
+            try:
+                logger.debug("try solving standard problem...")
+                result = problem_standard.solve()[0]
+                if result.success:
+                    logger.debug("solved!")
+                    init_solution = result.x
+                    break
+            except self.problem_type.SamplingBasedInitialguessFail:
+                pass
+            count += 1
+            if count > n_max_trial:
+                raise RuntimeError("somehow standard problem cannot be solved")
+        assert init_solution is not None
+
+        logger.info("measure performance of each server by letting them make a dummy dataset")
+        score_map: Dict[HostPortPair, float] = {}
+        for hostport_pair in self.hostport_cpuinfo_map.keys():
+            with http_connection(*hostport_pair) as conn:
+                cpu_info = self.hostport_cpuinfo_map[hostport_pair]
+                req_dataset = CreateDatasetRequest(
+                    self.problem_type,
+                    init_solution,
+                    n_problem=n_problem,
+                    n_problem_inner=n_problem_inner,
+                    n_process=cpu_info.n_cpu,
+                )
+                resp_dataset = send_request(conn, req_dataset)
+                score = 1.0 / resp_dataset.elapsed_time
+                score_map[hostport_pair] = score
+
+        # normalize
+        score_sum = sum(score_map.values())
+        for key in score_map:
+            score_map[key] /= score_sum
+        return score_map
