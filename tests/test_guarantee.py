@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from mohou.trainer import TrainConfig
+from skplan.solver.constraint import ConstraintSatisfactionFail
 
 from hifuku.guarantee.algorithm import (
     LibrarySamplerConfig,
@@ -21,8 +22,14 @@ from hifuku.utils import create_default_logger
 def test_MultiProcessDatasetGenerator():
     gen = MultiProcessDatasetGenerator(TabletopPlanningProblem, n_process=2)
     prob_stan = TabletopPlanningProblem.create_standard()
-    sol = prob_stan.solve()[0]
-    assert sol.success
+
+    while True:
+        try:
+            sol = prob_stan.solve()[0]
+            if sol.success:
+                break
+        except ConstraintSatisfactionFail:
+            continue
     n_problem = 4
     n_problem_inner = 10
 
@@ -86,4 +93,5 @@ def test_SolutionLibrarySampler():
 
 
 if __name__ == "__main__":
+    test_MultiProcessDatasetGenerator()
     test_SolutionLibrarySampler()
