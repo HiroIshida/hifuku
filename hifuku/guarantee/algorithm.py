@@ -282,6 +282,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         library = SolutionLibrary.initialize(
             problem_type, ae_model, config.solvable_threshold_factor
         )
+        logger.info("library sampler config: {}".format(config))
         return cls(problem_type, library, dataset_gen, config, validation_problem_pool, [])
 
     def step_active_sampling(
@@ -323,12 +324,14 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         maxiter = self.problem_type.get_solver_config().maxiter
 
+        logger.info("**compute est values")
         iterval_est_list = []
         for problem in tqdm.tqdm(self.validation_problem_pool):
             assert problem.n_problem() == 1
             iterval_est = singleton_library.infer_iteration_num(problem)[0]
             iterval_est_list.append(iterval_est)
 
+        logger.info("**compute real values")
         problems = [p for p in self.validation_problem_pool]
         iterval_real_list = compute_real_itervals(problems, init_solution, maxiter)
 
@@ -448,11 +451,13 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         difficult_problems: List[ProblemT] = []
         with tqdm.tqdm(total=self.config.n_difficult_problem) as pbar:
             while len(difficult_problems) < self.config.n_difficult_problem:
+                logger.debug("try sampling difficutl problem...")
                 problem = next(problem_pool)
                 assert problem.n_problem() == 1
                 iterval = self.library.infer_iteration_num(problem)[0]
                 is_difficult = iterval > difficult_iter_threshold
                 if is_difficult:
+                    logger.debug("sampled! number: {}".format(len(difficult_problems)))
                     difficult_problems.append(problem)
                     pbar.update(1)
         return difficult_problems
