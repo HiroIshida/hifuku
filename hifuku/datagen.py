@@ -18,19 +18,26 @@ from hifuku.http_datagen.request import (
     send_request,
 )
 from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
-from hifuku.threedim.tabletop import TabletopPlanningProblem
-from hifuku.types import ProblemT, RawData
+from hifuku.types import ProblemInterface, ProblemT, RawData
 from hifuku.utils import get_module_source_hash
 
 logger = logging.getLogger(__name__)
 
 
 class HifukuDataGenerationTask(DataGenerationTask[RawData]):
+    problem_type: Type[ProblemInterface]
     n_problem_inner: int
     init_solution: np.ndarray
 
-    def __init__(self, arg: DataGenerationTaskArg, n_problem_inner: int, init_solution: np.ndarray):
+    def __init__(
+        self,
+        arg: DataGenerationTaskArg,
+        problem_type: Type[ProblemInterface],
+        n_problem_inner: int,
+        init_solution: np.ndarray,
+    ):
         super().__init__(arg)
+        self.problem_type = problem_type
         self.n_problem_inner = n_problem_inner
         self.init_solution = init_solution
 
@@ -38,7 +45,7 @@ class HifukuDataGenerationTask(DataGenerationTask[RawData]):
         pass
 
     def generate_single_data(self) -> RawData:
-        problem = TabletopPlanningProblem.sample(n_pose=self.n_problem_inner)
+        problem = self.problem_type.sample(self.n_problem_inner)
         results = problem.solve(self.init_solution)
         logger.debug("generated single data")
         logger.debug("success: {}".format([r.success for r in results]))
@@ -90,7 +97,7 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
                 arg = DataGenerationTaskArg(
                     n_problem_per_process, show_process_bar, cache_dir_path, extension=".npz"
                 )
-                p = HifukuDataGenerationTask(arg, n_problem_inner, init_solution)
+                p = HifukuDataGenerationTask(arg, self.problem_type, n_problem_inner, init_solution)
                 p.start()
                 process_list.append(p)
 
@@ -98,7 +105,7 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
                 p.join()
         else:
             arg = DataGenerationTaskArg(n_problem, True, cache_dir_path, extension=".npz")
-            task = HifukuDataGenerationTask(arg, n_problem_inner, init_solution)
+            task = HifukuDataGenerationTask(arg, self.problem_type, n_problem_inner, init_solution)
             task.run()
 
 
