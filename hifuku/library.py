@@ -294,6 +294,8 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         coverage = self.library.measure_coverage(self.validation_problem_pool)
         logger.info("current library's coverage estimate: {}".format(coverage))
 
+        self.library.dump(project_path)
+
     def _compute_coverage(
         self, predictor: IterationPredictor, init_solution: np.ndarray
     ) -> CoverageResult:

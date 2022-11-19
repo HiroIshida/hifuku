@@ -65,8 +65,7 @@ def test_SolutionLibrarySampler():
             # active sampling
             lib_sampler.step_active_sampling(td_path)
 
-            # test dump and load
-            lib_sampler.library.dump(td_path)
+            # test load
             lib_load = SolutionLibrary.load(td_path, problem_type)[0]
 
             # compare
