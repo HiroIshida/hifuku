@@ -118,7 +118,9 @@ class SimpleFixedProblemPool(FixedProblemPool[ProblemT]):
     problem_list: List[ProblemT]
 
     @classmethod
-    def initialize(cls, problem_type: Type[ProblemT], n_problem: int) -> "SimpleFixedProblemPool":
+    def initialize(
+        cls, problem_type: Type[ProblemT], n_problem: int
+    ) -> "SimpleFixedProblemPool[ProblemT]":
         problem_list = [problem_type.sample(1) for _ in range(n_problem)]
         return cls(problem_type, problem_list)
 
