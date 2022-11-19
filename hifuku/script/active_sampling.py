@@ -5,10 +5,10 @@ from mohou.trainer import TrainConfig
 
 from hifuku.guarantee.algorithm import (
     LibrarySamplerConfig,
-    MultiProcessDatasetGenerator,
     SimpleFixedProblemPool,
     SolutionLibrarySampler,
 )
+from hifuku.guarantee.datagen import MultiProcessDatasetGenerator
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.utils import create_default_logger

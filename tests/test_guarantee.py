@@ -7,11 +7,11 @@ from mohou.trainer import TrainConfig
 
 from hifuku.guarantee.algorithm import (
     LibrarySamplerConfig,
-    MultiProcessDatasetGenerator,
     SimpleFixedProblemPool,
     SolutionLibrary,
     SolutionLibrarySampler,
 )
+from hifuku.guarantee.datagen import MultiProcessDatasetGenerator
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData
