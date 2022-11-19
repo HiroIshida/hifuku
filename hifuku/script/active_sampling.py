@@ -3,7 +3,7 @@ import warnings
 from mohou.file import get_project_path
 from mohou.trainer import TrainConfig
 
-from hifuku.datagen import MultiProcessDatasetGenerator
+from hifuku.datagen import DistributedDatasetGenerator
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleFixedProblemPool,
@@ -25,18 +25,24 @@ if __name__ == "__main__":
     pp.mkdir(exist_ok=True)
     logger = create_default_logger(pp, "library_gen")
 
-    gen = MultiProcessDatasetGenerator(TabletopPlanningProblem)
-    tconfig = TrainConfig(n_epoch=100)
+    hostport_pairs = [
+        ("localhost", 8080),
+        ("phobos", 8080),
+        ("mars", 8080),
+    ]
+
+    gen = DistributedDatasetGenerator(TabletopPlanningProblem, hostport_pairs)
+    # gen = MultiProcessDatasetGenerator(TabletopPlanningProblem)
     ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
 
     lconfig = LibrarySamplerConfig(
-        n_problem=100,
+        n_problem=3000,
         n_problem_inner=50,
-        train_config=TrainConfig(n_epoch=100),
+        train_config=TrainConfig(n_epoch=40),
         n_solution_candidate=10,
         n_difficult_problem=100,
     )  # all pass
-    validation_pool = SimpleFixedProblemPool.initialize(TabletopPlanningProblem, 3000)
+    validation_pool = SimpleFixedProblemPool.initialize(TabletopPlanningProblem, 2000)
     lib_sampler = SolutionLibrarySampler.initialize(
         TabletopPlanningProblem, ae_model, gen, lconfig, validation_pool
     )
