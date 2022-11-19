@@ -240,25 +240,8 @@ class DistributedDatasetGenerator(DatasetGenerator[ProblemT]):
         n_problem: int,
         n_problem_inner: int,
     ) -> Dict[HostPortPair, float]:
-        n_max_trial = 10
-        count = 0
-        init_solution: Optional[np.ndarray] = None
-        problem_standard = self.problem_type.create_standard()
-        while True:
-            try:
-                logger.debug("try solving standard problem...")
-                result = problem_standard.solve()[0]
-                if result.success:
-                    logger.debug("solved!")
-                    init_solution = result.x
-                    break
-            except self.problem_type.SamplingBasedInitialguessFail:
-                pass
-            count += 1
-            if count > n_max_trial:
-                raise RuntimeError("somehow standard problem cannot be solved")
-        assert init_solution is not None
 
+        init_solution = self.problem_type.get_default_init_solution()
         logger.info("measure performance of each server by letting them make a dummy dataset")
         score_map: Dict[HostPortPair, float] = {}
         with tempfile.TemporaryDirectory() as td:

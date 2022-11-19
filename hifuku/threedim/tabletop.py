@@ -1,4 +1,5 @@
 import copy
+import logging
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Callable, List, Optional, Tuple, Type, TypeVar
@@ -35,6 +36,8 @@ from voxbloxpy.core import Grid, GridSDF
 from hifuku.sdf import create_union_sdf
 from hifuku.threedim.utils import skcoords_to_pose_vec
 from hifuku.types import ProblemInterface, ResultProtocol
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -290,6 +293,29 @@ class TabletopProblem(ProblemInterface):
             axis.newcoords(target_pose)
             viewer.add(axis)
         viewer.show()
+
+    @classmethod
+    def get_default_init_solution(cls) -> np.ndarray:
+        problem_standard = cls.create_standard()
+
+        n_max_trial = 10
+        count = 0
+        init_solution: Optional[np.ndarray] = None
+        while True:
+            try:
+                logger.debug("try solving standard problem...")
+                result = problem_standard.solve()[0]
+                if result.success:
+                    logger.debug("solved!")
+                    init_solution = result.x
+                    break
+            except cls.SamplingBasedInitialguessFail:
+                pass
+            count += 1
+            if count > n_max_trial:
+                raise RuntimeError("somehow standard problem cannot be solved")
+        assert init_solution is not None
+        return init_solution
 
 
 @dataclass

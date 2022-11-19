@@ -35,7 +35,7 @@ class ProblemInterface(ABC):
 
     @classmethod
     @abstractmethod
-    def create_standard(cls: Type[ProblemT]) -> ProblemT:
+    def get_default_init_solution(cls: Type[ProblemT]) -> np.ndarray:
         ...
 
     @abstractmethod

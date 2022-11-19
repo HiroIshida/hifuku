@@ -19,11 +19,7 @@ from hifuku.utils import create_default_logger
 
 
 def test_compute_real_itervals():
-    np.random.seed(0)
-    prob_stan = TabletopPlanningProblem.create_standard()
-    res = prob_stan.solve()[0]
-    x_init = res.x
-
+    x_init = TabletopPlanningProblem.get_default_init_solution()
     n_problem = 10
     problems = [TabletopPlanningProblem.sample(1) for _ in range(n_problem)]
     maxiter = TabletopPlanningProblem.get_solver_config().maxiter

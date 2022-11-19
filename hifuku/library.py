@@ -361,17 +361,8 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         is_initialized = len(self.library.predictors) > 0
         if not is_initialized:
             logger.info("start determine init solution using standard problem")
-            for _ in range(20):
-                try:
-                    problem = self.problem_type.create_standard()
-                    logger.debug("try solving standard problem...")
-                    result = problem.solve()[0]
-                    assert result.success
-                    logger.info("solved! return")
-                    return result.x
-                except self.problem_type.SamplingBasedInitialguessFail:
-                    pass
-            assert False
+            init_solution = self.problem_type.get_default_init_solution()
+            return init_solution
         else:
             logger.info("start determine init solution len(lib) > 0")
 
