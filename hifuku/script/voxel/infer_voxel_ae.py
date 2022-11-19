@@ -14,7 +14,7 @@ def render(mesh):
     sdf.render_volume()
 
 
-pp = get_project_path("tabletop_ik")
+pp = get_project_path("tabletop_mesh")
 best_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
 
 world = TableTopWorld.sample()

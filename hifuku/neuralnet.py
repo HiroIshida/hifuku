@@ -245,7 +245,8 @@ class VoxelAutoEncoder(ModelBase[VoxelAutoEncoderConfig]):
         ]
         self.decoder = nn.Sequential(*decoder_layers)
 
-    def loss(self, sample: Tensor) -> LossDict:
+    def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
+        mesh, _, _, _ = sample
         mesh = sample[0]
         encoded = self.encoder(mesh)
         reconst = self.decoder(encoded)

@@ -293,6 +293,32 @@ class TabletopProblem(ProblemInterface):
 
 
 @dataclass
+class TabletopMeshProblem(TabletopProblem):
+    """this problem is actually not a problem.
+    This class is for generating data for mesh to train autoencoder.
+    So the noth config and result are dummy and will not be used in
+    training
+    """
+
+    @dataclass
+    class DummySolverConfig:
+        maxiter: int = -1
+
+    @classmethod
+    def get_solver_config(cls) -> DummySolverConfig:
+        return cls.DummySolverConfig()
+
+    def solve(self, av_init: Optional[np.ndarray] = None) -> Tuple[()]:
+        assert self.n_problem() == 0
+        return ()
+
+    @classmethod
+    def create_standard(cls) -> "TabletopMeshProblem":
+        world = create_simple_tabletop_world(with_obstacle=False)
+        return cls(world, [])
+
+
+@dataclass
 class TabletopIKProblem(TabletopProblem):
     @classmethod
     def get_solver_config(cls) -> IKConfig:
