@@ -4,7 +4,6 @@ from pathlib import Path
 import numpy as np
 import torch
 from mohou.trainer import TrainConfig
-from skplan.solver.constraint import ConstraintSatisfactionFail
 
 from hifuku.datagen import MultiProcessDatasetGenerator
 from hifuku.library import (
@@ -16,7 +15,6 @@ from hifuku.library import (
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
-from hifuku.types import RawData
 from hifuku.utils import create_default_logger
 
 
@@ -34,32 +32,6 @@ def test_compute_real_itervals():
     itervals_sp = compute_real_itervals(problems, x_init, maxiter, n_process=1)
     assert len(itervals_mp) == n_problem
     assert itervals_mp == itervals_sp
-
-
-def test_MultiProcessDatasetGenerator():
-    gen = MultiProcessDatasetGenerator(TabletopPlanningProblem, n_process=2)
-    prob_stan = TabletopPlanningProblem.create_standard()
-
-    while True:
-        try:
-            sol = prob_stan.solve()[0]
-            if sol.success:
-                break
-        except ConstraintSatisfactionFail:
-            continue
-    n_problem = 4
-    n_problem_inner = 10
-
-    with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        gen.generate(sol.x, n_problem, n_problem_inner, td_path)
-
-        file_path_list = list(td_path.iterdir())
-        assert len(file_path_list) == n_problem
-
-        for file_path in file_path_list:
-            rawdata = RawData.load(file_path, decompress=True)
-            assert len(rawdata.descriptions) == n_problem_inner
 
 
 def test_SolutionLibrarySampler():
@@ -110,5 +82,4 @@ def test_SolutionLibrarySampler():
 
 
 if __name__ == "__main__":
-    test_MultiProcessDatasetGenerator()
     test_SolutionLibrarySampler()
