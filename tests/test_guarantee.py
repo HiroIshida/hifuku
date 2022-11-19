@@ -6,13 +6,13 @@ import torch
 from mohou.trainer import TrainConfig
 from skplan.solver.constraint import ConstraintSatisfactionFail
 
-from hifuku.guarantee.algorithm import (
+from hifuku.library import (
     LibrarySamplerConfig,
     SimpleFixedProblemPool,
     SolutionLibrary,
     SolutionLibrarySampler,
 )
-from hifuku.guarantee.datagen import MultiProcessDatasetGenerator
+from hifuku.datagen import MultiProcessDatasetGenerator
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData

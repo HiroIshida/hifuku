@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 from mohou.file import get_project_path
 
-from hifuku.guarantee.datagen import MultiProcessDatasetGenerator
+from hifuku.datagen import MultiProcessDatasetGenerator
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")

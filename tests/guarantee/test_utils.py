@@ -1,6 +1,6 @@
 import numpy as np
 
-from hifuku.guarantee.utils import compute_real_itervals
+from hifuku.library import compute_real_itervals
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 

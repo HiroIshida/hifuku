@@ -3,12 +3,12 @@ import warnings
 from mohou.file import get_project_path
 from mohou.trainer import TrainConfig
 
-from hifuku.guarantee.algorithm import (
+from hifuku.datagen import MultiProcessDatasetGenerator
+from hifuku.library import (
     LibrarySamplerConfig,
     SimpleFixedProblemPool,
     SolutionLibrarySampler,
 )
-from hifuku.guarantee.datagen import MultiProcessDatasetGenerator
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.utils import create_default_logger

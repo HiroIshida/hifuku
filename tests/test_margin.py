@@ -2,7 +2,7 @@ from math import floor
 
 import numpy as np
 
-from hifuku.guarantee.margin import CoverageResult
+from hifuku.margin import CoverageResult
 
 
 def test_coverage_result():
