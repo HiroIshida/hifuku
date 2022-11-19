@@ -1,7 +1,7 @@
 import contextlib
 import logging
 import pickle
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
 from typing import List, Optional, Type, overload
 
@@ -47,6 +47,13 @@ class CreateDatasetRequest(Request):
     n_problem: int
     n_problem_inner: int
     n_process: int
+
+    def __str__(self) -> str:
+        vis_dict = asdict(self)
+        vis_dict["init_solution"] = "[{}..(float)..{}]".format(
+            self.init_solution[0], self.init_solution[-1]
+        )
+        return vis_dict.__str__()
 
 
 @dataclass
