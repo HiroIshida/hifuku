@@ -33,16 +33,17 @@ class ComputeRealItervalsArg:
     indices: np.ndarray
     problems: Sequence[ProblemInterface]
     init_solution: np.ndarray
-    maxiter: int
     disable_tqdm: bool
 
 
 def _compute_real_itervals(arg: ComputeRealItervalsArg, q: multiprocessing.Queue):
     with tqdm.tqdm(total=len(arg.problems), disable=arg.disable_tqdm) as pbar:
+        maxiter = arg.problems[0].get_solver_config().maxiter
+        logger.debug("*maxiter: {}".format(maxiter))
         for idx, problem in zip(arg.indices, arg.problems):
             assert problem.n_problem() == 1
             result = problem.solve(arg.init_solution)[0]
-            iterval_real = result.nit if result.success else float(arg.maxiter)
+            iterval_real = result.nit if result.success else float(maxiter)
             q.put((idx, iterval_real))
             pbar.update(1)
 
@@ -50,17 +51,22 @@ def _compute_real_itervals(arg: ComputeRealItervalsArg, q: multiprocessing.Queue
 def compute_real_itervals(
     problems: Sequence[ProblemInterface],
     init_solution: np.ndarray,
-    maxiter: int,
-    n_process: Optional[int] = None,
+    n_process: Optional[int],
 ) -> List[float]:
+
     if n_process is None:
         cpu_count = os.cpu_count()
         assert cpu_count is not None
         n_process = int(0.5 * cpu_count)
 
+    n_process = min(n_process, len(problems))
+    logger.debug("*n_process: {}".format(n_process))
+
     is_single_process = n_process == 1
     if is_single_process:
         itervals = []
+        maxiter = problems[0].get_solver_config().maxiter
+        logger.debug("*maxiter: {}".format(maxiter))
         for problem in problems:
             result = problem.solve(init_solution)[0]
             iterval_real = result.nit if result.success else float(maxiter)
@@ -77,9 +83,7 @@ def compute_real_itervals(
         for i, indices_part in enumerate(indices_list_per_worker):
             disable_tqdm = i > 0
             problems_part = [problems[idx] for idx in indices_part]
-            arg = ComputeRealItervalsArg(
-                indices_part, problems_part, init_solution, maxiter, disable_tqdm
-            )
+            arg = ComputeRealItervalsArg(indices_part, problems_part, init_solution, disable_tqdm)
             p = multiprocessing.Process(target=_compute_real_itervals, args=(arg, q))
             p.start()
             process_list.append(p)
@@ -354,7 +358,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         logger.info("**compute real values")
         problems = [p for p in self.validation_problem_pool]
-        iterval_real_list = compute_real_itervals(problems, init_solution, maxiter)
+        iterval_real_list = compute_real_itervals(problems, init_solution, None)
 
         success_iter_threshold = maxiter * self.config.difficult_threshold_factor
         coverage_result = CoverageResult(
@@ -411,12 +415,15 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             logger.info("compute scores")
             score_list = []
             for solution_guess in solution_candidates:
-                score = 0.0
-                for problem in difficult_problems:
-                    res = problem.solve(solution_guess)[0]
-                    score += int(res.success)
+                iterval_real_list = compute_real_itervals(difficult_problems, solution_guess, None)
+                # NOTE: iterval_real_list is already clamped
+                score = -sum(iterval_real_list)  # must be nagative
+                logger.debug("*score of solution cand: {}".format(score))
                 score_list.append(score)
-            best_solution = solution_candidates[np.argmax(score_list)]
+
+            best_idx = np.argmax(score_list)
+            best_solution = solution_candidates[best_idx]
+            logger.debug("best score: {}".format(score_list[best_idx]))
             return best_solution
 
     def _sample_solution_canidates(

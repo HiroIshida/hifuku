@@ -22,10 +22,8 @@ def test_compute_real_itervals():
     x_init = TabletopPlanningProblem.get_default_init_solution()
     n_problem = 10
     problems = [TabletopPlanningProblem.sample(1) for _ in range(n_problem)]
-    maxiter = TabletopPlanningProblem.get_solver_config().maxiter
-
-    itervals_mp = compute_real_itervals(problems, x_init, maxiter, n_process=4)
-    itervals_sp = compute_real_itervals(problems, x_init, maxiter, n_process=1)
+    itervals_mp = compute_real_itervals(problems, x_init, n_process=4)
+    itervals_sp = compute_real_itervals(problems, x_init, n_process=1)
     assert len(itervals_mp) == n_problem
     assert itervals_mp == itervals_sp
 
