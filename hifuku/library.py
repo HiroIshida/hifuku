@@ -141,6 +141,12 @@ class SolutionLibrary(Generic[ProblemT]):
     solvable_threshold_factor: float
     uuidval: str
 
+    @dataclass
+    class InferenceResult:
+        nit: float
+        idx: int  # index of selected solution in the library
+        init_solution: np.ndarray
+
     @classmethod
     def initialize(
         cls,
@@ -182,13 +188,23 @@ class SolutionLibrary(Generic[ProblemT]):
         itervals_arr = np.array(itervals_list)
         return itervals_arr
 
-    def infer_iteration_num(self, problem: ProblemT) -> np.ndarray:
-        """
-        itervals_arr: R^{n_problem_inner}
-        """
+    def infer(self, problem: ProblemT) -> List[InferenceResult]:
+        # itervals_aar: R^{n_problem_inner, n_elem_in_lib}
         itervals_arr = self._infer_iteration_num(problem)
-        itervals_min = np.min(itervals_arr, axis=0)
-        return itervals_min
+
+        # nits_min: R^{n_problem_inner}
+        nits_min = np.min(itervals_arr, axis=0)
+
+        # indices_min: R^{n_problem_inner}
+        indices_min = np.argmin(itervals_arr, axis=0)
+
+        result_list = []
+        for nit, idx in zip(nits_min, indices_min):
+            init_solution = self.predictors[idx].initial_solution
+            assert init_solution is not None
+            res = self.InferenceResult(nit, idx, init_solution)
+            result_list.append(res)
+        return result_list
 
     def success_iter_threshold(self) -> float:
         config = self.problem_type.get_solver_config()
@@ -200,8 +216,8 @@ class SolutionLibrary(Generic[ProblemT]):
         count = 0
         for problem in problem_pool:
             assert problem.n_problem() == 1
-            iterval = self.infer_iteration_num(problem)[0].item()
-            if iterval < threshold:
+            infer_res = self.infer(problem)[0]
+            if infer_res.nit < threshold:
                 count += 1
         return count / float(len(problem_pool))
 
@@ -317,7 +333,8 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         iterval_est_list = []
         for problem in tqdm.tqdm(self.validation_problem_pool):
             assert problem.n_problem() == 1
-            iterval_est = singleton_library.infer_iteration_num(problem)[0]
+            infer_res = singleton_library.infer(problem)[0]
+            iterval_est = infer_res.nit
             iterval_est_list.append(iterval_est)
 
         logger.info("**compute real values")
@@ -398,7 +415,8 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             while len(solution_candidates) < self.config.n_solution_candidate:
                 problem = next(problem_pool)
                 assert problem.n_problem() == 1
-                iterval = self.library.infer_iteration_num(problem)[0]
+                infer_res = self.library.infer(problem)[0]
+                iterval = infer_res.nit
 
                 is_difficult = iterval > difficult_iter_threshold
                 if is_difficult:
@@ -434,7 +452,8 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
                 logger.debug("try sampling difficutl problem...")
                 problem = next(problem_pool)
                 assert problem.n_problem() == 1
-                iterval = self.library.infer_iteration_num(problem)[0]
+                infer_res = self.library.infer(problem)[0]
+                iterval = infer_res.nit
                 is_difficult = iterval > difficult_iter_threshold
                 if is_difficult:
                     logger.debug("sampled! number: {}".format(len(difficult_problems)))
