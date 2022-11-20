@@ -1,8 +1,11 @@
 import warnings
 
+import skplan
 from mohou.file import get_project_path
 from mohou.trainer import TrainConfig
+from mohou.utils import log_package_version_info
 
+import hifuku
 from hifuku.datagen import DistributedDatasetGenerator
 from hifuku.library import (
     LibrarySamplerConfig,
@@ -24,9 +27,10 @@ if __name__ == "__main__":
     pp = get_project_path("tabletop_solution_library")
     pp.mkdir(exist_ok=True)
     logger = create_default_logger(pp, "library_gen")
+    log_package_version_info(logger, hifuku)
+    log_package_version_info(logger, skplan)
 
     hostport_pairs = [
-        ("localhost", 8080),
         ("phobos", 8080),
         ("mars", 8080),
     ]
@@ -41,12 +45,13 @@ if __name__ == "__main__":
         train_config=TrainConfig(n_epoch=40),
         n_solution_candidate=10,
         n_difficult_problem=100,
+        solvable_threshold_factor=0.6,
     )  # all pass
     validation_pool = SimpleFixedProblemPool.initialize(TabletopPlanningProblem, 2000)
     lib_sampler = SolutionLibrarySampler.initialize(
         TabletopPlanningProblem, ae_model, gen, lconfig, validation_pool
     )
 
-    for i in range(10):
+    for i in range(50):
         print(i)
         lib_sampler.step_active_sampling(pp)
