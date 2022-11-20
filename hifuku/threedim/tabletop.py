@@ -437,7 +437,7 @@ class TabletopPlanningProblem(TabletopActualProblem):
                         cspace,
                         eq_const=pose_const,
                         ineq_const=obstacle_const,
-                        focus_weight=0.0,
+                        focus_weight=1.0,
                         max_sample_per_sample=20,
                     )
                 except ConstraintSatisfactionFail:
