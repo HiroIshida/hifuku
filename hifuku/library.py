@@ -157,6 +157,11 @@ class SolutionLibrary(Generic[ProblemT]):
         uuidval = str(uuid.uuid4())[-8:]
         return cls(problem_type, ae_model, [], [], [], solvable_threshold_factor, uuidval)
 
+    def _put_on_device(self, device: torch.device):
+        self.ae_model.put_on_device(device)
+        for pred in self.predictors:
+            pred.put_on_device(device)
+
     @property
     def device(self) -> torch.device:
         return self.ae_model.device
@@ -240,15 +245,25 @@ class SolutionLibrary(Generic[ProblemT]):
 
     @classmethod
     def load(
-        cls, base_path: Path, problem_type: Type[ProblemT]
+        cls,
+        base_path: Path,
+        problem_type: Type[ProblemT],
+        device: Optional[torch.device] = None,
     ) -> List["SolutionLibrary[ProblemT]"]:
+        if device is None:
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+            else:
+                device = torch.device("cpu")
         libraries = []
         for path in base_path.iterdir():
             m = re.match(r"Library-(\w+)-(\w+).pkl", path.name)
             if m is not None and m[1] == problem_type.__name__:
                 logger.info("library found at {}".format(path))
                 with path.open(mode="rb") as f:
-                    libraries.append(pickle.load(f))
+                    lib: "SolutionLibrary[ProblemT]" = pickle.load(f)
+                    lib._put_on_device(device)
+                    libraries.append(lib)
         return libraries  # type: ignore
 
 
