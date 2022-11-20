@@ -17,7 +17,7 @@ from skplan.solver.constraint import (
     PoseConstraint,
     TrajectoryEqualityConstraint,
     TrajectoryInequalityConstraint,
-    batch_project_to_manifold,
+    batch_sample_from_manifold,
 )
 from skplan.solver.inverse_kinematics import IKConfig, IKResult, InverseKinematicsSolver
 from skplan.solver.optimization import OsqpSqpPlanner
@@ -425,7 +425,7 @@ class TabletopPlanningProblem(TabletopActualProblem):
             if traj_init is None:
                 # creat init traj
                 try:
-                    samples = batch_project_to_manifold(
+                    samples = batch_sample_from_manifold(
                         20,
                         cspace,
                         eq_const=pose_const,
