@@ -79,17 +79,24 @@ class TableTopWorld:
     def sample_pose(self) -> Axis:
         table = self.table
         table_depth, table_width, table_height = table._extents
-        table_tip = table.copy_worldcoords()
-        table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
-        table_tip.translate([0, 0, 0.05])
+        max_trial = 500
+        sdf = self.get_union_sdf()
+        for _ in range(max_trial):
+            table_tip = table.copy_worldcoords()
+            table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
+            table_tip.translate([0, 0, 0.05])
 
-        diff = np.random.rand(3) * np.array([table_depth, table_width, 0.2])
-        table_tip.translate(diff)
-        table_tip.rotate(-1.0 + np.random.rand() * 2.0, axis="z")
+            diff = np.random.rand(3) * np.array([table_depth, table_width, 0.2])
+            table_tip.translate(diff)
+            table_tip.rotate(-1.0 + np.random.rand() * 2.0, axis="z")
 
-        ax = Axis()
-        ax.newcoords(table_tip.copy_worldcoords())
-        return ax
+            points = np.expand_dims(table_tip.worldpos(), axis=0)
+            sd_val = sdf(points)[0]
+            if sd_val > 0.0:
+                ax = Axis()
+                ax.newcoords(table_tip.copy_worldcoords())
+                return ax
+        assert False
 
     def sample_standard_pose(self) -> Axis:
         table = self.table
