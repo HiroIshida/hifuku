@@ -392,7 +392,7 @@ class TabletopIKProblem(TabletopActualProblem):
 class TabletopPlanningProblem(TabletopActualProblem):
     @classmethod
     def get_solver_config(cls) -> OsqpSqpPlanner.SolverConfig:
-        config = OsqpSqpPlanner.SolverConfig(verbose=False)
+        config = OsqpSqpPlanner.SolverConfig(verbose=False, maxiter=10, maxfev=10)
         return config
 
     def solve(
