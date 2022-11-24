@@ -1,3 +1,4 @@
+import copy
 import logging
 import multiprocessing
 import os
@@ -275,10 +276,17 @@ class SolutionLibrary(Generic[ProblemT]):
         self.coverage_results.append(coverage_reuslt)
 
     def dump(self, base_path: Path) -> None:
+        cpu_device = torch.device("cpu")
+        copied = copy.deepcopy(self)
+
+        copied.ae_model.put_on_device(cpu_device)
+        for pred in copied.predictors:
+            pred.put_on_device(cpu_device)
+
         name = "Library-{}-{}.pkl".format(self.problem_type.__name__, self.uuidval)
         file_path = base_path / name
         with file_path.open(mode="wb") as f:
-            pickle.dump(self, f)
+            pickle.dump(copied, f)
         logger.info("dumped library to {}".format(file_path))
 
     @classmethod
@@ -300,6 +308,7 @@ class SolutionLibrary(Generic[ProblemT]):
                 logger.info("library found at {}".format(path))
                 with path.open(mode="rb") as f:
                     lib: "SolutionLibrary[ProblemT]" = pickle.load(f)
+                    assert lib.device == torch.device("cpu")
                     lib._put_on_device(device)
                     libraries.append(lib)
         return libraries  # type: ignore
