@@ -1,78 +1,74 @@
-import tempfile
-from dataclasses import dataclass
-from pathlib import Path
+import logging
+import os
+import signal
+import subprocess
+import time
+from typing import List
 
-import numpy as np
+import pytest
 
 from hifuku.datagen import (
-    DataGenerationTaskArg,
-    HifukuDataGenerationTask,
+    DatasetGenerator,
+    DistributedDatasetGenerator,
     MultiProcessDatasetGenerator,
 )
-from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.threedim.tabletop import TabletopPlanningProblem
-from hifuku.types import PredicateInterface, RawData
+
+logger = logging.getLogger(__name__)
 
 
-@dataclass
-class SimplePredicate(PredicateInterface[TabletopPlanningProblem]):
-    threshold: float = 0.0
+@pytest.fixture(autouse=True)
+def server():
+    p1 = subprocess.Popen(
+        "python3 -m hifuku.http_datagen.server -port 8081", shell=True, preexec_fn=os.setsid
+    )
+    p2 = subprocess.Popen(
+        "python3 -m hifuku.http_datagen.server -port 8082", shell=True, preexec_fn=os.setsid
+    )
+    time.sleep(2)
+    yield
+    # https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true/4791612#4791612
+    os.killpg(os.getpgid(p1.pid), signal.SIGTERM)
+    os.killpg(os.getpgid(p2.pid), signal.SIGTERM)
+    logger.info("kill servers")
 
-    def __call__(self, problem: TabletopPlanningProblem) -> bool:
-        assert problem.n_problem() == 1
-        pose = problem.target_pose_list[0]
-        is_y_positive = pose.worldpos()[1] > self.threshold
-        return is_y_positive
 
+def test_consistency_of_all_generator(server):
+    for n_problem in [1, 8]:  # to test edge case
+        n_problem_inner = 2
+        init_solutions = [TabletopPlanningProblem.get_default_init_solution()] * n_problem
+        problems = [TabletopPlanningProblem.sample(n_problem_inner) for _ in range(n_problem)]
+        gen_list: List[DatasetGenerator] = []
+        gen_list.append(MultiProcessDatasetGenerator(TabletopPlanningProblem, 1))
+        gen_list.append(MultiProcessDatasetGenerator(TabletopPlanningProblem, 2))
 
-def test_DataGenerationTask():
-
-    x_init = TabletopPlanningProblem.get_default_init_solution()
-
-    # case if predicate is feasible
-    with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        arg = DataGenerationTaskArg(4, False, td_path, extension=".npz")
-        task = HifukuDataGenerationTask(
-            arg, TabletopPlanningProblem, 5, x_init, predicate=SimplePredicate(0.0)
+        hostport_pairs = [("localhost", 8081), ("localhost", 8082)]
+        gen = DistributedDatasetGenerator(
+            TabletopPlanningProblem, hostport_pairs, n_problem_measure=1
         )
-        task.run()
+        gen_list.append(gen)
 
-        # load and check
-        dataset = LazyDecomplessDataset.load(td_path, RawData, n_worker=1)
-        data_list = dataset.get_data(np.array([0, 1, 2, 3]))
+        # compare generated nit and success
+        # we wanted to directly compare results_list but somehow, pickling-unpickling process
+        # change the hash value. so...
+        nits_list = []
+        successes_list = []
+        for gen in gen_list:  # type: ignore
+            results_list = gen.generate(problems, init_solutions)
+            assert isinstance(results_list, list)
+            assert len(results_list) == n_problem
+            assert isinstance(results_list[0], tuple)
+            assert len(results_list[0]) == n_problem_inner
 
-        for data in data_list:
-            desc = data.descriptions[0]
-            assert len(desc) == 12  # assume pose of target + pose of table is concatted
-            is_y_positive = desc[1] > 0.0
-            assert is_y_positive
+            nits = []
+            successes = []
+            for results in results_list:
+                nits.extend([r.nit for r in results])
+                successes.extend([r.success for r in results])
+            nits_list.append(tuple(nits))
+            successes_list.append(tuple(successes))
 
-    # case if predicate is not feasible
-    with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        arg = DataGenerationTaskArg(4, False, td_path, extension=".npz")
-        pred_infeasible = SimplePredicate(np.inf)
-        task = HifukuDataGenerationTask(
-            arg, TabletopPlanningProblem, 5, x_init, predicate=pred_infeasible
-        )
-        data_ = task.generate_single_data()
-        assert data_ is None
-
-
-def test_MultiProcessDatasetGenerator():
-    gen = MultiProcessDatasetGenerator(TabletopPlanningProblem, n_process=2)
-    init_solution = TabletopPlanningProblem.get_default_init_solution()
-    n_problem = 4
-    n_problem_inner = 10
-
-    with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        gen.generate(init_solution, n_problem, n_problem_inner, td_path)
-
-        file_path_list = list(td_path.iterdir())
-        assert len(file_path_list) == n_problem
-
-        for file_path in file_path_list:
-            rawdata = RawData.load(file_path, decompress=True)
-            assert len(rawdata.descriptions) == n_problem_inner
+        # NOTE: it seems that osqp solve results sometimes slightly different though
+        # the same problem is provided.. maybe random variable is used inside???
+        assert len(set(nits_list)) == 1
+        assert len(set(successes_list)) == 1

@@ -1,13 +1,13 @@
 import contextlib
 import logging
-import pickle
 from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
-from typing import Generic, List, Optional, Type, overload
+from typing import Generic, List, Optional, Tuple, Type, overload
 
+import dill
 import numpy as np
 
-from hifuku.types import PredicateInterface, ProblemT
+from hifuku.types import PredicateInterface, ProblemT, ResultProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,25 @@ class GetModuleHashValueRequest(Request):
 @dataclass
 class GetModuleHashValueResponse(Response):
     hash_values: List[Optional[str]]
+
+
+@dataclass
+class SolveProblemRequest(Generic[ProblemT], Request):
+    problems: List[ProblemT]
+    init_solutions: List[np.ndarray]
+    n_process: int
+
+    def __str__(self) -> str:
+        return "[...hogehoge...]"
+
+
+@dataclass
+class SolveProblemResponse(Response):
+    results_list: List[Tuple[ResultProtocol, ...]]
+    elapsed_time: float
+
+    def __str__(self) -> str:
+        return "[...hogehoge...]"
 
 
 @dataclass
@@ -90,11 +109,16 @@ def send_request(conn: HTTPConnection, request: CreateDatasetRequest) -> CreateD
     pass
 
 
+@overload
+def send_request(conn: HTTPConnection, request: SolveProblemRequest) -> SolveProblemResponse:
+    pass
+
+
 def send_request(conn: HTTPConnection, request):
     headers = {"Content-type": "application/json"}
-    conn.request("POST", "/post", pickle.dumps(request), headers)
+    conn.request("POST", "/post", dill.dumps(request), headers)
     logger.debug("send request to ({}, {}): {}".format(conn.host, conn.port, request))
-    response = pickle.loads(conn.getresponse().read())
+    response = dill.loads(conn.getresponse().read())
     logger.debug("got renpose from ({}, {}): {}".format(conn.host, conn.port, response))
     return response
 

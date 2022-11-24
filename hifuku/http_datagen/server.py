@@ -9,13 +9,13 @@ from pathlib import Path
 
 from hifuku.datagen import MultiProcessDatasetGenerator
 from hifuku.http_datagen.request import (
-    CreateDatasetRequest,
-    CreateDatasetResponse,
     GetCPUInfoRequest,
     GetCPUInfoResponse,
     GetModuleHashValueRequest,
     GetModuleHashValueResponse,
     Response,
+    SolveProblemRequest,
+    SolveProblemResponse,
 )
 from hifuku.utils import get_module_source_hash
 
@@ -45,26 +45,19 @@ class PostHandler(BaseHTTPRequestHandler):
         resp = GetModuleHashValueResponse(hashes)
         return resp
 
-    def process_CreateDatasetRequest(self, request: CreateDatasetRequest) -> CreateDatasetResponse:
+    def process_SolveProblemRequest(self, request: SolveProblemRequest) -> SolveProblemResponse:
         ts = time.time()
         logging.info("request: {}".format(request))
+        problem_type = type(request.problems[0])
 
-        gen = MultiProcessDatasetGenerator(request.problem_type, request.n_process)
+        gen = MultiProcessDatasetGenerator(problem_type, request.n_process)  # type: ignore
 
         with tempfile.TemporaryDirectory() as td:
-            td_path = Path(td)
-            gen.generate(request.init_solution, request.n_problem, request.n_problem_inner, td_path)
-
-            byte_data_list = []
-            name_list = []
-            for path in td_path.iterdir():
-                with path.open(mode="rb") as f:
-                    byte_data = f.read()
-                    byte_data_list.append(byte_data)
-                    name_list.append(path.name)
+            Path(td)
+            results_list = gen.generate(request.problems, request.init_solutions)
 
         elapsed_time = time.time() - ts
-        resp = CreateDatasetResponse(byte_data_list, name_list, elapsed_time)
+        resp = SolveProblemResponse(results_list, elapsed_time)
         return resp
 
     def do_POST(self):
@@ -81,10 +74,10 @@ class PostHandler(BaseHTTPRequestHandler):
             resp = self.process_GetCPUInfoRequest(request)
         elif isinstance(request, GetModuleHashValueRequest):
             resp = self.process_GetModuleHashValueRequest(request)
-        elif isinstance(request, CreateDatasetRequest):
-            resp = self.process_CreateDatasetRequest(request)
+        elif isinstance(request, SolveProblemRequest):
+            resp = self.process_SolveProblemRequest(request)
         else:
-            assert False
+            assert False, "request {} is not supported".format(type(request))
         self.wfile.write(pickle.dumps(resp))
         print("elapsed time to handle request: {}".format(time.time() - ts))
 

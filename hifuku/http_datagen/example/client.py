@@ -2,9 +2,9 @@ import numpy as np
 
 from hifuku.http_datagen.request import http_connection, send_request
 from hifuku.http_datagen.server import (
-    CreateDatasetRequest,
     GetCPUInfoRequest,
     GetModuleHashValueRequest,
+    SolveProblemRequest,
 )
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
@@ -26,7 +26,8 @@ with http_connection("localhost", 8080) as conn:
     req2 = GetCPUInfoRequest()
     resp2 = send_request(conn, req2)
 
-    init_solution = np.zeros(10 * 15)
-    req3 = CreateDatasetRequest(TabletopPlanningProblem, init_solution, 12, 1, resp2.n_cpu)
+    problems = [TabletopPlanningProblem.sample(2) for _ in range(3)]
+    init_solution = [np.zeros(10 * 15)] * 3
+    req3 = SolveProblemRequest(problems, init_solution, resp2.n_cpu)
     resp3 = send_request(conn, req3)
     print(resp3.elapsed_time)
