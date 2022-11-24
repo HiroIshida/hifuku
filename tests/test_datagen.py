@@ -1,4 +1,5 @@
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -13,22 +14,27 @@ from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import PredicateInterface, RawData
 
 
+@dataclass
 class SimplePredicate(PredicateInterface[TabletopPlanningProblem]):
+    threshold: float = 0.0
+
     def __call__(self, problem: TabletopPlanningProblem) -> bool:
         assert problem.n_problem() == 1
         pose = problem.target_pose_list[0]
-        is_y_positive = pose.worldpos()[1] > 0.0
+        is_y_positive = pose.worldpos()[1] > self.threshold
         return is_y_positive
 
 
 def test_DataGenerationTask():
 
+    x_init = TabletopPlanningProblem.get_default_init_solution()
+
+    # case if predicate is feasible
     with tempfile.TemporaryDirectory() as td:
-        x_init = TabletopPlanningProblem.get_default_init_solution()
         td_path = Path(td)
         arg = DataGenerationTaskArg(4, False, td_path, extension=".npz")
         task = HifukuDataGenerationTask(
-            arg, TabletopPlanningProblem, 5, x_init, predicate=SimplePredicate()
+            arg, TabletopPlanningProblem, 5, x_init, predicate=SimplePredicate(0.0)
         )
         task.run()
 
@@ -41,6 +47,17 @@ def test_DataGenerationTask():
             assert len(desc) == 12  # assume pose of target + pose of table is concatted
             is_y_positive = desc[1] > 0.0
             assert is_y_positive
+
+    # case if predicate is not feasible
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        arg = DataGenerationTaskArg(4, False, td_path, extension=".npz")
+        pred_infeasible = SimplePredicate(np.inf)
+        task = HifukuDataGenerationTask(
+            arg, TabletopPlanningProblem, 5, x_init, predicate=pred_infeasible
+        )
+        data_ = task.generate_single_data()
+        assert data_ is None
 
 
 def test_MultiProcessDatasetGenerator():
