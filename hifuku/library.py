@@ -15,7 +15,7 @@ import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 
-from hifuku.datagen import DatasetGenerator
+from hifuku.datagen import BatchProblemSolver
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.margin import CoverageResult
 from hifuku.neuralnet import (
@@ -328,7 +328,7 @@ class LibrarySamplerConfig:
 class SolutionLibrarySampler(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT]
-    dataset_gen: DatasetGenerator
+    dataset_gen: BatchProblemSolver
     config: LibrarySamplerConfig
     validation_problem_pool: FixedProblemPool[ProblemT]
 
@@ -337,7 +337,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         cls,
         problem_type: Type[ProblemT],
         ae_model: VoxelAutoEncoder,
-        dataset_gen: DatasetGenerator,
+        dataset_gen: BatchProblemSolver,
         config: LibrarySamplerConfig,
         validation_problem_pool: FixedProblemPool[ProblemT],
     ) -> "SolutionLibrarySampler[ProblemT]":

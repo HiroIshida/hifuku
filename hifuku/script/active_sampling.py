@@ -6,7 +6,7 @@ from mohou.trainer import TrainConfig
 from mohou.utils import log_package_version_info
 
 import hifuku
-from hifuku.datagen import DistributedDatasetGenerator
+from hifuku.datagen import DistributedBatchProblemSolver
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleFixedProblemPool,
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         ("mars", 8080),
     ]
 
-    gen = DistributedDatasetGenerator(TabletopPlanningProblem, hostport_pairs)
+    gen = DistributedBatchProblemSolver(TabletopPlanningProblem, hostport_pairs)
     # gen = MultiProcessDatasetGenerator(TabletopPlanningProblem)
     ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
 

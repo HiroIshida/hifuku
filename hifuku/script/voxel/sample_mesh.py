@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 from mohou.file import get_project_path
 
-from hifuku.datagen import MultiProcessDatasetGenerator
+from hifuku.datagen import MultiProcessBatchProblemSolver
 from hifuku.threedim.tabletop import TabletopMeshProblem
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
@@ -16,5 +16,5 @@ if __name__ == "__main__":
     pp = get_project_path("tabletop_mesh")
     cache_base_path = pp / "cache"
     cache_base_path.mkdir(exist_ok=True, parents=True)
-    gen = MultiProcessDatasetGenerator(TabletopMeshProblem)
+    gen = MultiProcessBatchProblemSolver(TabletopMeshProblem)
     gen.generate(np.zeros(0), n_problem, 0, cache_base_path)

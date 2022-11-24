@@ -7,7 +7,7 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from hifuku.datagen import MultiProcessDatasetGenerator
+from hifuku.datagen import MultiProcessBatchProblemSolver
 from hifuku.http_datagen.request import (
     GetCPUInfoRequest,
     GetCPUInfoResponse,
@@ -50,7 +50,7 @@ class PostHandler(BaseHTTPRequestHandler):
         logging.info("request: {}".format(request))
         problem_type = type(request.problems[0])
 
-        gen = MultiProcessDatasetGenerator(problem_type, request.n_process)  # type: ignore
+        gen = MultiProcessBatchProblemSolver(problem_type, request.n_process)  # type: ignore
 
         with tempfile.TemporaryDirectory() as td:
             Path(td)

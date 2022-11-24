@@ -8,9 +8,9 @@ from typing import List
 import pytest
 
 from hifuku.datagen import (
-    DatasetGenerator,
-    DistributedDatasetGenerator,
-    MultiProcessDatasetGenerator,
+    BatchProblemSolver,
+    DistributedBatchProblemSolver,
+    MultiProcessBatchProblemSolver,
 )
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
@@ -38,12 +38,12 @@ def test_consistency_of_all_generator(server):
         n_problem_inner = 2
         init_solutions = [TabletopPlanningProblem.get_default_init_solution()] * n_problem
         problems = [TabletopPlanningProblem.sample(n_problem_inner) for _ in range(n_problem)]
-        gen_list: List[DatasetGenerator] = []
-        gen_list.append(MultiProcessDatasetGenerator(TabletopPlanningProblem, 1))
-        gen_list.append(MultiProcessDatasetGenerator(TabletopPlanningProblem, 2))
+        gen_list: List[BatchProblemSolver] = []
+        gen_list.append(MultiProcessBatchProblemSolver(TabletopPlanningProblem, 1))
+        gen_list.append(MultiProcessBatchProblemSolver(TabletopPlanningProblem, 2))
 
         hostport_pairs = [("localhost", 8081), ("localhost", 8082)]
-        gen = DistributedDatasetGenerator(
+        gen = DistributedBatchProblemSolver(
             TabletopPlanningProblem, hostport_pairs, n_problem_measure=1
         )
         gen_list.append(gen)

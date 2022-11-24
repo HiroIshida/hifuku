@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class DataGenerationTaskArg(Generic[ProblemT]):
+class BatchProblemSolverArg(Generic[ProblemT]):
     indices: np.ndarray
     problems: List[ProblemT]
     init_solutions: List[np.ndarray]
@@ -42,11 +42,11 @@ class DataGenerationTaskArg(Generic[ProblemT]):
         assert len(self.problems) == len(self.init_solutions)
 
 
-class HifukuDataGenerationTask(Process, Generic[ProblemT]):
-    arg: DataGenerationTaskArg[ProblemT]
+class BatchProblemSolverTask(Process, Generic[ProblemT]):
+    arg: BatchProblemSolverArg[ProblemT]
     queue: Queue
 
-    def __init__(self, arg: DataGenerationTaskArg, queue: Queue):
+    def __init__(self, arg: BatchProblemSolverArg, queue: Queue):
         self.arg = arg
         self.queue = queue
         super().__init__()
@@ -72,7 +72,7 @@ class HifukuDataGenerationTask(Process, Generic[ProblemT]):
                 pbar.update(1)
 
 
-class DatasetGenerator(Generic[ProblemT], ABC):
+class BatchProblemSolver(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
 
     def __init__(self, problem_type: Type[ProblemT], cache_base_dir: Optional[Path] = None):
@@ -103,7 +103,7 @@ class DatasetGenerator(Generic[ProblemT], ABC):
         return indices_list
 
 
-class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
+class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
     n_process: int
 
     def __init__(self, problem_type: Type[ProblemT], n_process: Optional[int] = None):
@@ -149,10 +149,10 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
                 enable_tqdm = i == 0
                 problems_part = [problems[idx] for idx in indices_part]
                 init_solutions_part = [init_solutions[idx] for idx in indices_part]
-                arg = DataGenerationTaskArg(
+                arg = BatchProblemSolverArg(
                     indices_part, problems_part, init_solutions_part, enable_tqdm
                 )
-                task = HifukuDataGenerationTask(arg, q)  # type: ignore
+                task = BatchProblemSolverTask(arg, q)  # type: ignore
                 process_list.append(task)
                 task.start()
 
@@ -169,7 +169,7 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
 HostPortPair = Tuple[str, int]
 
 
-class DistributedDatasetGenerator(DatasetGenerator[ProblemT]):
+class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
     hostport_cpuinfo_map: Dict[HostPortPair, GetCPUInfoResponse]
     n_problem_measure: int
     check_module_names: ClassVar[Tuple[str, ...]] = ("skplan", "voxbloxpy")
