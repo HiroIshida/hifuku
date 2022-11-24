@@ -230,6 +230,30 @@ class SolutionLibrary(Generic[ProblemT]):
         threshold = config.maxiter * self.solvable_threshold_factor
         return threshold
 
+    def measure_full_coverage(self, problem_pool: FixedProblemPool[ProblemT]) -> CoverageResult:
+        logger.info("**compute est values")
+        iterval_est_list = []
+        init_solution_est_list = []
+        for problem in tqdm.tqdm(problem_pool):
+            assert problem.n_problem() == 1
+            infer_res = self.infer(problem)[0]
+            iterval_est_list.append(infer_res.nit)
+            init_solution_est_list.append(infer_res.init_solution)
+
+        logger.info("**compute real values")
+        problems = [p for p in problem_pool]
+        results = MultiProcessProblemSolver.solve(problems, init_solution_est_list, None)
+
+        maxiter = self.problem_type.get_solver_config().maxiter
+        iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
+
+        success_iter = self.success_iter_threshold()
+        coverage_result = CoverageResult(
+            np.array(iterval_real_list), np.array(iterval_est_list), success_iter
+        )
+        logger.info(coverage_result)
+        return coverage_result
+
     def measure_coverage(self, problem_pool: FixedProblemPool[ProblemT]) -> float:
         threshold = self.success_iter_threshold()
         count = 0
@@ -329,22 +353,6 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         init_solution = self._determine_init_solution(problem_pool)
         predictor = self.learn_predictors(init_solution, project_path)
 
-        coverage_result = self._compute_coverage(predictor, init_solution)
-        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
-
-        logger.info("margin is set to {}".format(margin))
-        self.coverage_result_list.append(coverage_result)
-        self.library.add(predictor, margin, coverage_result)
-
-        coverage = self.library.measure_coverage(self.validation_problem_pool)
-        logger.info("current library's coverage estimate: {}".format(coverage))
-
-        self.library.dump(project_path)
-
-    def _compute_coverage(
-        self, predictor: IterationPredictor, init_solution: np.ndarray
-    ) -> CoverageResult:
-
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
             problem_type=self.problem_type,
@@ -355,29 +363,18 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
         )
-
-        maxiter = self.problem_type.get_solver_config().maxiter
-
-        logger.info("**compute est values")
-        iterval_est_list = []
-        for problem in tqdm.tqdm(self.validation_problem_pool):
-            assert problem.n_problem() == 1
-            infer_res = singleton_library.infer(problem)[0]
-            iterval_est = infer_res.nit
-            iterval_est_list.append(iterval_est)
-
-        logger.info("**compute real values")
-        problems = [p for p in self.validation_problem_pool]
-        init_solutions = [init_solution] * len(problems)
-        results = MultiProcessProblemSolver.solve(problems, init_solutions, None)
-        iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
-
-        success_iter_threshold = maxiter * self.config.difficult_threshold_factor
-        coverage_result = CoverageResult(
-            np.array(iterval_real_list), np.array(iterval_est_list), success_iter_threshold
-        )
+        coverage_result = singleton_library.measure_full_coverage(self.validation_problem_pool)
         logger.info(coverage_result)
-        return coverage_result
+        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+
+        logger.info("margin is set to {}".format(margin))
+        self.coverage_result_list.append(coverage_result)
+        self.library.add(predictor, margin, coverage_result)
+
+        coverage = self.library.measure_coverage(self.validation_problem_pool)
+        logger.info("current library's coverage estimate: {}".format(coverage))
+
+        self.library.dump(project_path)
 
     def learn_predictors(self, init_solution: np.ndarray, project_path: Path) -> IterationPredictor:
         pp = project_path
