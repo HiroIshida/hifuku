@@ -8,10 +8,10 @@ from mohou.trainer import TrainConfig
 from hifuku.datagen import MultiProcessDatasetGenerator
 from hifuku.library import (
     LibrarySamplerConfig,
+    MultiProcessProblemSolver,
     SimpleFixedProblemPool,
     SolutionLibrary,
     SolutionLibrarySampler,
-    compute_real_itervals,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
@@ -22,8 +22,8 @@ def test_compute_real_itervals():
     x_init = TabletopPlanningProblem.get_default_init_solution()
     n_problem = 10
     problems = [TabletopPlanningProblem.sample(1) for _ in range(n_problem)]
-    itervals_mp = compute_real_itervals(problems, x_init, n_process=4)
-    itervals_sp = compute_real_itervals(problems, x_init, n_process=1)
+    itervals_mp = MultiProcessProblemSolver.compute_real_itervals(problems, x_init, n_process=4)
+    itervals_sp = MultiProcessProblemSolver.compute_real_itervals(problems, x_init, n_process=1)
     assert len(itervals_mp) == n_problem
     assert itervals_mp == itervals_sp
 
