@@ -17,4 +17,4 @@ if __name__ == "__main__":
     cache_base_path = pp / "cache"
     cache_base_path.mkdir(exist_ok=True, parents=True)
     gen = MultiProcessBatchProblemSolver(TabletopMeshProblem)
-    gen.generate(np.zeros(0), n_problem, 0, cache_base_path)
+    gen.solve_batch(np.zeros(0), n_problem, 0, cache_base_path)

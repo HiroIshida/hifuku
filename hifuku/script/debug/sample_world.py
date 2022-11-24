@@ -22,4 +22,4 @@ if __name__ == "__main__":
     problem = TabletopPlanningProblem.create_standard()
     result = problem.solve()[0]
     assert result.success
-    gen.generate(result.x, n_problem, 50, cache_base_path)
+    gen.solve_batch(result.x, n_problem, 50, cache_base_path)

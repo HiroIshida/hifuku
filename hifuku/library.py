@@ -328,7 +328,7 @@ class LibrarySamplerConfig:
 class SolutionLibrarySampler(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT]
-    dataset_gen: BatchProblemSolver
+    solver: BatchProblemSolver
     config: LibrarySamplerConfig
     validation_problem_pool: FixedProblemPool[ProblemT]
 
@@ -337,7 +337,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         cls,
         problem_type: Type[ProblemT],
         ae_model: VoxelAutoEncoder,
-        dataset_gen: BatchProblemSolver,
+        solver: BatchProblemSolver,
         config: LibrarySamplerConfig,
         validation_problem_pool: FixedProblemPool[ProblemT],
     ) -> "SolutionLibrarySampler[ProblemT]":

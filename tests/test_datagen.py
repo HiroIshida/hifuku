@@ -54,7 +54,7 @@ def test_consistency_of_all_generator(server):
         nits_list = []
         successes_list = []
         for gen in gen_list:  # type: ignore
-            results_list = gen.generate(problems, init_solutions)
+            results_list = gen.solve_batch(problems, init_solutions)
             assert isinstance(results_list, list)
             assert len(results_list) == n_problem
             assert isinstance(results_list[0], tuple)

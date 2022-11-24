@@ -54,7 +54,7 @@ class PostHandler(BaseHTTPRequestHandler):
 
         with tempfile.TemporaryDirectory() as td:
             Path(td)
-            results_list = gen.generate(request.problems, request.init_solutions)
+            results_list = gen.solve_batch(request.problems, request.init_solutions)
 
         elapsed_time = time.time() - ts
         resp = SolveProblemResponse(results_list, elapsed_time)

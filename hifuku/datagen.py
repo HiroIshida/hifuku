@@ -79,7 +79,7 @@ class BatchProblemSolver(Generic[ProblemT], ABC):
         self.problem_type = problem_type
 
     @abstractmethod
-    def generate(
+    def solve_batch(
         self,
         problems: List[ProblemT],
         init_solutions: List[np.ndarray],
@@ -116,7 +116,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
         logger.info("n_process is set to {}".format(n_process))
         self.n_process = n_process
 
-    def generate(
+    def solve_batch(
         self,
         problems: List[ProblemT],
         init_solutions: List[np.ndarray],
@@ -202,7 +202,7 @@ class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
-    def generate(
+    def solve_batch(
         self,
         problems: List[ProblemT],
         init_solutions: List[np.ndarray],
