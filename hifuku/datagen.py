@@ -95,7 +95,13 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
         self.n_process = n_process
 
     def generate(
-        self, init_solution: np.ndarray, n_problem: int, n_problem_inner, cache_dir_path: Path
+        self,
+        init_solution: np.ndarray,
+        n_problem: int,
+        n_problem_inner,
+        cache_dir_path: Path,
+        predicate: Optional[PredicateInterface[ProblemT]] = None,
+        max_trial_factor: int = 40,
     ) -> None:
         n_problem_per_process_list = self.split_number(n_problem, self.n_process)
         assert cache_dir_path.exists()
@@ -107,7 +113,14 @@ class MultiProcessDatasetGenerator(DatasetGenerator[ProblemT]):
                 arg = DataGenerationTaskArg(
                     n_problem_per_process, show_process_bar, cache_dir_path, extension=".npz"
                 )
-                p = HifukuDataGenerationTask(arg, self.problem_type, n_problem_inner, init_solution)
+                p = HifukuDataGenerationTask(
+                    arg,
+                    self.problem_type,
+                    n_problem_inner,
+                    init_solution,
+                    predicate=predicate,
+                    max_trial_factor=max_trial_factor,
+                )
                 p.start()
                 process_list.append(p)
 
@@ -155,7 +168,13 @@ class DistributedDatasetGenerator(DatasetGenerator[ProblemT]):
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
     def generate(
-        self, init_solution: np.ndarray, n_problem: int, n_problem_inner, cache_dir_path: Path
+        self,
+        init_solution: np.ndarray,
+        n_problem: int,
+        n_problem_inner,
+        cache_dir_path: Path,
+        predicate: Optional[PredicateInterface[ProblemT]] = None,
+        max_trial_factor: int = 40,
     ) -> None:
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         performance_table = self._measure_performance_of_each_server(
@@ -183,7 +202,13 @@ class DistributedDatasetGenerator(DatasetGenerator[ProblemT]):
             n_problem_host = n_problem_table[hostport]
             n_process = self.hostport_cpuinfo_map[hostport].n_cpu
             req = CreateDatasetRequest(
-                self.problem_type, init_solution, n_problem_host, n_problem_inner, n_process
+                self.problem_type,
+                init_solution,
+                n_problem_host,
+                n_problem_inner,
+                n_process,
+                predicate=predicate,
+                max_trial_factor=max_trial_factor,
             )
             p = Process(target=self.send_and_recive_and_write, args=(hostport, req, cache_dir_path))
             p.start()

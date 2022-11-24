@@ -3,11 +3,11 @@ import logging
 import pickle
 from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
-from typing import List, Optional, Type, overload
+from typing import Generic, List, Optional, Type, overload
 
 import numpy as np
 
-from hifuku.types import ProblemInterface
+from hifuku.types import PredicateInterface, ProblemT
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +41,14 @@ class GetModuleHashValueResponse(Response):
 
 
 @dataclass
-class CreateDatasetRequest(Request):
-    problem_type: Type[ProblemInterface]
+class CreateDatasetRequest(Generic[ProblemT], Request):
+    problem_type: Type[ProblemT]
     init_solution: np.ndarray
     n_problem: int
     n_problem_inner: int
     n_process: int
+    predicate: Optional[PredicateInterface[ProblemT]] = None
+    max_trial_factor: int = 40
 
     def __str__(self) -> str:
         vis_dict = asdict(self)
