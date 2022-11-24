@@ -40,7 +40,7 @@ class DataGenerationTask(ABC, Process, Generic[ChunkT]):
         pass
 
     @abstractmethod
-    def generate_single_data(self) -> ChunkT:
+    def generate_single_data(self) -> Optional[ChunkT]:
         pass
 
     def run(self) -> None:
@@ -59,10 +59,16 @@ class DataGenerationTask(ABC, Process, Generic[ChunkT]):
         np.random.seed(unique_id)
         disable_tqdm = not self.arg.show_process_bar
 
-        for _ in tqdm.tqdm(range(self.arg.number), disable=disable_tqdm):
-            chunk = self.generate_single_data()
-            name = str(uuid.uuid4()) + self.arg.extension
-            file_path = self.arg.base_path / name
-            dump_path = chunk.dump(file_path)
-            if self.arg.queue is not None:
-                self.arg.queue.put(dump_path)
+        with tqdm.tqdm(total=self.arg.number, disable=disable_tqdm) as pbar:
+            counter = 0
+            while counter < self.arg.number:
+                chunk = self.generate_single_data()
+                if chunk is None:
+                    continue
+                name = str(uuid.uuid4()) + self.arg.extension
+                file_path = self.arg.base_path / name
+                dump_path = chunk.dump(file_path)
+                if self.arg.queue is not None:
+                    self.arg.queue.put(dump_path)
+                pbar.update(1)
+                counter += 1

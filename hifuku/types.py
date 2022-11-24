@@ -3,7 +3,18 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol, Tuple, Type, TypeVar, Union
+from typing import (
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
 
 import numpy as np
 import torch
@@ -24,13 +35,51 @@ class SolverConfigProtocol(Protocol):
     maxiter: int
 
 
+class PredicateInterface(Generic[ProblemT], ABC):
+    @abstractmethod
+    def __call__(self, problem: ProblemT) -> bool:
+        pass
+
+
 class ProblemInterface(ABC):
     class SamplingBasedInitialguessFail(Exception):
         pass
 
     @classmethod
     @abstractmethod
-    def sample(cls: Type[ProblemT], n_sample: int) -> ProblemT:
+    @overload
+    def sample(
+        cls: Type[ProblemT],
+        n_pose: int,
+        predicate: PredicateInterface[ProblemT],
+        max_trial_factor: int = ...,
+    ) -> Optional[ProblemT]:
+        ...
+
+    @classmethod
+    @abstractmethod
+    @overload
+    def sample(
+        cls: Type[ProblemT], n_pose: int, predicate: None, max_trial_factor: int = ...
+    ) -> ProblemT:
+        ...
+
+    @classmethod
+    @abstractmethod
+    @overload
+    def sample(
+        cls: Type[ProblemT], n_pose: int, predicate: None = ..., max_trial_factor: int = ...
+    ) -> ProblemT:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def sample(
+        cls: Type[ProblemT],
+        n_pose: int,
+        predicate: Optional[PredicateInterface[ProblemT]] = None,
+        max_trial_factor: int = 40,
+    ) -> Optional[ProblemT]:
         ...
 
     @classmethod
@@ -56,7 +105,7 @@ class ProblemInterface(ABC):
 
     @classmethod
     @abstractmethod
-    def get_solver_config(self) -> SolverConfigProtocol:
+    def get_solver_config(cls) -> SolverConfigProtocol:
         ...
 
 

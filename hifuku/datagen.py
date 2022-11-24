@@ -18,34 +18,44 @@ from hifuku.http_datagen.request import (
     send_request,
 )
 from hifuku.llazy.generation import DataGenerationTask, DataGenerationTaskArg
-from hifuku.types import ProblemInterface, ProblemT, RawData
+from hifuku.types import PredicateInterface, ProblemT, RawData
 from hifuku.utils import get_module_source_hash
 
 logger = logging.getLogger(__name__)
 
 
-class HifukuDataGenerationTask(DataGenerationTask[RawData]):
-    problem_type: Type[ProblemInterface]
+class HifukuDataGenerationTask(Generic[ProblemT], DataGenerationTask[RawData]):
+    problem_type: Type[ProblemT]
     n_problem_inner: int
     init_solution: np.ndarray
+    predicate: Optional[PredicateInterface[ProblemT]]
+    max_trial_factor: int
 
     def __init__(
         self,
         arg: DataGenerationTaskArg,
-        problem_type: Type[ProblemInterface],
+        problem_type: Type[ProblemT],
         n_problem_inner: int,
         init_solution: np.ndarray,
+        predicate: Optional[PredicateInterface[ProblemT]] = None,
+        max_trial_factor: int = 40,
     ):
         super().__init__(arg)
         self.problem_type = problem_type
         self.n_problem_inner = n_problem_inner
         self.init_solution = init_solution
+        self.predicate = predicate
+        self.max_trial_factor = max_trial_factor
 
     def post_init_hook(self) -> None:
         pass
 
-    def generate_single_data(self) -> RawData:
-        problem = self.problem_type.sample(self.n_problem_inner)
+    def generate_single_data(self) -> Optional[RawData]:
+        problem = self.problem_type.sample(
+            self.n_problem_inner, self.predicate, self.max_trial_factor
+        )
+        if problem is None:
+            return None
         results = problem.solve(self.init_solution)
         logger.debug("generated single data")
         logger.debug("success: {}".format([r.success for r in results]))

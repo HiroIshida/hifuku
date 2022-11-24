@@ -2,7 +2,7 @@ import copy
 import logging
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Callable, List, Optional, Tuple, Type, TypeVar
+from typing import Callable, List, Optional, Tuple, Type, TypeVar, overload
 
 import numpy as np
 import skrobot
@@ -35,7 +35,7 @@ from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
 from hifuku.threedim.utils import skcoords_to_pose_vec
-from hifuku.types import ProblemInterface, ResultProtocol
+from hifuku.types import PredicateInterface, ProblemInterface, ResultProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -266,8 +266,30 @@ class TabletopProblem(ProblemInterface):
         pose = world.sample_standard_pose()
         return cls(world, [pose])
 
+    # fmt: off
     @classmethod
-    def sample(cls: Type[TableTopProblemT], n_pose: int) -> TableTopProblemT:
+    @overload
+    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: PredicateInterface[TableTopProblemT], max_trial_factor: int = ...) -> Optional[TableTopProblemT]: ...  # noqa
+
+    @classmethod
+    @overload
+    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: None, max_trial_factor: int = ...) -> TableTopProblemT: ...  # noqa
+
+    @classmethod
+    @overload
+    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: None=..., max_trial_factor: int = ...) -> TableTopProblemT: ...  # noqa
+    # fmt: on
+
+    @classmethod
+    def sample(
+        cls: Type[TableTopProblemT],
+        n_pose: int,
+        predicate: Optional[PredicateInterface[TableTopProblemT]] = None,
+        max_trial_factor: int = 40,
+    ) -> Optional[TableTopProblemT]:
+        """
+        max_trial_factor is used only if predicate is specified
+        """
         pr2 = cls.setup_pr2()
         efkin, colkin = cls.setup_kinmaps()
 
@@ -281,9 +303,31 @@ class TabletopProblem(ProblemInterface):
         while True:
             world = TableTopWorld.sample()
             if not is_collision_init_config(world):
-                target_pose_list = [world.sample_pose() for _ in range(n_pose)]
-                problem = cls(world, target_pose_list)
-                return problem
+                if predicate is None:
+                    target_pose_list = [world.sample_pose() for _ in range(n_pose)]
+                    problem = cls(world, target_pose_list)
+                    return problem
+                else:
+                    target_pose_list = []
+                    trial_count = 0
+                    while len(target_pose_list) < n_pose:
+                        trial_count += 1
+                        pose = world.sample_pose()
+                        problem = cls(world, [pose])
+                        assert predicate is not None
+                        is_valid = predicate(problem)
+                        if is_valid:
+                            target_pose_list.append(pose)
+
+                        # if sampling the first valid problem takes more than max_trial_factor, then
+                        # consider the problem is infeasible
+                        seems_infeasible = (
+                            len(target_pose_list) == 0 and trial_count > max_trial_factor
+                        )
+                        if seems_infeasible:
+                            return None
+
+                    return cls(world, target_pose_list)
 
     def visualize(self, av: np.ndarray):
         pr2 = copy.deepcopy(self.setup_pr2())
