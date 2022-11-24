@@ -324,7 +324,6 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
     dataset_gen: DatasetGenerator
     config: LibrarySamplerConfig
     validation_problem_pool: FixedProblemPool[ProblemT]
-    coverage_result_list: List[CoverageResult]
 
     @classmethod
     def initialize(
@@ -339,7 +338,7 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             problem_type, ae_model, config.solvable_threshold_factor
         )
         logger.info("library sampler config: {}".format(config))
-        return cls(problem_type, library, dataset_gen, config, validation_problem_pool, [])
+        return cls(problem_type, library, dataset_gen, config, validation_problem_pool)
 
     def step_active_sampling(
         self, project_path: Path, problem_pool: Optional[IteratorProblemPool[ProblemT]] = None
@@ -368,7 +367,6 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
         logger.info("margin is set to {}".format(margin))
-        self.coverage_result_list.append(coverage_result)
         self.library.add(predictor, margin, coverage_result)
 
         coverage = self.library.measure_coverage(self.validation_problem_pool)
