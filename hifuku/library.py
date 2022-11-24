@@ -23,7 +23,7 @@ from hifuku.neuralnet import (
     IterationPredictorDataset,
     VoxelAutoEncoder,
 )
-from hifuku.types import ProblemInterface, ProblemT, RawData
+from hifuku.types import ProblemInterface, ProblemT, RawData, ResultProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -35,31 +35,30 @@ class MultiProcessProblemSolver:
     """
 
     @dataclass
-    class ComputeRealItervalsArg:
+    class ProblemSolverArg:
         indices: np.ndarray
         problems: Sequence[ProblemInterface]
         init_solution: np.ndarray
         disable_tqdm: bool
 
     @staticmethod
-    def _compute_real_itervals(arg: ComputeRealItervalsArg, q: multiprocessing.Queue):
+    def _solve(arg: ProblemSolverArg, q: multiprocessing.Queue):
         with tqdm.tqdm(total=len(arg.problems), disable=arg.disable_tqdm) as pbar:
             maxiter = arg.problems[0].get_solver_config().maxiter
             logger.debug("*maxiter: {}".format(maxiter))
             for idx, problem in zip(arg.indices, arg.problems):
                 assert problem.n_problem() == 1
                 result = problem.solve(arg.init_solution)[0]
-                iterval_real = result.nit if result.success else float(maxiter)
-                q.put((idx, iterval_real))
+                q.put((idx, result))
                 pbar.update(1)
 
     @classmethod
-    def compute_real_itervals(
+    def solve(
         cls,
         problems: Sequence[ProblemInterface],
         init_solution: np.ndarray,
         n_process: Optional[int],
-    ) -> List[float]:
+    ) -> List[ResultProtocol]:
 
         if n_process is None:
             cpu_count = os.cpu_count()
@@ -71,14 +70,13 @@ class MultiProcessProblemSolver:
 
         is_single_process = n_process == 1
         if is_single_process:
-            itervals = []
+            results = []
             maxiter = problems[0].get_solver_config().maxiter
             logger.debug("*maxiter: {}".format(maxiter))
             for problem in problems:
                 result = problem.solve(init_solution)[0]
-                iterval_real = result.nit if result.success else float(maxiter)
-                itervals.append(iterval_real)
-            return itervals
+                results.append(result)
+            return results
         else:
             indices = np.array(list(range(len(problems))))
             indices_list_per_worker = np.array_split(indices, n_process)
@@ -90,17 +88,15 @@ class MultiProcessProblemSolver:
             for i, indices_part in enumerate(indices_list_per_worker):
                 disable_tqdm = i > 0
                 problems_part = [problems[idx] for idx in indices_part]
-                arg = cls.ComputeRealItervalsArg(
-                    indices_part, problems_part, init_solution, disable_tqdm
-                )
-                p = multiprocessing.Process(target=cls._compute_real_itervals, args=(arg, q))
+                arg = cls.ProblemSolverArg(indices_part, problems_part, init_solution, disable_tqdm)
+                p = multiprocessing.Process(target=cls._solve, args=(arg, q))
                 p.start()
                 process_list.append(p)
 
-            idx_iterval_pairs = [q.get() for _ in range(len(problems))]
-            idx_iterval_pairs_sorted = sorted(idx_iterval_pairs, key=lambda x: x[0])  # type: ignore
-            _, itervals = zip(*idx_iterval_pairs_sorted)
-            return list(itervals)
+            idx_result_pairs = [q.get() for _ in range(len(problems))]
+            idx_result_pairs_sorted = sorted(idx_result_pairs, key=lambda x: x[0])  # type: ignore
+            _, results = zip(*idx_result_pairs_sorted)
+            return list(results)
 
 
 class ProblemPool(Iterable[ProblemT]):
@@ -367,9 +363,8 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         logger.info("**compute real values")
         problems = [p for p in self.validation_problem_pool]
-        iterval_real_list = MultiProcessProblemSolver.compute_real_itervals(
-            problems, init_solution, None
-        )
+        results = MultiProcessProblemSolver.solve(problems, init_solution, None)
+        iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
 
         success_iter_threshold = maxiter * self.config.difficult_threshold_factor
         coverage_result = CoverageResult(
@@ -425,11 +420,10 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
             logger.info("compute scores")
             score_list = []
+            maxiter = self.problem_type.get_solver_config().maxiter
             for solution_guess in solution_candidates:
-                iterval_real_list = MultiProcessProblemSolver.compute_real_itervals(
-                    difficult_problems, solution_guess, None
-                )
-                # NOTE: iterval_real_list is already clamped
+                results = MultiProcessProblemSolver.solve(difficult_problems, solution_guess, None)
+                iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
                 score = -sum(iterval_real_list)  # must be nagative
                 logger.debug("*score of solution cand: {}".format(score))
                 score_list.append(score)
