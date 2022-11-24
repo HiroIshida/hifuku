@@ -45,8 +45,6 @@ class MultiProcessProblemSolver:
     @staticmethod
     def _solve(arg: ProblemSolverArg, q: multiprocessing.Queue):
         with tqdm.tqdm(total=len(arg.problems), disable=arg.disable_tqdm) as pbar:
-            maxiter = arg.problems[0].get_solver_config().maxiter
-            logger.debug("*maxiter: {}".format(maxiter))
             for idx, problem, init_solution in zip(arg.indices, arg.problems, arg.init_solutions):
                 assert problem.n_problem() == 1
                 result = problem.solve(init_solution)[0]
