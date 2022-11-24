@@ -19,7 +19,7 @@ if __name__ == "__main__":
     cache_base_path.mkdir()
     gen = MultiProcessBatchProblemSolver(TabletopPlanningProblem)
 
-    problem = TabletopPlanningProblem.create_standard()
-    result = problem.solve()[0]
-    assert result.success
-    gen.solve_batch(result.x, n_problem, 50, cache_base_path)
+    x_init = TabletopPlanningProblem.get_default_init_solution()
+    problems = [TabletopPlanningProblem.sample(50) for _ in range(n_problem)]
+    init_solutions = [x_init] * n_problem
+    gen.create_dataset(problems, init_solutions, cache_base_path, None)

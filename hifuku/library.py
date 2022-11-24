@@ -114,9 +114,10 @@ class IteratorProblemPool(Iterator[ProblemT], ProblemPool[ProblemT]):
 @dataclass
 class SimpleProblemPool(IteratorProblemPool[ProblemT]):
     problem_type: Type[ProblemT]
+    n_problem_inner: int = 1
 
     def __next__(self) -> ProblemT:
-        return self.problem_type.sample(1)
+        return self.problem_type.sample(self.n_problem_inner)
 
 
 class FixedProblemPool(Sized, ProblemPool[ProblemT]):
@@ -345,19 +346,27 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             problem_type, ae_model, config.solvable_threshold_factor
         )
         logger.info("library sampler config: {}".format(config))
-        return cls(problem_type, library, dataset_gen, config, validation_problem_pool)
+        return cls(problem_type, library, solver, config, validation_problem_pool)
 
     def step_active_sampling(
-        self, project_path: Path, problem_pool: Optional[IteratorProblemPool[ProblemT]] = None
+        self,
+        project_path: Path,
+        problem_pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
+        problem_pool_init_traj: Optional[IteratorProblemPool[ProblemT]] = None,
     ):
         logger.info("active sampling step")
 
-        if problem_pool is None:
+        if problem_pool_dataset is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
-            problem_pool = SimpleProblemPool(self.problem_type)
+            # TODO: smelling! n_problem_inner should not be set here
+            problem_pool_dataset = SimpleProblemPool(self.problem_type, self.config.n_problem_inner)
 
-        init_solution = self._determine_init_solution(problem_pool)
-        predictor = self.learn_predictors(init_solution, project_path)
+        if problem_pool_init_traj is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            problem_pool_init_traj = SimpleProblemPool(self.problem_type, 1)
+
+        init_solution = self._determine_init_solution(problem_pool_init_traj)
+        predictor = self.learn_predictors(init_solution, project_path, problem_pool_dataset)
 
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
@@ -381,7 +390,12 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         self.library.dump(project_path)
 
-    def learn_predictors(self, init_solution: np.ndarray, project_path: Path) -> IterationPredictor:
+    def learn_predictors(
+        self,
+        init_solution: np.ndarray,
+        project_path: Path,
+        problem_pool: IteratorProblemPool[ProblemT],
+    ) -> IterationPredictor:
         pp = project_path
         cache_dir_base = pp / "dataset_cache"
         cache_dir_base.mkdir(exist_ok=True, parents=True)
@@ -392,9 +406,11 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         cache_dir_path.mkdir()
 
         logger.info("start generating dataset")
-        self.dataset_gen.generate(
-            init_solution, self.config.n_problem, self.config.n_problem_inner, cache_dir_path
-        )
+
+        # create dataset
+        problems = [next(problem_pool) for _ in range(self.config.n_problem)]
+        init_solutions = [init_solution] * self.config.n_problem
+        self.solver.create_dataset(problems, init_solutions, cache_dir_path, n_process=None)
 
         dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
         raw_dataset = LazyDecomplessDataset.load(cache_dir_path, RawData, n_worker=-1)

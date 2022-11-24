@@ -22,10 +22,26 @@ from hifuku.http_datagen.request import (
     http_connection,
     send_request,
 )
-from hifuku.types import ProblemT, ResultProtocol
+from hifuku.types import ProblemT, RawData, ResultProtocol
 from hifuku.utils import get_module_source_hash
 
 logger = logging.getLogger(__name__)
+
+
+def split_number(num, div):
+    return [num // div + (1 if x < num % div else 0) for x in range(div)]
+
+
+def split_indices(n_problem_total: int, n_problem_list: List[int]) -> List[List[int]]:
+    indices = np.array(list(range(n_problem_total)))
+    indices_list = []
+    head = 0
+    for n_problem in n_problem_list:
+        tail = head + n_problem
+        indices_list.append(indices[head:tail].tolist())
+        head = tail
+    assert sum([len(ii) for ii in indices_list]) == n_problem_total
+    return indices_list
 
 
 @dataclass
@@ -72,6 +88,27 @@ class BatchProblemSolverTask(Process, Generic[ProblemT]):
                 pbar.update(1)
 
 
+@dataclass
+class DumpResultTask(Generic[ProblemT]):
+    problems: List[ProblemT]
+    init_solutions: List[np.ndarray]
+    results_list: List[Tuple[ResultProtocol, ...]]
+    cache_path: Path
+
+    def __len__(self) -> int:
+        return len(self.problems)
+
+    def run(self):
+        for i in range(len(self)):
+            problem = self.problems[i]
+            init_solution = self.init_solutions[i]
+            results = self.results_list[i]
+            raw_data = RawData.create(problem, results, init_solution)
+            name = str(uuid.uuid4()) + ".npz"
+            path = self.cache_path / name
+            raw_data.dump(path)
+
+
 class BatchProblemSolver(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
 
@@ -86,21 +123,40 @@ class BatchProblemSolver(Generic[ProblemT], ABC):
     ) -> List[Tuple[ResultProtocol, ...]]:
         ...
 
-    @staticmethod
-    def split_number(num, div):
-        return [num // div + (1 if x < num % div else 0) for x in range(div)]
+    def create_dataset(
+        self,
+        problems: List[ProblemT],
+        init_solutions: List[np.ndarray],
+        cache_dir_path: Path,
+        n_process: Optional[int],
+    ) -> None:
 
-    @staticmethod
-    def split_indices(n_problem_total: int, n_problem_list: List[int]) -> List[List[int]]:
-        indices = np.array(list(range(n_problem_total)))
-        indices_list = []
-        head = 0
-        for n_problem in n_problem_list:
-            tail = head + n_problem
-            indices_list.append(indices[head:tail].tolist())
-            head = tail
-        assert sum([len(ii) for ii in indices_list]) == n_problem_total
-        return indices_list
+        results_list = self.solve_batch(problems, init_solutions)
+
+        if n_process is None:
+            cpu_count = os.cpu_count()
+            assert cpu_count is not None
+            n_process = int(0.5 * cpu_count)
+
+        n_problem = len(problems)
+        indices = np.array(list(range(n_problem)))
+        indices_list = np.array_split(indices, n_process)
+
+        process_list = []
+        for indices_part in indices_list:
+            problems_part = [problems[i] for i in indices_part]
+            init_solutions_part = [init_solutions[i] for i in indices_part]
+            results_list_part = [results_list[i] for i in indices_part]
+
+            task = DumpResultTask(
+                problems_part, init_solutions_part, results_list_part, cache_dir_path
+            )
+            p = Process(target=task.run, args=())
+            p.start()
+            process_list.append(p)
+
+        for p in process_list:
+            p.join()
 
 
 class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
@@ -224,14 +280,14 @@ class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
 
         # allocate remainders
         remainder_sum = n_problem - sum(n_problem_table.values())
-        alloc_splitted = self.split_number(remainder_sum, len(hostport_pairs))
+        alloc_splitted = split_number(remainder_sum, len(hostport_pairs))
         for hostport, alloc in zip(hostport_pairs, alloc_splitted):
             n_problem_table[hostport] += alloc
 
         assert sum(n_problem_table.values()) == n_problem
         logger.info("n_problem_table: {}".format(n_problem_table))
 
-        indices_list = self.split_indices(n_problem, list(n_problem_table.values()))
+        indices_list = split_indices(n_problem, list(n_problem_table.values()))
 
         # send request
         with tempfile.TemporaryDirectory() as td:

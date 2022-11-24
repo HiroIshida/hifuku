@@ -2,9 +2,12 @@ import logging
 import os
 import signal
 import subprocess
+import tempfile
 import time
+from pathlib import Path
 from typing import List
 
+import numpy as np
 import pytest
 
 from hifuku.datagen import (
@@ -12,7 +15,9 @@ from hifuku.datagen import (
     DistributedBatchProblemSolver,
     MultiProcessBatchProblemSolver,
 )
+from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.threedim.tabletop import TabletopPlanningProblem
+from hifuku.types import RawData
 
 logger = logging.getLogger(__name__)
 
@@ -72,3 +77,24 @@ def test_consistency_of_all_generator(server):
         # the same problem is provided.. maybe random variable is used inside???
         assert len(set(nits_list)) == 1
         assert len(set(successes_list)) == 1
+
+
+def test_create_dataset():
+    n_problem = 4
+    n_problem_inner = 2
+    init_solutions = [TabletopPlanningProblem.get_default_init_solution()] * n_problem
+    problems = [TabletopPlanningProblem.sample(n_problem_inner) for _ in range(n_problem)]
+
+    solver = MultiProcessBatchProblemSolver(TabletopPlanningProblem, 2)
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        solver.create_dataset(problems, init_solutions, td_path, n_process=None)
+
+        dataset = LazyDecomplessDataset.load(td_path, RawData)
+        assert len(dataset) == n_problem
+        for i in range(n_problem):
+            data = dataset.get_data(np.array([i]))[0]
+            assert len(data.descriptions) == n_problem_inner
+        loader = LazyDecomplessDataLoader(dataset, batch_size=1)
+        for sample in loader:
+            pass
