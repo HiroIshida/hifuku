@@ -38,7 +38,7 @@ class MultiProcessProblemSolver:
     class ProblemSolverArg:
         indices: np.ndarray
         problems: Sequence[ProblemInterface]
-        init_solution: np.ndarray
+        init_solutions: Sequence[np.ndarray]
         disable_tqdm: bool
 
     @staticmethod
@@ -46,9 +46,9 @@ class MultiProcessProblemSolver:
         with tqdm.tqdm(total=len(arg.problems), disable=arg.disable_tqdm) as pbar:
             maxiter = arg.problems[0].get_solver_config().maxiter
             logger.debug("*maxiter: {}".format(maxiter))
-            for idx, problem in zip(arg.indices, arg.problems):
+            for idx, problem, init_solution in zip(arg.indices, arg.problems, arg.init_solutions):
                 assert problem.n_problem() == 1
-                result = problem.solve(arg.init_solution)[0]
+                result = problem.solve(init_solution)[0]
                 q.put((idx, result))
                 pbar.update(1)
 
@@ -56,9 +56,11 @@ class MultiProcessProblemSolver:
     def solve(
         cls,
         problems: Sequence[ProblemInterface],
-        init_solution: np.ndarray,
+        init_solutions: Sequence[np.ndarray],
         n_process: Optional[int],
-    ) -> List[ResultProtocol]:
+    ) -> Sequence[ResultProtocol]:
+
+        assert len(problems) == len(init_solutions)
 
         if n_process is None:
             cpu_count = os.cpu_count()
@@ -73,7 +75,7 @@ class MultiProcessProblemSolver:
             results = []
             maxiter = problems[0].get_solver_config().maxiter
             logger.debug("*maxiter: {}".format(maxiter))
-            for problem in problems:
+            for problem, init_solution in zip(problems, init_solutions):
                 result = problem.solve(init_solution)[0]
                 results.append(result)
             return results
@@ -88,7 +90,10 @@ class MultiProcessProblemSolver:
             for i, indices_part in enumerate(indices_list_per_worker):
                 disable_tqdm = i > 0
                 problems_part = [problems[idx] for idx in indices_part]
-                arg = cls.ProblemSolverArg(indices_part, problems_part, init_solution, disable_tqdm)
+                init_solutions_part = [init_solutions[idx] for idx in indices_part]
+                arg = cls.ProblemSolverArg(
+                    indices_part, problems_part, init_solutions_part, disable_tqdm
+                )
                 p = multiprocessing.Process(target=cls._solve, args=(arg, q))
                 p.start()
                 process_list.append(p)
@@ -363,7 +368,8 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
 
         logger.info("**compute real values")
         problems = [p for p in self.validation_problem_pool]
-        results = MultiProcessProblemSolver.solve(problems, init_solution, None)
+        init_solutions = [init_solution] * len(problems)
+        results = MultiProcessProblemSolver.solve(problems, init_solutions, None)
         iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
 
         success_iter_threshold = maxiter * self.config.difficult_threshold_factor
@@ -422,7 +428,10 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             score_list = []
             maxiter = self.problem_type.get_solver_config().maxiter
             for solution_guess in solution_candidates:
-                results = MultiProcessProblemSolver.solve(difficult_problems, solution_guess, None)
+                solution_guesses = [solution_guess] * len(difficult_problems)
+                results = MultiProcessProblemSolver.solve(
+                    difficult_problems, solution_guesses, None
+                )
                 iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
                 score = -sum(iterval_real_list)  # must be nagative
                 logger.debug("*score of solution cand: {}".format(score))

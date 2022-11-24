@@ -22,8 +22,9 @@ def test_compute_real_itervals():
     x_init = TabletopPlanningProblem.get_default_init_solution()
     n_problem = 10
     problems = [TabletopPlanningProblem.sample(1) for _ in range(n_problem)]
-    itervals_mp = MultiProcessProblemSolver.compute_real_itervals(problems, x_init, n_process=4)
-    itervals_sp = MultiProcessProblemSolver.compute_real_itervals(problems, x_init, n_process=1)
+    init_solutions = [x_init] * n_problem
+    itervals_mp = MultiProcessProblemSolver.solve(problems, init_solutions, n_process=4)
+    itervals_sp = MultiProcessProblemSolver.solve(problems, init_solutions, n_process=1)
     assert len(itervals_mp) == n_problem
     assert itervals_mp == itervals_sp
 
