@@ -2,7 +2,7 @@ import contextlib
 import logging
 from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
-from typing import Generic, List, Optional, Tuple, Type, overload
+from typing import Generic, List, Optional, Tuple, Type, TypeVar, overload
 
 import dill
 import numpy as np
@@ -19,6 +19,10 @@ class Request:
 
 class Response:
     pass
+
+
+RequestT = TypeVar("RequestT", bound=Request)
+ResponseT = TypeVar("ResponseT", bound=Response)
 
 
 @dataclass

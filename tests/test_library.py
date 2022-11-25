@@ -35,7 +35,7 @@ def test_compute_real_itervals():
 
 def test_SolutionLibrarySampler():
     problem_type = TabletopPlanningProblem
-    gen = MultiProcessBatchProblemSolver(problem_type, n_process=2)
+    gen = MultiProcessBatchProblemSolver[TabletopPlanningProblem](n_process=2)
     tconfig = TrainConfig(n_epoch=1)
     lconfig = LibrarySamplerConfig(
         n_problem=10,

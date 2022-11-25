@@ -50,7 +50,7 @@ class PostHandler(BaseHTTPRequestHandler):
         logging.info("request: {}".format(request))
         problem_type = type(request.problems[0])
 
-        gen = MultiProcessBatchProblemSolver(problem_type, request.n_process)  # type: ignore
+        gen = MultiProcessBatchProblemSolver(request.n_process)  # type: ignore[var-annotated]
 
         with tempfile.TemporaryDirectory() as td:
             Path(td)

@@ -44,12 +44,12 @@ def test_consistency_of_all_generator(server):
         init_solutions = [TabletopPlanningProblem.get_default_init_solution()] * n_problem
         problems = [TabletopPlanningProblem.sample(n_problem_inner) for _ in range(n_problem)]
         gen_list: List[BatchProblemSolver] = []
-        gen_list.append(MultiProcessBatchProblemSolver(TabletopPlanningProblem, 1))
-        gen_list.append(MultiProcessBatchProblemSolver(TabletopPlanningProblem, 2))
+        gen_list.append(MultiProcessBatchProblemSolver(1))
+        gen_list.append(MultiProcessBatchProblemSolver(2))
 
         hostport_pairs = [("localhost", 8081), ("localhost", 8082)]
-        gen = DistributedBatchProblemSolver(
-            TabletopPlanningProblem, hostport_pairs, n_problem_measure=1
+        gen = DistributedBatchProblemSolver[TabletopPlanningProblem](
+            hostport_pairs, n_measure_sample=1
         )
         gen_list.append(gen)
 
@@ -85,7 +85,7 @@ def test_create_dataset():
     init_solutions = [TabletopPlanningProblem.get_default_init_solution()] * n_problem
     problems = [TabletopPlanningProblem.sample(n_problem_inner) for _ in range(n_problem)]
 
-    solver = MultiProcessBatchProblemSolver(TabletopPlanningProblem, 2)
+    solver = MultiProcessBatchProblemSolver[TabletopPlanningProblem](2)
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         solver.create_dataset(problems, init_solutions, td_path, n_process=None)

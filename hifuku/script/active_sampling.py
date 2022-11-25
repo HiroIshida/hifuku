@@ -32,7 +32,7 @@ if __name__ == "__main__":
         ("mars", 8080),
     ]
 
-    gen = DistributedBatchProblemSolver(TabletopPlanningProblem, hostport_pairs)
+    gen = DistributedBatchProblemSolver[TabletopPlanningProblem](hostport_pairs)
     # gen = MultiProcessDatasetGenerator(TabletopPlanningProblem)
     ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
 
