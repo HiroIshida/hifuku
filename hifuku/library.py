@@ -3,15 +3,14 @@ import logging
 import multiprocessing
 import os
 import pickle
-import queue
 import random
 import re
+import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    Any,
     Generic,
     Iterable,
     Iterator,
@@ -23,6 +22,7 @@ from typing import (
     Type,
 )
 
+import dill
 import numpy as np
 import pyclustering.cluster.xmeans as xmeans
 import torch
@@ -379,7 +379,7 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         accept_threshold: float,
         ambient_rate: float,
         show_progress_bar: bool,
-        queue: Any,
+        cache_path: Path,
     ) -> None:
 
         # set random seed
@@ -412,7 +412,10 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         probelms_all = problems + ambient_problems
         random.seed(0)
         random.shuffle(probelms_all)  # noqa
-        queue.put(probelms_all)
+
+        file_path = cache_path / str(uuid.uuid4())
+        with file_path.open(mode="wb") as f:
+            dill.dump(probelms_all, f)
 
     def sample(
         self,
@@ -422,31 +425,20 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         ambient_rate: float = 0.2,
         n_process: Optional[int] = None,
     ) -> List[ProblemT]:
+
         if n_process is None:
             cpu_count = os.cpu_count()
             assert cpu_count is not None
             n_process = int(0.5 * cpu_count)
         assert n_sample > n_process * 10  # this is random. i don't have time
 
-        if n_process == 1:
-            q = queue.Queue()  # type: ignore
-            args = (
-                self.library,
-                self.svm,
-                n_sample,
-                pool,
-                accept_threshold,
-                ambient_rate,
-                True,
-                q,
-            )
-            self.task(*args)
-            return q.get()  # type: ignore
-        else:
-            assert False
+        with tempfile.TemporaryDirectory() as td:
+            # https://github.com/pytorch/pytorch/issues/89693
+            ctx = multiprocessing.get_context(method="spawn")
             n_sample_list = split_number(n_sample, n_process)
             process_list = []
-            q = multiprocessing.Queue()  # type: ignore
+
+            td_path = Path(td)
             for idx_process, n_sample_part in enumerate(n_sample_list):
                 show_progress = idx_process == 0
                 args = (
@@ -457,19 +449,20 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
                     accept_threshold,
                     ambient_rate,
                     show_progress,
-                    q,
+                    td_path,
                 )
-                p = multiprocessing.Process(target=self.task, args=args)
+                p = ctx.Process(target=self.task, args=args)
                 p.start()
                 process_list.append(p)
 
-            problems = []
-            for _ in range(n_process):
-                problems.extend(q.get())  # type: ignore
-
             for p in process_list:
                 p.join()
-            return problems
+
+            problems_sampled = []
+            for file_path in td_path.iterdir():
+                with file_path.open(mode="rb") as f:
+                    problems_sampled.extend(dill.load(f))
+        return problems_sampled
 
 
 @dataclass
