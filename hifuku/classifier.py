@@ -92,7 +92,7 @@ class SVM:
             val = sum(values)
             return val
 
-        sol = minimize(fun, [0.0, 0.0], method="L-BFGS-B")
+        sol = minimize(fun, [0.0, 0.0], method="BFGS")
         a, b = sol.x
         return a, b
 
