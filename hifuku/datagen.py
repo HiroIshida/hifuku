@@ -4,6 +4,7 @@ import multiprocessing
 import os
 import pickle
 import tempfile
+import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 from typing import ClassVar, Dict, Generic, List, Optional, Tuple, Type
 
+import dill
 import numpy as np
 import tqdm
 
@@ -22,8 +24,9 @@ from hifuku.http_datagen.request import (
     http_connection,
     send_request,
 )
+from hifuku.pool import PredicatedIteratorProblemPool
 from hifuku.types import ProblemT, RawData, ResultProtocol
-from hifuku.utils import get_module_source_hash
+from hifuku.utils import get_module_source_hash, num_torch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -409,3 +412,85 @@ class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
         for key in score_map:
             score_map[key] /= score_sum
         return score_map
+
+
+class MultiProcessBatchProblemSampler(Generic[ProblemT]):
+    n_process: int
+    n_thread: int
+
+    def __init__(self, n_process: Optional[int] = None, n_thread: int = 1):
+        cpu_count = os.cpu_count()
+        assert cpu_count is not None
+        n_physical_cpu = int(0.5 * cpu_count)
+
+        if n_process is None:
+            good_thread_num = 2  # from my experience
+            n_process = n_physical_cpu // good_thread_num
+        logger.info("n_process is set to {}".format(n_process))
+        logger.info("n_thread is set to {}".format(n_thread))
+        assert n_process * n_thread == n_physical_cpu  # hmm, too strict
+        self.n_process = n_process
+        self.n_thread = n_thread
+
+    @staticmethod
+    def task(
+        n_sample: int,
+        pool: PredicatedIteratorProblemPool[ProblemT],
+        show_progress_bar: bool,
+        n_thread: int,
+        cache_path: Path,
+    ) -> None:
+
+        # set random seed
+        unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
+        np.random.seed(unique_id)
+        logger.debug("random seed set to {}".format(unique_id))
+
+        logger.debug("start sampling using clf")
+        problems: List[ProblemT] = []
+        with num_torch_thread(n_thread):
+            disable = not show_progress_bar
+            with tqdm.tqdm(total=n_sample, smoothing=0.0, disable=disable) as pbar:
+                while len(problems) < n_sample:
+                    problem = next(pool)
+                    if problem is not None:
+                        problems.append(problem)
+                        pbar.update(1)
+        ts = time.time()
+        file_path = cache_path / str(uuid.uuid4())
+        with file_path.open(mode="wb") as f:
+            dill.dump(problems, f)
+        logger.debug("time to dump {}".format(time.time() - ts))
+
+    def sample(
+        self,
+        n_sample: int,
+        pool: PredicatedIteratorProblemPool[ProblemT],
+    ) -> List[ProblemT]:
+
+        assert n_sample > self.n_process * 5  # this is random. i don't have time
+
+        with tempfile.TemporaryDirectory() as td:
+            # https://github.com/pytorch/pytorch/issues/89693
+            ctx = multiprocessing.get_context(method="spawn")
+            n_sample_list = split_number(n_sample, self.n_process)
+            process_list = []
+
+            td_path = Path(td)
+            for idx_process, n_sample_part in enumerate(n_sample_list):
+                show_progress = idx_process == 0
+                args = (n_sample_part, pool, show_progress, self.n_thread, td_path)
+                p = ctx.Process(target=self.task, args=args)
+                p.start()
+                process_list.append(p)
+
+            for p in process_list:
+                p.join()
+
+            ts = time.time()
+            problems_sampled = []
+            for file_path in td_path.iterdir():
+                with file_path.open(mode="rb") as f:
+                    problems_sampled.extend(dill.load(f))
+            logger.debug("time to load {}".format(time.time() - ts))
+        return problems_sampled

@@ -11,11 +11,11 @@ def test_simple_pool():
         next(pool)
 
     pred1 = lambda p: p.get_descriptions()[0][1] > -np.inf  # noqa
-    pool_pred = pool.make_predicated(pred1)
+    pool_pred = pool.make_predicated(pred1, 40)
     for _ in range(5):
         assert next(pool_pred) is not None
 
     pred2 = lambda p: p.get_descriptions()[0][1] > np.inf  # noqa
-    pool_pred = pool.make_predicated(pred2)
+    pool_pred = pool.make_predicated(pred2, 40)
     for _ in range(5):
         assert next(pool_pred) is None

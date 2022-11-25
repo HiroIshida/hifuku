@@ -280,9 +280,10 @@ class SolutionLibrary(Generic[ProblemT]):
 
 
 @dataclass
-class ClassifierBasedProblemSampler(Generic[ProblemT]):
+class LargestDifficultClusterPredicate(Generic[ProblemT]):
     library: SolutionLibrary[ProblemT]
     svm: SVM
+    accept_proba_threshold: float
 
     def __post_init__(self):
         assert self.library.device == torch.device("cpu")
@@ -293,7 +294,8 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         library: SolutionLibrary[ProblemT],
         difficult_problems: List[ProblemT],
         ambient_problems: List[ProblemT],
-    ) -> "ClassifierBasedProblemSampler[ProblemT]":
+        accept_proba_threshold: float = 0.4,
+    ) -> "LargestDifficultClusterPredicate[ProblemT]":
         """
         difficult problems for detect the largest cluster
         ambient_problems + difficult_problems for fit the clf
@@ -319,7 +321,13 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         Y[larget_cluster_indices] = True
         dataset = SVMDataset.from_xy(X, Y)
         svm = SVM.from_dataset(dataset)
-        return cls(library, svm)
+        return cls(library, svm, accept_proba_threshold)
+
+    def __call__(self, problem: ProblemT) -> bool:
+        assert problem.n_problem() == 1
+        iters = self.library._infer_iteration_num(problem).flatten()
+        proba = self.svm.predict_proba(iters)
+        return proba > self.accept_proba_threshold
 
     @staticmethod
     def task(
