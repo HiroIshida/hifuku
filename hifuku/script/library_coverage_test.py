@@ -2,7 +2,8 @@ from pathlib import Path
 
 import torch
 
-from hifuku.library import SimpleFixedProblemPool, SolutionLibrary
+from hifuku.library import SolutionLibrary
+from hifuku.pool import SimpleFixedProblemPool
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 p = Path("~/.mohou/tabletop_solution_library").expanduser()

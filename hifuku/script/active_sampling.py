@@ -7,12 +7,9 @@ from mohou.utils import log_package_version_info
 
 import hifuku
 from hifuku.datagen import DistributedBatchProblemSolver
-from hifuku.library import (
-    LibrarySamplerConfig,
-    SimpleFixedProblemPool,
-    SimpleSolutionLibrarySampler,
-)
+from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
+from hifuku.pool import SimpleFixedProblemPool
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.utils import create_default_logger
 

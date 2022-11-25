@@ -1,6 +1,6 @@
 import numpy as np
 
-from hifuku.library import SimpleProblemPool
+from hifuku.pool import SimpleProblemPool
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 

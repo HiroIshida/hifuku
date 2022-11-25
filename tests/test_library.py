@@ -9,11 +9,11 @@ from hifuku.datagen import MultiProcessBatchProblemSolver
 from hifuku.library import (
     LibrarySamplerConfig,
     MultiProcessProblemSolver,
-    SimpleFixedProblemPool,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
+from hifuku.pool import SimpleFixedProblemPool
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.utils import create_default_logger
 
