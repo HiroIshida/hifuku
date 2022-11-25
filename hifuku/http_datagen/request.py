@@ -7,6 +7,7 @@ from typing import Generic, List, Optional, Tuple, Type, overload
 import dill
 import numpy as np
 
+from hifuku.pool import PredicatedIteratorProblemPool
 from hifuku.types import ProblemT, ResultProtocol
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,27 @@ class SolveProblemResponse(Response):
 
     def __str__(self) -> str:
         return "[...hogehoge...]"
+
+
+@dataclass
+class SampleProblemRequest(Generic[ProblemT], Request):
+    n_sample: int
+    pool: PredicatedIteratorProblemPool[ProblemT]
+    n_process: int
+    n_thread: int
+
+
+@dataclass
+class SampleProblemResponse(Generic[ProblemT], Response):
+    problems: List[ProblemT]
+    elapsed_time: float
+
+    def __str__(self) -> str:
+        vis_dict = asdict(self)
+        n_problems = len(self.problems)
+        if n_problems > 0:
+            vis_dict["problems"] = "[...({} problems)...]".format(n_problems)
+        return vis_dict.__str__()
 
 
 @dataclass
