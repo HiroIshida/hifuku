@@ -115,7 +115,7 @@ class DumpResultTask(Generic[ProblemT]):
 class BatchProblemSolver(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
 
-    def __init__(self, problem_type: Type[ProblemT], cache_base_dir: Optional[Path] = None):
+    def __init__(self, problem_type: Type[ProblemT]):
         self.problem_type = problem_type
 
     @abstractmethod
@@ -414,11 +414,30 @@ class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
         return score_map
 
 
-class MultiProcessBatchProblemSampler(Generic[ProblemT]):
+class BatchProblemSampler(Generic[ProblemT], ABC):
+    problem_type: Type[ProblemT]
+
+    def __init__(self, problem_type: Type[ProblemT]):
+        self.problem_type = problem_type
+
+    @abstractmethod
+    def sample_batch(
+        self,
+        n_sample: int,
+        pool: PredicatedIteratorProblemPool[ProblemT],
+    ) -> List[ProblemT]:
+        ...
+
+
+class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
+    problem_type: Type[ProblemT]
     n_process: int
     n_thread: int
 
-    def __init__(self, n_process: Optional[int] = None, n_thread: int = 1):
+    def __init__(
+        self, problem_type: Type[ProblemT], n_process: Optional[int] = None, n_thread: int = 1
+    ):
+        super().__init__(problem_type)
         cpu_count = os.cpu_count()
         assert cpu_count is not None
         n_physical_cpu = int(0.5 * cpu_count)
