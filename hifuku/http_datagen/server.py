@@ -48,7 +48,7 @@ class PostHandler(BaseHTTPRequestHandler):
     def process_SolveProblemRequest(self, request: SolveProblemRequest) -> SolveProblemResponse:
         ts = time.time()
         logging.info("request: {}".format(request))
-        problem_type = type(request.problems[0])
+        type(request.problems[0])
 
         gen = MultiProcessBatchProblemSolver(request.n_process)  # type: ignore[var-annotated]
 

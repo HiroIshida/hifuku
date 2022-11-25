@@ -2,7 +2,7 @@ import contextlib
 import logging
 from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
-from typing import Generic, List, Optional, Tuple, Type, TypeVar, overload
+from typing import Generic, List, Optional, Tuple, TypeVar, overload
 
 import dill
 import numpy as np
@@ -14,15 +14,25 @@ logger = logging.getLogger(__name__)
 
 
 class Request:
-    pass
+    ...
 
 
 class Response:
-    pass
+    ...
+
+
+class MainRequest(Request):
+    n_process: int
+
+
+class MainResponse(Response):
+    elapsed_time: float
 
 
 RequestT = TypeVar("RequestT", bound=Request)
 ResponseT = TypeVar("ResponseT", bound=Response)
+MainRequestT = TypeVar("MainRequestT", bound=MainRequest)
+MainResponseT = TypeVar("MainResponseT", bound=MainResponse)
 
 
 @dataclass
@@ -46,7 +56,7 @@ class GetModuleHashValueResponse(Response):
 
 
 @dataclass
-class SolveProblemRequest(Generic[ProblemT], Request):
+class SolveProblemRequest(Generic[ProblemT], MainRequest):
     problems: List[ProblemT]
     init_solutions: List[np.ndarray]
     n_process: int
@@ -56,7 +66,7 @@ class SolveProblemRequest(Generic[ProblemT], Request):
 
 
 @dataclass
-class SolveProblemResponse(Response):
+class SolveProblemResponse(MainResponse):
     results_list: List[Tuple[ResultProtocol, ...]]
     elapsed_time: float
 
@@ -65,7 +75,7 @@ class SolveProblemResponse(Response):
 
 
 @dataclass
-class SampleProblemRequest(Generic[ProblemT], Request):
+class SampleProblemRequest(Generic[ProblemT], MainRequest):
     n_sample: int
     pool: PredicatedIteratorProblemPool[ProblemT]
     n_process: int
@@ -73,7 +83,7 @@ class SampleProblemRequest(Generic[ProblemT], Request):
 
 
 @dataclass
-class SampleProblemResponse(Generic[ProblemT], Response):
+class SampleProblemResponse(Generic[ProblemT], MainResponse):
     problems: List[ProblemT]
     elapsed_time: float
 
@@ -85,57 +95,31 @@ class SampleProblemResponse(Generic[ProblemT], Response):
         return vis_dict.__str__()
 
 
-@dataclass
-class CreateDatasetRequest(Generic[ProblemT], Request):
-    problem_type: Type[ProblemT]
-    init_solution: np.ndarray
-    n_problem: int
-    n_problem_inner: int
-    n_process: int
-
-    def __str__(self) -> str:
-        vis_dict = asdict(self)
-        if len(self.init_solution) > 1:
-            vis_dict["init_solution"] = "[{}..(float)..{}]".format(
-                self.init_solution[0], self.init_solution[-1]
-            )
-        return vis_dict.__str__()
-
-
-@dataclass
-class CreateDatasetResponse(Response):
-    data_list: List[bytes]
-    name_list: List[str]
-    elapsed_time: float
-
-    def __str__(self) -> str:
-        vis_dict = {}
-        vis_dict["data_list"] = "[..({} binaries)..]".format(len(self.data_list))
-        vis_dict["name_list"] = "[{}...{}".format(self.name_list[0], self.name_list[-1])
-        vis_dict["elapsed_time"] = self.elapsed_time  # type: ignore
-        return vis_dict.__str__()
-
-
 @overload
 def send_request(conn: HTTPConnection, request: GetCPUInfoRequest) -> GetCPUInfoResponse:
-    pass
+    ...
 
 
 @overload
 def send_request(
     conn: HTTPConnection, request: GetModuleHashValueRequest
 ) -> GetModuleHashValueResponse:
-    pass
-
-
-@overload
-def send_request(conn: HTTPConnection, request: CreateDatasetRequest) -> CreateDatasetResponse:
-    pass
+    ...
 
 
 @overload
 def send_request(conn: HTTPConnection, request: SolveProblemRequest) -> SolveProblemResponse:
-    pass
+    ...
+
+
+@overload
+def send_request(conn: HTTPConnection, request: SampleProblemRequest) -> SampleProblemResponse:
+    ...
+
+
+@overload
+def send_request(conn: HTTPConnection, request: MainRequest) -> MainResponse:
+    ...
 
 
 def send_request(conn: HTTPConnection, request):

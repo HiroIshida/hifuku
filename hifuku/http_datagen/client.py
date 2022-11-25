@@ -1,11 +1,15 @@
 import logging
+import os
+import tempfile
+from multiprocessing import Process, Queue
+from pathlib import Path
 from typing import ClassVar, Dict, Generic, List, Tuple
 
 from hifuku.http_datagen.request import (
     GetCPUInfoRequest,
     GetCPUInfoResponse,
     GetModuleHashValueRequest,
-    RequestT,
+    MainRequestT,
     http_connection,
     send_request,
 )
@@ -17,7 +21,7 @@ logger = logging.getLogger(__name__)
 HostPortPair = Tuple[str, int]
 
 
-class ClientBase(Generic[RequestT]):
+class ClientBase(Generic[MainRequestT]):
     hostport_cpuinfo_map: Dict[HostPortPair, GetCPUInfoResponse]
     n_measure_sample: int
     check_module_names: ClassVar[Tuple[str, ...]] = ("skplan", "voxbloxpy")
@@ -77,3 +81,48 @@ class ClientBase(Generic[RequestT]):
             logger.error(message)
             if not force_continue:
                 raise RuntimeError(message)
+
+    @staticmethod  # called only in _measure_performance_of_each_server
+    def _send_and_recive_and_get_elapsed_time(
+        hostport: HostPortPair, request: MainRequestT, queue: Queue
+    ) -> None:
+        logger.debug("send_and_recive_and_get_elapsed_time called on pid: {}".format(os.getpid()))
+        with http_connection(*hostport) as conn:
+            response = send_request(conn, request)
+        logger.debug("send_and_recive_and_get_elapsed_time finished on pid: {}".format(os.getpid()))
+        queue.put((hostport, response.elapsed_time))
+
+    def _measure_performance_of_each_server(
+        self,
+        request: MainRequestT,
+    ) -> Dict[HostPortPair, float]:
+        assert request.n_process == -1
+
+        logger.info("measure performance of each server by letting them make a dummy dataset")
+        score_map: Dict[HostPortPair, float] = {}
+        with tempfile.TemporaryDirectory() as td:
+            Path(td)
+            queue = Queue()  # type: ignore
+            process_list = []
+            for hostport in self.hostport_cpuinfo_map.keys():
+                cpu_info = self.hostport_cpuinfo_map[hostport]
+                request.n_process = cpu_info.n_cpu
+                p = Process(
+                    target=self._send_and_recive_and_get_elapsed_time,
+                    args=(hostport, request, queue),
+                )
+                process_list.append(p)
+                p.start()
+
+            hostport_elapsed_pairs = [queue.get() for _ in range(len(self.hostport_cpuinfo_map))]
+            for p in process_list:
+                p.join()
+
+        for hostport, elapsed in hostport_elapsed_pairs:
+            score_map[hostport] = 1.0 / elapsed
+
+        # normalize
+        score_sum = sum(score_map.values())
+        for key in score_map:
+            score_map[key] /= score_sum
+        return score_map

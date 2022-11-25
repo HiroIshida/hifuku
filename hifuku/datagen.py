@@ -248,9 +248,8 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         problems_measure = problems[: self.n_measure_sample]
         init_solutions_measure = init_solutions[: self.n_measure_sample]
-        performance_table = self._measure_performance_of_each_server(
-            problems_measure, init_solutions_measure
-        )
+        request_for_measure = SolveProblemRequest(problems_measure, init_solutions_measure, -1)
+        performance_table = self._measure_performance_of_each_server(request_for_measure)
         logger.info("performance table: {}".format(performance_table))
 
         n_problem_table: Dict[HostPortPair, int] = {}
@@ -302,50 +301,6 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
             idx_result_pairs_sorted = sorted(idx_result_pairs, key=lambda x: x[0])  # type: ignore
             _, results = zip(*idx_result_pairs_sorted)
         return list(results)  # type: ignore
-
-    @staticmethod  # called only in _measure_performance_of_each_server
-    def _send_and_recive_and_get_elapsed_time(
-        hostport: HostPortPair, request: SolveProblemRequest, queue: Queue
-    ) -> None:
-        logger.debug("send_and_recive_and_get_elapsed_time called on pid: {}".format(os.getpid()))
-        with http_connection(*hostport) as conn:
-            response = send_request(conn, request)
-        logger.debug("send_and_recive_and_get_elapsed_time finished on pid: {}".format(os.getpid()))
-        queue.put((hostport, response.elapsed_time))
-
-    def _measure_performance_of_each_server(
-        self,
-        problems: List[ProblemT],
-        init_solutions: List[np.ndarray],
-    ) -> Dict[HostPortPair, float]:
-
-        logger.info("measure performance of each server by letting them make a dummy dataset")
-        score_map: Dict[HostPortPair, float] = {}
-        with tempfile.TemporaryDirectory() as td:
-            Path(td)
-            queue = Queue()  # type: ignore
-            process_list = []
-            for hostport in self.hostport_cpuinfo_map.keys():
-                cpu_info = self.hostport_cpuinfo_map[hostport]
-                req = SolveProblemRequest(problems, init_solutions, cpu_info.n_cpu)
-                p = Process(
-                    target=self._send_and_recive_and_get_elapsed_time, args=(hostport, req, queue)
-                )
-                process_list.append(p)
-                p.start()
-
-            hostport_elapsed_pairs = [queue.get() for _ in range(len(self.hostport_cpuinfo_map))]
-            for p in process_list:
-                p.join()
-
-        for hostport, elapsed in hostport_elapsed_pairs:
-            score_map[hostport] = 1.0 / elapsed
-
-        # normalize
-        score_sum = sum(score_map.values())
-        for key in score_map:
-            score_map[key] /= score_sum
-        return score_map
 
 
 class BatchProblemSampler(Generic[ProblemT], ABC):
