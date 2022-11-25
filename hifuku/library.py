@@ -3,19 +3,34 @@ import logging
 import multiprocessing
 import os
 import pickle
+import queue
+import random
 import re
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, Iterable, Iterator, List, Optional, Sequence, Sized, Type
+from typing import (
+    Any,
+    Generic,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Sized,
+    Tuple,
+    Type,
+)
 
 import numpy as np
+import pyclustering.cluster.xmeans as xmeans
 import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 
-from hifuku.datagen import BatchProblemSolver
+from hifuku.classifier import SVM, SVMDataset
+from hifuku.datagen import BatchProblemSolver, split_number
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.margin import CoverageResult
 from hifuku.neuralnet import (
@@ -314,6 +329,150 @@ class SolutionLibrary(Generic[ProblemT]):
 
 
 @dataclass
+class ClassifierBasedProblemSampler(Generic[ProblemT]):
+    library: SolutionLibrary[ProblemT]
+    svm: SVM
+
+    def __post_init__(self):
+        assert self.library.device == torch.device("cpu")
+
+    @classmethod
+    def create(
+        cls,
+        library: SolutionLibrary[ProblemT],
+        difficult_problems: List[ProblemT],
+        ambient_problems: List[ProblemT],
+    ) -> "ClassifierBasedProblemSampler[ProblemT]":
+        """
+        difficult problems for detect the largest cluster
+        ambient_problems + difficult_problems for fit the clf
+        """
+        difficult_iters_list = [
+            library._infer_iteration_num(p).flatten() for p in tqdm.tqdm(difficult_problems)
+        ]
+        len(difficult_iters_list)
+        easy_iters_list = [
+            library._infer_iteration_num(p).flatten() for p in tqdm.tqdm(ambient_problems)
+        ]
+
+        initializer = xmeans.kmeans_plusplus_initializer(
+            data=difficult_iters_list, amount_centers=2
+        )
+        initial_centers = initializer.initialize()
+        xm = xmeans.xmeans(data=difficult_iters_list, initial_centers=initial_centers)
+        xm.process()
+        larget_cluster_indices: np.ndarray = sorted(xm.get_clusters(), key=lambda c: len(c))[-1]  # type: ignore
+
+        X = difficult_iters_list + easy_iters_list
+        Y = np.zeros(len(X), dtype=bool)
+        Y[larget_cluster_indices] = True
+        dataset = SVMDataset.from_xy(X, Y)
+        svm = SVM.from_dataset(dataset)
+        return cls(library, svm)
+
+    @staticmethod
+    def task(
+        library: SolutionLibrary[ProblemT],
+        svm: SVM,
+        n_sample: int,
+        pool: IteratorProblemPool[ProblemT],
+        accept_threshold: float,
+        ambient_rate: float,
+        show_progress_bar: bool,
+        queue: Any,
+    ) -> None:
+
+        # set random seed
+        unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
+        np.random.seed(unique_id)
+        logger.debug("random seed set to {}".format(unique_id))
+
+        logger.debug("start sampling using clf")
+        problems: List[ProblemT] = []
+        ambient_problems = []
+        n_ambient = int(n_sample * ambient_rate)
+        n_sample_focus = n_sample - n_ambient
+        with tqdm.tqdm(total=n_sample_focus, disable=not show_progress_bar) as pbar:
+            while len(problems) < n_sample_focus:
+                problem = next(pool)
+                iters = library._infer_iteration_num(problem).flatten()
+                proba = svm.predict_proba(iters)
+                if proba > accept_threshold:
+                    problems.append(problem)
+                    pbar.update(1)
+                else:
+                    ambient_problems.append(problem)
+
+        logger.debug("start sampling ambient sample")
+        n_lack = max(n_ambient - len(ambient_problems), 0)
+        for _ in range(n_lack):
+            ambient_problems.append(next(pool))
+        assert len(ambient_problems) > n_ambient
+
+        probelms_all = problems + ambient_problems
+        random.seed(0)
+        random.shuffle(probelms_all)  # noqa
+        queue.put(probelms_all)
+
+    def sample(
+        self,
+        n_sample: int,
+        pool: IteratorProblemPool[ProblemT],
+        accept_threshold: float = 0.4,
+        ambient_rate: float = 0.2,
+        n_process: Optional[int] = None,
+    ) -> List[ProblemT]:
+        if n_process is None:
+            cpu_count = os.cpu_count()
+            assert cpu_count is not None
+            n_process = int(0.5 * cpu_count)
+        assert n_sample > n_process * 10  # this is random. i don't have time
+
+        if n_process == 1:
+            q = queue.Queue()  # type: ignore
+            args = (
+                self.library,
+                self.svm,
+                n_sample,
+                pool,
+                accept_threshold,
+                ambient_rate,
+                True,
+                q,
+            )
+            self.task(*args)
+            return q.get()  # type: ignore
+        else:
+            assert False
+            n_sample_list = split_number(n_sample, n_process)
+            process_list = []
+            q = multiprocessing.Queue()  # type: ignore
+            for idx_process, n_sample_part in enumerate(n_sample_list):
+                show_progress = idx_process == 0
+                args = (
+                    self.library,
+                    self.svm,
+                    n_sample_part,
+                    pool,
+                    accept_threshold,
+                    ambient_rate,
+                    show_progress,
+                    q,
+                )
+                p = multiprocessing.Process(target=self.task, args=args)
+                p.start()
+                process_list.append(p)
+
+            problems = []
+            for _ in range(n_process):
+                problems.extend(q.get())  # type: ignore
+
+            for p in process_list:
+                p.join()
+            return problems
+
+
+@dataclass
 class LibrarySamplerConfig:
     n_problem: int
     n_problem_inner: int
@@ -341,7 +500,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         solver: BatchProblemSolver,
         config: LibrarySamplerConfig,
         validation_problem_pool: FixedProblemPool[ProblemT],
-    ) -> "SimpleSolutionLibrarySampler[ProblemT]":
+    ) -> "_SolutionLibrarySampler[ProblemT]":  # FIXME
         library = SolutionLibrary.initialize(
             problem_type, ae_model, config.solvable_threshold_factor
         )
@@ -360,6 +519,13 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     @abstractmethod
     def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
         ...
+
+    @property
+    def difficult_iter_threshold(self) -> float:
+        difficult_iter_threshold = (
+            self.problem_type.get_solver_config().maxiter * self.config.difficult_threshold_factor
+        )
+        return difficult_iter_threshold
 
     def learn_predictors(
         self,
@@ -438,9 +604,10 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         n_sample: int,
         problem_pool: IteratorProblemPool[ProblemT],
         difficult_iter_threshold: float,
-    ) -> List[ProblemT]:
+    ) -> Tuple[List[ProblemT], List[ProblemT]]:
 
         difficult_problems: List[ProblemT] = []
+        easy_problems: List[ProblemT] = []
         with tqdm.tqdm(total=n_sample) as pbar:
             while len(difficult_problems) < n_sample:
                 logger.debug("try sampling difficutl problem...")
@@ -453,7 +620,9 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
                     logger.debug("sampled! number: {}".format(len(difficult_problems)))
                     difficult_problems.append(problem)
                     pbar.update(1)
-        return difficult_problems
+                else:
+                    easy_problems.append(problem)
+        return difficult_problems, easy_problems
 
 
 class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
@@ -510,17 +679,13 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
             logger.info("start determine init solution len(lib) > 0")
 
             logger.info("sample solution candidates")
-            difficult_iter_threshold = (
-                self.problem_type.get_solver_config().maxiter
-                * self.config.difficult_threshold_factor
-            )
             solution_candidates = self._sample_solution_canidates(
-                self.config.n_difficult_problem, problem_pool, difficult_iter_threshold
+                self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
             )
 
             logger.info("sample difficult problems")
-            difficult_problems = self._sample_difficult_problems(
-                self.config.n_difficult_problem, problem_pool, difficult_iter_threshold
+            difficult_problems, _ = self._sample_difficult_problems(
+                self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
             )
 
             logger.info("compute scores")
