@@ -6,6 +6,7 @@ import pickle
 import random
 import re
 import tempfile
+import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -40,6 +41,7 @@ from hifuku.neuralnet import (
     VoxelAutoEncoder,
 )
 from hifuku.types import ProblemInterface, ProblemT, RawData, ResultProtocol
+from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -379,6 +381,7 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         accept_threshold: float,
         ambient_rate: float,
         show_progress_bar: bool,
+        n_thread: int,
         cache_path: Path,
     ) -> None:
 
@@ -392,16 +395,20 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         ambient_problems = []
         n_ambient = int(n_sample * ambient_rate)
         n_sample_focus = n_sample - n_ambient
-        with tqdm.tqdm(total=n_sample_focus, disable=not show_progress_bar) as pbar:
-            while len(problems) < n_sample_focus:
-                problem = next(pool)
-                iters = library._infer_iteration_num(problem).flatten()
-                proba = svm.predict_proba(iters)
-                if proba > accept_threshold:
-                    problems.append(problem)
-                    pbar.update(1)
-                else:
-                    ambient_problems.append(problem)
+
+        with num_torch_thread(n_thread):
+            with tqdm.tqdm(
+                total=n_sample_focus, smoothing=0.0, disable=not show_progress_bar
+            ) as pbar:
+                while len(problems) < n_sample_focus:
+                    problem = next(pool)
+                    iters = library._infer_iteration_num(problem).flatten()
+                    proba = svm.predict_proba(iters)
+                    if proba > accept_threshold:
+                        problems.append(problem)
+                        pbar.update(1)
+                    else:
+                        ambient_problems.append(problem)
 
         logger.debug("start sampling ambient sample")
         n_lack = max(n_ambient - len(ambient_problems), 0)
@@ -413,9 +420,11 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         random.seed(0)
         random.shuffle(probelms_all)  # noqa
 
+        ts = time.time()
         file_path = cache_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
             dill.dump(probelms_all, f)
+        print("time to dump {}".format(time.time() - ts))
 
     def sample(
         self,
@@ -426,11 +435,14 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         n_process: Optional[int] = None,
     ) -> List[ProblemT]:
 
+        cpu_count = os.cpu_count()
+        assert cpu_count is not None
+        n_physical_cpu = int(0.5 * cpu_count)
+
         if n_process is None:
-            cpu_count = os.cpu_count()
-            assert cpu_count is not None
-            n_process = int(0.5 * cpu_count)
-        assert n_sample > n_process * 10  # this is random. i don't have time
+            good_thread_num = 2  # from my experience
+            n_process = n_physical_cpu // good_thread_num
+        assert n_sample > n_process * 5  # this is random. i don't have time
 
         with tempfile.TemporaryDirectory() as td:
             # https://github.com/pytorch/pytorch/issues/89693
@@ -439,6 +451,7 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
             process_list = []
 
             td_path = Path(td)
+            n_thread = n_physical_cpu // n_process
             for idx_process, n_sample_part in enumerate(n_sample_list):
                 show_progress = idx_process == 0
                 args = (
@@ -449,6 +462,7 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
                     accept_threshold,
                     ambient_rate,
                     show_progress,
+                    n_thread,
                     td_path,
                 )
                 p = ctx.Process(target=self.task, args=args)
@@ -458,10 +472,12 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
             for p in process_list:
                 p.join()
 
+            ts = time.time()
             problems_sampled = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
                     problems_sampled.extend(dill.load(f))
+            print("time to load {}".format(time.time() - ts))
         return problems_sampled
 
 
