@@ -7,7 +7,7 @@ from typing import Generic, List, Optional, Tuple, Type, overload
 import dill
 import numpy as np
 
-from hifuku.types import PredicateInterface, ProblemT, ResultProtocol
+from hifuku.types import ProblemT, ResultProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +66,6 @@ class CreateDatasetRequest(Generic[ProblemT], Request):
     n_problem: int
     n_problem_inner: int
     n_process: int
-    predicate: Optional[PredicateInterface[ProblemT]] = None
-    max_trial_factor: int = 40
 
     def __str__(self) -> str:
         vis_dict = asdict(self)

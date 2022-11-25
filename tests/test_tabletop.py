@@ -3,11 +3,10 @@ from dataclasses import dataclass
 import numpy as np
 
 from hifuku.threedim.tabletop import TabletopIKProblem
-from hifuku.types import PredicateInterface
 
 
 @dataclass
-class SimplePredicate(PredicateInterface[TabletopIKProblem]):
+class SimplePredicate:
     threshold: float = 0.0
 
     def __call__(self, problem: TabletopIKProblem) -> bool:
