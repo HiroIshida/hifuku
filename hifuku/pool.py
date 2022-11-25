@@ -46,7 +46,7 @@ class SimpleProblemPool(IteratorProblemPool[ProblemT]):
         return self.problem_type.sample(self.n_problem_inner)
 
     def make_predicated(
-        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int = 40
+        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
     ) -> SimplePredicatedProblemPool[ProblemT]:
         return SimplePredicatedProblemPool(
             self.problem_type, predicate, max_trial_factor, self.n_problem_inner

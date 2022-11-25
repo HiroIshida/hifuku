@@ -333,6 +333,13 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
         n_thread: int,
         cache_path: Path,
     ) -> None:
+        def predicate(problem: ProblemT) -> bool:
+            assert problem.n_problem() == 1
+            iters = library._infer_iteration_num(problem).flatten()
+            proba = svm.predict_proba(iters)
+            return proba > accept_threshold
+
+        predicated_pool = pool.make_predicated(predicate, 40)
 
         # set random seed
         unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
@@ -341,7 +348,6 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
 
         logger.debug("start sampling using clf")
         problems: List[ProblemT] = []
-        ambient_problems = []
         n_ambient = int(n_sample * ambient_rate)
         n_sample_focus = n_sample - n_ambient
 
@@ -350,30 +356,22 @@ class ClassifierBasedProblemSampler(Generic[ProblemT]):
                 total=n_sample_focus, smoothing=0.0, disable=not show_progress_bar
             ) as pbar:
                 while len(problems) < n_sample_focus:
-                    problem = next(pool)
-                    iters = library._infer_iteration_num(problem).flatten()
-                    proba = svm.predict_proba(iters)
-                    if proba > accept_threshold:
+                    problem = next(predicated_pool)
+                    if problem is not None:
                         problems.append(problem)
                         pbar.update(1)
-                    else:
-                        ambient_problems.append(problem)
 
-        logger.debug("start sampling ambient sample")
-        n_lack = max(n_ambient - len(ambient_problems), 0)
-        for _ in range(n_lack):
-            ambient_problems.append(next(pool))
-        assert len(ambient_problems) > n_ambient
+        for _ in range(n_ambient):
+            problems.append(next(pool))
 
-        probelms_all = problems + ambient_problems
         random.seed(0)
-        random.shuffle(probelms_all)  # noqa
+        random.shuffle(problems)  # noqa
 
         ts = time.time()
         file_path = cache_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
-            dill.dump(probelms_all, f)
-        print("time to dump {}".format(time.time() - ts))
+            dill.dump(problems, f)
+        logger.debug("time to dump {}".format(time.time() - ts))
 
     def sample(
         self,
