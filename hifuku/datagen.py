@@ -1,5 +1,4 @@
 import logging
-import math
 import multiprocessing
 import os
 import pickle
@@ -10,7 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import ClassVar, Dict, Generic, List, Optional, Tuple
+from typing import Generic, List, Optional, Tuple
 
 import dill
 import numpy as np
@@ -18,7 +17,6 @@ import tqdm
 
 from hifuku.http_datagen.client import ClientBase
 from hifuku.http_datagen.request import (
-    GetCPUInfoResponse,
     SolveProblemRequest,
     http_connection,
     send_request,
@@ -222,9 +220,6 @@ HostPortPair = Tuple[str, int]
 
 
 class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProblemSolver[ProblemT]):
-    hostport_cpuinfo_map: Dict[HostPortPair, GetCPUInfoResponse]
-    check_module_names: ClassVar[Tuple[str, ...]] = ("skplan", "voxbloxpy")
-
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
         hostport: HostPortPair, request: SolveProblemRequest, indices: np.ndarray, tmp_path: Path
@@ -249,24 +244,8 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
         problems_measure = problems[: self.n_measure_sample]
         init_solutions_measure = init_solutions[: self.n_measure_sample]
         request_for_measure = SolveProblemRequest(problems_measure, init_solutions_measure, -1)
-        performance_table = self._measure_performance_of_each_server(request_for_measure)
-        logger.info("performance table: {}".format(performance_table))
-
-        n_problem_table: Dict[HostPortPair, int] = {}
         n_problem = len(problems)
-        for hostport in hostport_pairs:
-            n_problem_host = math.floor(n_problem * performance_table[hostport])
-            n_problem_table[hostport] = n_problem_host
-
-        # allocate remainders
-        remainder_sum = n_problem - sum(n_problem_table.values())
-        alloc_splitted = split_number(remainder_sum, len(hostport_pairs))
-        for hostport, alloc in zip(hostport_pairs, alloc_splitted):
-            n_problem_table[hostport] += alloc
-
-        assert sum(n_problem_table.values()) == n_problem
-        logger.info("n_problem_table: {}".format(n_problem_table))
-
+        n_problem_table = self.create_gen_number_table(request_for_measure, n_problem)
         indices_list = split_indices(n_problem, list(n_problem_table.values()))
 
         # send request

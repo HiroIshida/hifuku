@@ -1,4 +1,6 @@
+import copy
 import logging
+import math
 import os
 import tempfile
 from multiprocessing import Process, Queue
@@ -19,6 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 HostPortPair = Tuple[str, int]
+
+
+def split_number(num, div):
+    return [num // div + (1 if x < num % div else 0) for x in range(div)]
 
 
 class ClientBase(Generic[MainRequestT]):
@@ -82,6 +88,26 @@ class ClientBase(Generic[MainRequestT]):
             if not force_continue:
                 raise RuntimeError(message)
 
+    def create_gen_number_table(self, request: MainRequestT, n_gen) -> Dict[HostPortPair, int]:
+        performance_table = self._measure_performance_of_each_server(request)
+        logger.info("performance table: {}".format(performance_table))
+
+        n_gen_table: Dict[HostPortPair, int] = {}
+        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
+        for hostport in hostport_pairs:
+            n_problem_host = math.floor(n_gen * performance_table[hostport])
+            n_gen_table[hostport] = n_problem_host
+
+        # allocate remainders
+        remainder_sum = n_gen - sum(n_gen_table.values())
+        alloc_splitted = split_number(remainder_sum, len(hostport_pairs))
+        for hostport, alloc in zip(hostport_pairs, alloc_splitted):
+            n_gen_table[hostport] += alloc
+
+        assert sum(n_gen_table.values()) == n_gen
+        logger.info("n_gen_table: {}".format(n_gen_table))
+        return n_gen_table
+
     @staticmethod  # called only in _measure_performance_of_each_server
     def _send_and_recive_and_get_elapsed_time(
         hostport: HostPortPair, request: MainRequestT, queue: Queue
@@ -97,6 +123,7 @@ class ClientBase(Generic[MainRequestT]):
         request: MainRequestT,
     ) -> Dict[HostPortPair, float]:
         assert request.n_process == -1
+        request = copy.deepcopy(request)
 
         logger.info("measure performance of each server by letting them make a dummy dataset")
         score_map: Dict[HostPortPair, float] = {}
