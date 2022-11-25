@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Iterable, Iterator, List, Optional, Sized, Type
+from typing import Callable, Iterable, Iterator, List, Optional, Sized, Type, cast
 
 from hifuku.types import ProblemT
 
@@ -22,6 +22,9 @@ class IteratorProblemPool(Iterator[ProblemT], ProblemPool[ProblemT], ABC):
         self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
     ) -> PredicatedIteratorProblemPool[ProblemT]:
         pass
+
+    def as_predicated(self) -> PredicatedIteratorProblemPool[ProblemT]:
+        return cast(PredicatedIteratorProblemPool[ProblemT], self)
 
 
 @dataclass
