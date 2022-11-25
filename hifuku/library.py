@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
+    Callable,
     Generic,
     Iterable,
     Iterator,
@@ -124,8 +125,29 @@ class ProblemPool(Iterable[ProblemT]):
     problem_type: Type[ProblemT]
 
 
-class IteratorProblemPool(Iterator[ProblemT], ProblemPool[ProblemT]):
+class PredicatedIteratorProblemPool(Iterator[Optional[ProblemT]], ProblemPool[ProblemT]):
     pass
+
+
+class IteratorProblemPool(Iterator[ProblemT], ProblemPool[ProblemT], ABC):
+    @abstractmethod
+    def make_predicated(
+        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
+    ) -> PredicatedIteratorProblemPool[ProblemT]:
+        pass
+
+
+@dataclass
+class SimplePredicatedProblemPool(PredicatedIteratorProblemPool[ProblemT]):
+    problem_type: Type[ProblemT]
+    predicate: Callable[[ProblemT], bool]
+    max_trial_factor: int
+    n_problem_inner: int = 1
+
+    def __next__(self) -> Optional[ProblemT]:
+        return self.problem_type.sample(
+            self.n_problem_inner, predicate=self.predicate, max_trial_factor=self.max_trial_factor
+        )
 
 
 @dataclass
@@ -135,6 +157,13 @@ class SimpleProblemPool(IteratorProblemPool[ProblemT]):
 
     def __next__(self) -> ProblemT:
         return self.problem_type.sample(self.n_problem_inner)
+
+    def make_predicated(
+        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int = 40
+    ) -> SimplePredicatedProblemPool[ProblemT]:
+        return SimplePredicatedProblemPool(
+            self.problem_type, predicate, max_trial_factor, self.n_problem_inner
+        )
 
 
 class FixedProblemPool(Sized, ProblemPool[ProblemT]):
