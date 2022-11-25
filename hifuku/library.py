@@ -326,7 +326,7 @@ class LibrarySamplerConfig:
 
 
 @dataclass
-class SolutionLibrarySampler(Generic[ProblemT], ABC):
+class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT]
     solver: BatchProblemSolver
@@ -341,54 +341,25 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         solver: BatchProblemSolver,
         config: LibrarySamplerConfig,
         validation_problem_pool: FixedProblemPool[ProblemT],
-    ) -> "SolutionLibrarySampler[ProblemT]":
+    ) -> "SimpleSolutionLibrarySampler[ProblemT]":
         library = SolutionLibrary.initialize(
             problem_type, ae_model, config.solvable_threshold_factor
         )
         logger.info("library sampler config: {}".format(config))
         return cls(problem_type, library, solver, config, validation_problem_pool)
 
+    @abstractmethod
     def step_active_sampling(
         self,
         project_path: Path,
         problem_pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
         problem_pool_init_traj: Optional[IteratorProblemPool[ProblemT]] = None,
-    ):
-        logger.info("active sampling step")
+    ) -> None:
+        ...
 
-        if problem_pool_dataset is None:
-            logger.info("problem pool is not specified. use SimpleProblemPool")
-            # TODO: smelling! n_problem_inner should not be set here
-            problem_pool_dataset = SimpleProblemPool(self.problem_type, self.config.n_problem_inner)
-
-        if problem_pool_init_traj is None:
-            logger.info("problem pool is not specified. use SimpleProblemPool")
-            problem_pool_init_traj = SimpleProblemPool(self.problem_type, 1)
-
-        init_solution = self._determine_init_solution(problem_pool_init_traj)
-        predictor = self.learn_predictors(init_solution, project_path, problem_pool_dataset)
-
-        logger.info("start measuring coverage")
-        singleton_library = SolutionLibrary(
-            problem_type=self.problem_type,
-            ae_model=self.library.ae_model,
-            predictors=[predictor],
-            margins=[0.0],
-            coverage_results=[None],
-            solvable_threshold_factor=self.config.solvable_threshold_factor,
-            uuidval="dummy",
-        )
-        coverage_result = singleton_library.measure_full_coverage(self.validation_problem_pool)
-        logger.info(coverage_result)
-        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
-
-        logger.info("margin is set to {}".format(margin))
-        self.library.add(predictor, margin, coverage_result)
-
-        coverage = self.library.measure_coverage(self.validation_problem_pool)
-        logger.info("current library's coverage estimate: {}".format(coverage))
-
-        self.library.dump(project_path)
+    @abstractmethod
+    def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
+        ...
 
     def learn_predictors(
         self,
@@ -425,48 +396,6 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         tcache = TrainCache.from_model(model)
         train(pp, tcache, dataset, self.config.train_config)
         return model
-
-    def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
-
-        is_initialized = len(self.library.predictors) > 0
-        if not is_initialized:
-            logger.info("start determine init solution using standard problem")
-            init_solution = self.problem_type.get_default_init_solution()
-            return init_solution
-        else:
-            logger.info("start determine init solution len(lib) > 0")
-
-            logger.info("sample solution candidates")
-            difficult_iter_threshold = (
-                self.problem_type.get_solver_config().maxiter
-                * self.config.difficult_threshold_factor
-            )
-            solution_candidates = self._sample_solution_canidates(
-                self.config.n_difficult_problem, problem_pool, difficult_iter_threshold
-            )
-
-            logger.info("sample difficult problems")
-            difficult_problems = self._sample_difficult_problems(
-                self.config.n_difficult_problem, problem_pool, difficult_iter_threshold
-            )
-
-            logger.info("compute scores")
-            score_list = []
-            maxiter = self.problem_type.get_solver_config().maxiter
-            for solution_guess in solution_candidates:
-                solution_guesses = [solution_guess] * len(difficult_problems)
-                results = MultiProcessProblemSolver.solve(
-                    difficult_problems, solution_guesses, None
-                )
-                iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
-                score = -sum(iterval_real_list)  # must be nagative
-                logger.debug("*score of solution cand: {}".format(score))
-                score_list.append(score)
-
-            best_idx = np.argmax(score_list)
-            best_solution = solution_candidates[best_idx]
-            logger.debug("best score: {}".format(score_list[best_idx]))
-            return best_solution
 
     def _sample_solution_canidates(
         self,
@@ -525,3 +454,89 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
                     difficult_problems.append(problem)
                     pbar.update(1)
         return difficult_problems
+
+
+class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
+    def step_active_sampling(
+        self,
+        project_path: Path,
+        problem_pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
+        problem_pool_init_traj: Optional[IteratorProblemPool[ProblemT]] = None,
+    ) -> None:
+        logger.info("active sampling step")
+
+        if problem_pool_dataset is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            # TODO: smelling! n_problem_inner should not be set here
+            problem_pool_dataset = SimpleProblemPool(self.problem_type, self.config.n_problem_inner)
+
+        if problem_pool_init_traj is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            problem_pool_init_traj = SimpleProblemPool(self.problem_type, 1)
+
+        init_solution = self._determine_init_solution(problem_pool_init_traj)
+        predictor = self.learn_predictors(init_solution, project_path, problem_pool_dataset)
+
+        logger.info("start measuring coverage")
+        singleton_library = SolutionLibrary(
+            problem_type=self.problem_type,
+            ae_model=self.library.ae_model,
+            predictors=[predictor],
+            margins=[0.0],
+            coverage_results=[None],
+            solvable_threshold_factor=self.config.solvable_threshold_factor,
+            uuidval="dummy",
+        )
+        coverage_result = singleton_library.measure_full_coverage(self.validation_problem_pool)
+        logger.info(coverage_result)
+        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+
+        logger.info("margin is set to {}".format(margin))
+        self.library.add(predictor, margin, coverage_result)
+
+        coverage = self.library.measure_coverage(self.validation_problem_pool)
+        logger.info("current library's coverage estimate: {}".format(coverage))
+
+        self.library.dump(project_path)
+
+    def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
+
+        is_initialized = len(self.library.predictors) > 0
+        if not is_initialized:
+            logger.info("start determine init solution using standard problem")
+            init_solution = self.problem_type.get_default_init_solution()
+            return init_solution
+        else:
+            logger.info("start determine init solution len(lib) > 0")
+
+            logger.info("sample solution candidates")
+            difficult_iter_threshold = (
+                self.problem_type.get_solver_config().maxiter
+                * self.config.difficult_threshold_factor
+            )
+            solution_candidates = self._sample_solution_canidates(
+                self.config.n_difficult_problem, problem_pool, difficult_iter_threshold
+            )
+
+            logger.info("sample difficult problems")
+            difficult_problems = self._sample_difficult_problems(
+                self.config.n_difficult_problem, problem_pool, difficult_iter_threshold
+            )
+
+            logger.info("compute scores")
+            score_list = []
+            maxiter = self.problem_type.get_solver_config().maxiter
+            for solution_guess in solution_candidates:
+                solution_guesses = [solution_guess] * len(difficult_problems)
+                results = MultiProcessProblemSolver.solve(
+                    difficult_problems, solution_guesses, None
+                )
+                iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
+                score = -sum(iterval_real_list)  # must be nagative
+                logger.debug("*score of solution cand: {}".format(score))
+                score_list.append(score)
+
+            best_idx = np.argmax(score_list)
+            best_solution = solution_candidates[best_idx]
+            logger.debug("best score: {}".format(score_list[best_idx]))
+            return best_solution

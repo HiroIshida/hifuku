@@ -10,8 +10,8 @@ from hifuku.library import (
     LibrarySamplerConfig,
     MultiProcessProblemSolver,
     SimpleFixedProblemPool,
+    SimpleSolutionLibrarySampler,
     SolutionLibrary,
-    SolutionLibrarySampler,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
@@ -60,7 +60,7 @@ def test_SolutionLibrarySampler():
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             create_default_logger(td_path, "test_trajectorylib")
-            lib_sampler = SolutionLibrarySampler.initialize(
+            lib_sampler = SimpleSolutionLibrarySampler.initialize(
                 problem_type, ae_model, gen, lconfig, validation_pool
             )
             # init

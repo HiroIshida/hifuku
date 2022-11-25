@@ -10,7 +10,7 @@ from hifuku.datagen import DistributedBatchProblemSolver
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleFixedProblemPool,
-    SolutionLibrarySampler,
+    SimpleSolutionLibrarySampler,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         solvable_threshold_factor=0.6,
     )  # all pass
     validation_pool = SimpleFixedProblemPool.initialize(TabletopPlanningProblem, 2000)
-    lib_sampler = SolutionLibrarySampler.initialize(
+    lib_sampler = SimpleSolutionLibrarySampler.initialize(
         TabletopPlanningProblem, ae_model, gen, lconfig, validation_pool
     )
 
