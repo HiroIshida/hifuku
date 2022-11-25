@@ -437,10 +437,18 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             logger.info("start determine init solution len(lib) > 0")
 
             logger.info("sample solution candidates")
-            solution_candidates = self._sample_solution_canidates(problem_pool)
+            difficult_iter_threshold = (
+                self.problem_type.get_solver_config().maxiter
+                * self.config.difficult_threshold_factor
+            )
+            solution_candidates = self._sample_solution_canidates(
+                self.config.n_difficult_problem, problem_pool, difficult_iter_threshold
+            )
 
             logger.info("sample difficult problems")
-            difficult_problems = self._sample_difficult_problems(problem_pool)
+            difficult_problems = self._sample_difficult_problems(
+                self.config.n_difficult_problem, problem_pool, difficult_iter_threshold
+            )
 
             logger.info("compute scores")
             score_list = []
@@ -461,14 +469,15 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
             return best_solution
 
     def _sample_solution_canidates(
-        self, problem_pool: IteratorProblemPool[ProblemT]
+        self,
+        n_sample: int,
+        problem_pool: IteratorProblemPool[ProblemT],
+        difficult_iter_threshold: float,
     ) -> List[np.ndarray]:
-        maxiter = self.problem_type.get_solver_config().maxiter
-        difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
 
         solution_candidates: List[np.ndarray] = []
-        with tqdm.tqdm(total=self.config.n_solution_candidate) as pbar:
-            while len(solution_candidates) < self.config.n_solution_candidate:
+        with tqdm.tqdm(total=n_sample) as pbar:
+            while len(solution_candidates) < n_sample:
                 problem = next(problem_pool)
                 assert problem.n_problem() == 1
                 infer_res = self.library.infer(problem)[0]
@@ -496,15 +505,15 @@ class SolutionLibrarySampler(Generic[ProblemT], ABC):
         return solution_candidates
 
     def _sample_difficult_problems(
-        self, problem_pool: IteratorProblemPool[ProblemT]
+        self,
+        n_sample: int,
+        problem_pool: IteratorProblemPool[ProblemT],
+        difficult_iter_threshold: float,
     ) -> List[ProblemT]:
 
-        maxiter = self.problem_type.get_solver_config().maxiter
-        difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
-
         difficult_problems: List[ProblemT] = []
-        with tqdm.tqdm(total=self.config.n_difficult_problem) as pbar:
-            while len(difficult_problems) < self.config.n_difficult_problem:
+        with tqdm.tqdm(total=n_sample) as pbar:
+            while len(difficult_problems) < n_sample:
                 logger.debug("try sampling difficutl problem...")
                 problem = next(problem_pool)
                 assert problem.n_problem() == 1
