@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import (
+    Callable,
     Dict,
-    Generic,
     List,
     Optional,
     Protocol,
@@ -35,12 +35,6 @@ class SolverConfigProtocol(Protocol):
     maxiter: int
 
 
-class PredicateInterface(Generic[ProblemT], ABC):
-    @abstractmethod
-    def __call__(self, problem: ProblemT) -> bool:
-        pass
-
-
 class ProblemInterface(ABC):
     class SamplingBasedInitialguessFail(Exception):
         pass
@@ -51,7 +45,7 @@ class ProblemInterface(ABC):
     def sample(
         cls: Type[ProblemT],
         n_pose: int,
-        predicate: PredicateInterface[ProblemT],
+        predicate: Callable[[ProblemT], bool],
         max_trial_factor: int = ...,
     ) -> Optional[ProblemT]:
         ...
@@ -77,7 +71,7 @@ class ProblemInterface(ABC):
     def sample(
         cls: Type[ProblemT],
         n_pose: int,
-        predicate: Optional[PredicateInterface[ProblemT]] = None,
+        predicate: Optional[Callable[[ProblemT], bool]] = None,
         max_trial_factor: int = 40,
     ) -> Optional[ProblemT]:
         ...

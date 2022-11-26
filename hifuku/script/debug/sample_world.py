@@ -17,7 +17,7 @@ if __name__ == "__main__":
     pp.mkdir(exist_ok=True)
     cache_base_path = pp / "cache"
     cache_base_path.mkdir()
-    gen = MultiProcessBatchProblemSolver(TabletopPlanningProblem)
+    gen = MultiProcessBatchProblemSolver[TabletopPlanningProblem]()
 
     x_init = TabletopPlanningProblem.get_default_init_solution()
     problems = [TabletopPlanningProblem.sample(50) for _ in range(n_problem)]

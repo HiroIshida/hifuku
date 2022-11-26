@@ -11,11 +11,16 @@ import numpy as np
 import pytest
 
 from hifuku.datagen import (
+    BatchProblemSampler,
     BatchProblemSolver,
+    DistributeBatchProblemSampler,
     DistributedBatchProblemSolver,
+    MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
+from hifuku.pool import PredicatedIteratorProblemPool, SimpleProblemPool
+from hifuku.testing_asset import SimplePredicate
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData
 
@@ -38,18 +43,18 @@ def server():
     logger.info("kill servers")
 
 
-def test_consistency_of_all_generator(server):
+def test_consistency_of_all_batch_sovler(server):
     for n_problem in [1, 8]:  # to test edge case
         n_problem_inner = 2
         init_solutions = [TabletopPlanningProblem.get_default_init_solution()] * n_problem
         problems = [TabletopPlanningProblem.sample(n_problem_inner) for _ in range(n_problem)]
         gen_list: List[BatchProblemSolver] = []
-        gen_list.append(MultiProcessBatchProblemSolver(TabletopPlanningProblem, 1))
-        gen_list.append(MultiProcessBatchProblemSolver(TabletopPlanningProblem, 2))
+        gen_list.append(MultiProcessBatchProblemSolver(1))
+        gen_list.append(MultiProcessBatchProblemSolver(2))
 
         hostport_pairs = [("localhost", 8081), ("localhost", 8082)]
-        gen = DistributedBatchProblemSolver(
-            TabletopPlanningProblem, hostport_pairs, n_problem_measure=1
+        gen = DistributedBatchProblemSolver[TabletopPlanningProblem](
+            hostport_pairs, n_measure_sample=1
         )
         gen_list.append(gen)
 
@@ -79,13 +84,35 @@ def test_consistency_of_all_generator(server):
         assert len(set(successes_list)) == 1
 
 
+def test_consistency_of_all_batch_sampler(server):
+    hostport_pairs = [("localhost", 8081), ("localhost", 8082)]
+
+    sampler_list: List[BatchProblemSampler[TabletopPlanningProblem]] = []
+    sampler_list.append(MultiProcessBatchProblemSampler(1))
+    sampler_list.append(MultiProcessBatchProblemSampler(2))
+    sampler_list.append(DistributeBatchProblemSampler[TabletopPlanningProblem](hostport_pairs))
+
+    n_problem_inner = 5
+    pool_list: List[PredicatedIteratorProblemPool] = []
+    pool_base = SimpleProblemPool(TabletopPlanningProblem, n_problem_inner)
+    pool_list.append(pool_base.as_predicated())
+    pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
+
+    for n_sample in [1, 2, 20]:  # to test edge case
+        for pool in pool_list:
+            for sampler in sampler_list:
+                samples = sampler.sample_batch(n_sample, pool)
+                assert len(samples) == n_sample
+                assert samples[0].n_problem() == n_problem_inner
+
+
 def test_create_dataset():
     n_problem = 4
     n_problem_inner = 2
     init_solutions = [TabletopPlanningProblem.get_default_init_solution()] * n_problem
     problems = [TabletopPlanningProblem.sample(n_problem_inner) for _ in range(n_problem)]
 
-    solver = MultiProcessBatchProblemSolver(TabletopPlanningProblem, 2)
+    solver = MultiProcessBatchProblemSolver[TabletopPlanningProblem](2)
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         solver.create_dataset(problems, init_solutions, td_path, n_process=None)

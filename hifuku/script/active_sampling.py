@@ -7,12 +7,9 @@ from mohou.utils import log_package_version_info
 
 import hifuku
 from hifuku.datagen import DistributedBatchProblemSolver
-from hifuku.library import (
-    LibrarySamplerConfig,
-    SimpleFixedProblemPool,
-    SolutionLibrarySampler,
-)
+from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
+from hifuku.pool import SimpleFixedProblemPool
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.utils import create_default_logger
 
@@ -35,7 +32,7 @@ if __name__ == "__main__":
         ("mars", 8080),
     ]
 
-    gen = DistributedBatchProblemSolver(TabletopPlanningProblem, hostport_pairs)
+    gen = DistributedBatchProblemSolver[TabletopPlanningProblem](hostport_pairs)
     # gen = MultiProcessDatasetGenerator(TabletopPlanningProblem)
     ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
 
@@ -48,7 +45,7 @@ if __name__ == "__main__":
         solvable_threshold_factor=0.6,
     )  # all pass
     validation_pool = SimpleFixedProblemPool.initialize(TabletopPlanningProblem, 2000)
-    lib_sampler = SolutionLibrarySampler.initialize(
+    lib_sampler = SimpleSolutionLibrarySampler.initialize(
         TabletopPlanningProblem, ae_model, gen, lconfig, validation_pool
     )
 

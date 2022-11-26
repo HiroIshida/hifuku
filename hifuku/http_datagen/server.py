@@ -1,19 +1,25 @@
 import argparse
 import logging
 import os
-import pickle
 import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from hifuku.datagen import MultiProcessBatchProblemSolver
+import dill
+
+from hifuku.datagen import (
+    MultiProcessBatchProblemSampler,
+    MultiProcessBatchProblemSolver,
+)
 from hifuku.http_datagen.request import (
     GetCPUInfoRequest,
     GetCPUInfoResponse,
     GetModuleHashValueRequest,
     GetModuleHashValueResponse,
     Response,
+    SampleProblemRequest,
+    SampleProblemResponse,
     SolveProblemRequest,
     SolveProblemResponse,
 )
@@ -48,9 +54,8 @@ class PostHandler(BaseHTTPRequestHandler):
     def process_SolveProblemRequest(self, request: SolveProblemRequest) -> SolveProblemResponse:
         ts = time.time()
         logging.info("request: {}".format(request))
-        problem_type = type(request.problems[0])
 
-        gen = MultiProcessBatchProblemSolver(problem_type, request.n_process)  # type: ignore
+        gen = MultiProcessBatchProblemSolver(request.n_process)  # type: ignore[var-annotated]
 
         with tempfile.TemporaryDirectory() as td:
             Path(td)
@@ -60,11 +65,21 @@ class PostHandler(BaseHTTPRequestHandler):
         resp = SolveProblemResponse(results_list, elapsed_time)
         return resp
 
+    def process_SampleProblemRequest(self, request: SampleProblemRequest) -> SampleProblemResponse:
+        ts = time.time()
+        logging.info("request: {}".format(request))
+        sampler = MultiProcessBatchProblemSampler(request.n_process)  # type: ignore[var-annotated]
+        problems = sampler.sample_batch(request.n_sample, request.pool)
+        assert len(problems) > 0
+        elapsed_time = time.time() - ts
+        resp = SampleProblemResponse(problems, elapsed_time)
+        return resp
+
     def do_POST(self):
         ts = time.time()
 
         content_length = int(self.headers["Content-Length"])
-        request = pickle.loads(self.rfile.read(content_length))
+        request = dill.loads(self.rfile.read(content_length))
         logging.info("recieved request type: {}".format(type(request)))
 
         self._set_response()
@@ -76,9 +91,11 @@ class PostHandler(BaseHTTPRequestHandler):
             resp = self.process_GetModuleHashValueRequest(request)
         elif isinstance(request, SolveProblemRequest):
             resp = self.process_SolveProblemRequest(request)
+        elif isinstance(request, SampleProblemRequest):
+            resp = self.process_SampleProblemRequest(request)
         else:
             assert False, "request {} is not supported".format(type(request))
-        self.wfile.write(pickle.dumps(resp))
+        self.wfile.write(dill.dumps(resp))
         print("elapsed time to handle request: {}".format(time.time() - ts))
 
 

@@ -1,29 +1,29 @@
 import logging
-import math
 import multiprocessing
 import os
-import pickle
 import tempfile
+import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import ClassVar, Dict, Generic, List, Optional, Tuple, Type
+from typing import Generic, List, Optional, Tuple
 
+import dill
 import numpy as np
 import tqdm
 
+from hifuku.http_datagen.client import ClientBase
 from hifuku.http_datagen.request import (
-    GetCPUInfoRequest,
-    GetCPUInfoResponse,
-    GetModuleHashValueRequest,
+    SampleProblemRequest,
     SolveProblemRequest,
     http_connection,
     send_request,
 )
+from hifuku.pool import PredicatedIteratorProblemPool
 from hifuku.types import ProblemT, RawData, ResultProtocol
-from hifuku.utils import get_module_source_hash
+from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -110,11 +110,6 @@ class DumpResultTask(Generic[ProblemT]):
 
 
 class BatchProblemSolver(Generic[ProblemT], ABC):
-    problem_type: Type[ProblemT]
-
-    def __init__(self, problem_type: Type[ProblemT], cache_base_dir: Optional[Path] = None):
-        self.problem_type = problem_type
-
     @abstractmethod
     def solve_batch(
         self,
@@ -162,8 +157,7 @@ class BatchProblemSolver(Generic[ProblemT], ABC):
 class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
     n_process: int
 
-    def __init__(self, problem_type: Type[ProblemT], n_process: Optional[int] = None):
-        super().__init__(problem_type)
+    def __init__(self, n_process: Optional[int] = None):
         if n_process is None:
             logger.info("n_process is not set. automatically determine")
             cpu_num = os.cpu_count()
@@ -225,25 +219,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
 HostPortPair = Tuple[str, int]
 
 
-class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
-    hostport_cpuinfo_map: Dict[HostPortPair, GetCPUInfoResponse]
-    n_problem_measure: int
-    check_module_names: ClassVar[Tuple[str, ...]] = ("skplan", "voxbloxpy")
-
-    def __init__(
-        self,
-        problem_type: Type[ProblemT],
-        host_port_pairs: List[HostPortPair],
-        use_available_host: bool = False,
-        force_continue: bool = False,
-        n_problem_measure: int = 40,
-    ):
-        super().__init__(problem_type)
-        self.hostport_cpuinfo_map = self._init_get_cpu_infos(host_port_pairs, use_available_host)
-        list(self.hostport_cpuinfo_map.keys())
-        # self._init_check_dependent_module_hash(available_hostport_pairs, force_continue)
-        self.n_problem_measure = n_problem_measure
-
+class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProblemSolver[ProblemT]):
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
         hostport: HostPortPair, request: SolveProblemRequest, indices: np.ndarray, tmp_path: Path
@@ -254,7 +230,7 @@ class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
             response = send_request(conn, request)
         file_path = tmp_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
-            pickle.dump((indices, response.results_list), f)
+            dill.dump((indices, response.results_list), f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
@@ -265,28 +241,11 @@ class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
     ) -> List[Tuple[ResultProtocol, ...]]:
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
-        problems_measure = problems[: self.n_problem_measure]
-        init_solutions_measure = init_solutions[: self.n_problem_measure]
-        performance_table = self._measure_performance_of_each_server(
-            problems_measure, init_solutions_measure
-        )
-        logger.info("performance table: {}".format(performance_table))
-
-        n_problem_table: Dict[HostPortPair, int] = {}
+        problems_measure = problems[: self.n_measure_sample]
+        init_solutions_measure = init_solutions[: self.n_measure_sample]
+        request_for_measure = SolveProblemRequest(problems_measure, init_solutions_measure, -1)
         n_problem = len(problems)
-        for hostport in hostport_pairs:
-            n_problem_host = math.floor(n_problem * performance_table[hostport])
-            n_problem_table[hostport] = n_problem_host
-
-        # allocate remainders
-        remainder_sum = n_problem - sum(n_problem_table.values())
-        alloc_splitted = split_number(remainder_sum, len(hostport_pairs))
-        for hostport, alloc in zip(hostport_pairs, alloc_splitted):
-            n_problem_table[hostport] += alloc
-
-        assert sum(n_problem_table.values()) == n_problem
-        logger.info("n_problem_table: {}".format(n_problem_table))
-
+        n_problem_table = self.create_gen_number_table(request_for_measure, n_problem)
         indices_list = split_indices(n_problem, list(n_problem_table.values()))
 
         # send request
@@ -313,7 +272,7 @@ class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
             indices_all: List[int] = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    indices_part, results_list_part = pickle.load(f)
+                    indices_part, results_list_part = dill.load(f)
                     results_list_all.extend(results_list_part)
                     indices_all.extend(indices_part)
 
@@ -322,90 +281,167 @@ class DistributedBatchProblemSolver(BatchProblemSolver[ProblemT]):
             _, results = zip(*idx_result_pairs_sorted)
         return list(results)  # type: ignore
 
-    @classmethod  # called only one in __init__
-    def _init_get_cpu_infos(
-        cls, host_port_pairs: List[HostPortPair], use_available_host: bool
-    ) -> Dict[HostPortPair, GetCPUInfoResponse]:
-        # this method also work as connection checker
-        logger.info("check connection by cpu request")
-        hostport_cpuinfo_map: Dict[Tuple[str, int], GetCPUInfoResponse] = {}
-        for host, port in host_port_pairs:
-            try:
-                with http_connection(host, port) as conn:
-                    req_cpu = GetCPUInfoRequest()
-                    resp_cpu = send_request(conn, req_cpu)
-                logger.info("cpu info of ({}, {}) is {}".format(host, port, resp_cpu))
-                hostport_cpuinfo_map[(host, port)] = resp_cpu
-            except ConnectionRefusedError:
-                logger.error("connection to ({}, {}) was refused ".format(host, port))
 
-        if not use_available_host:
-            if len(hostport_cpuinfo_map) != len(host_port_pairs):
-                logger.error("connection to some of the specified hosts are failed")
-                raise ConnectionRefusedError
-        return hostport_cpuinfo_map
-
-    @classmethod  # called only one in __init__
-    def _init_check_dependent_module_hash(
-        cls, hostport_pairs: List[HostPortPair], force_continue: bool
-    ):
-        logger.info("check dependent module hash matches to the client ones")
-        invalid_pairs = []
-        hash_list_client = [get_module_source_hash(name) for name in cls.check_module_names]
-        logger.debug("hash value client: {}".format(hash_list_client))
-        for host, port in hostport_pairs:
-            with http_connection(host, port) as conn:
-                req_hash = GetModuleHashValueRequest(list(cls.check_module_names))
-                resp_hash = send_request(conn, req_hash)
-                if resp_hash.hash_values != hash_list_client:
-                    invalid_pairs.append((host, port))
-
-        if len(invalid_pairs) > 0:
-            message = "hosts {} module is incompatble with client ones".format(invalid_pairs)
-            logger.error(message)
-            if not force_continue:
-                raise RuntimeError(message)
-
-    @staticmethod  # called only in _measure_performance_of_each_server
-    def _send_and_recive_and_get_elapsed_time(
-        hostport: HostPortPair, request: SolveProblemRequest, queue: Queue
-    ) -> None:
-        logger.debug("send_and_recive_and_get_elapsed_time called on pid: {}".format(os.getpid()))
-        with http_connection(*hostport) as conn:
-            response = send_request(conn, request)
-        logger.debug("send_and_recive_and_get_elapsed_time finished on pid: {}".format(os.getpid()))
-        queue.put((hostport, response.elapsed_time))
-
-    def _measure_performance_of_each_server(
+class BatchProblemSampler(Generic[ProblemT], ABC):
+    @abstractmethod
+    def sample_batch(
         self,
-        problems: List[ProblemT],
-        init_solutions: List[np.ndarray],
-    ) -> Dict[HostPortPair, float]:
+        n_sample: int,
+        pool: PredicatedIteratorProblemPool[ProblemT],
+    ) -> List[ProblemT]:
+        ...
 
-        logger.info("measure performance of each server by letting them make a dummy dataset")
-        score_map: Dict[HostPortPair, float] = {}
+
+class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
+    n_process: int
+    n_thread: int
+
+    def __init__(self, n_process: Optional[int] = None):
+        cpu_count = os.cpu_count()
+        assert cpu_count is not None
+        n_physical_cpu = int(0.5 * cpu_count)
+
+        if n_process is None:
+            good_thread_num = 2  # from my experience
+            n_process = n_physical_cpu // good_thread_num
+        n_thread = n_physical_cpu // n_process
+        logger.info("n_process is set to {}".format(n_process))
+        logger.info("n_thread is set to {}".format(n_thread))
+        assert n_process * n_thread == n_physical_cpu  # hmm, too strict
+        self.n_process = n_process
+        self.n_thread = n_thread
+
+    @staticmethod
+    def task(
+        n_sample: int,
+        pool: PredicatedIteratorProblemPool[ProblemT],
+        show_progress_bar: bool,
+        n_thread: int,
+        cache_path: Path,
+    ) -> None:
+
+        # set random seed
+        unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
+        np.random.seed(unique_id)
+        logger.debug("random seed set to {}".format(unique_id))
+
+        logger.debug("start sampling using clf")
+        problems: List[ProblemT] = []
+        with num_torch_thread(n_thread):
+            disable = not show_progress_bar
+            with tqdm.tqdm(total=n_sample, smoothing=0.0, disable=disable) as pbar:
+                while len(problems) < n_sample:
+                    problem = next(pool)
+                    if problem is not None:
+                        problems.append(problem)
+                        pbar.update(1)
+        ts = time.time()
+        file_path = cache_path / str(uuid.uuid4())
+        with file_path.open(mode="wb") as f:
+            dill.dump(problems, f)
+        logger.debug("time to dump {}".format(time.time() - ts))
+
+    def sample_batch(
+        self,
+        n_sample: int,
+        pool: PredicatedIteratorProblemPool[ProblemT],
+    ) -> List[ProblemT]:
+        assert n_sample > 0
+        n_process = min(self.n_process, n_sample)
+
         with tempfile.TemporaryDirectory() as td:
-            Path(td)
-            queue = Queue()  # type: ignore
+            # https://github.com/pytorch/pytorch/issues/89693
+            ctx = multiprocessing.get_context(method="spawn")
+            n_sample_list = split_number(n_sample, n_process)
             process_list = []
-            for hostport in self.hostport_cpuinfo_map.keys():
-                cpu_info = self.hostport_cpuinfo_map[hostport]
-                req = SolveProblemRequest(problems, init_solutions, cpu_info.n_cpu)
-                p = Process(
-                    target=self._send_and_recive_and_get_elapsed_time, args=(hostport, req, queue)
-                )
-                process_list.append(p)
-                p.start()
 
-            hostport_elapsed_pairs = [queue.get() for _ in range(len(self.hostport_cpuinfo_map))]
+            td_path = Path(td)
+            for idx_process, n_sample_part in enumerate(n_sample_list):
+                show_progress = idx_process == 0
+                args = (n_sample_part, pool, show_progress, self.n_thread, td_path)
+                p = ctx.Process(target=self.task, args=args)
+                p.start()
+                process_list.append(p)
+
             for p in process_list:
                 p.join()
 
-        for hostport, elapsed in hostport_elapsed_pairs:
-            score_map[hostport] = 1.0 / elapsed
+            ts = time.time()
+            problems_sampled = []
+            for file_path in td_path.iterdir():
+                with file_path.open(mode="rb") as f:
+                    problems_sampled.extend(dill.load(f))
+            logger.debug("time to load {}".format(time.time() - ts))
+        return problems_sampled
 
-        # normalize
-        score_sum = sum(score_map.values())
-        for key in score_map:
-            score_map[key] /= score_sum
-        return score_map
+
+class DistributeBatchProblemSampler(
+    ClientBase[SampleProblemRequest], BatchProblemSampler[ProblemT]
+):
+    n_thread: int
+
+    def __init__(
+        self,
+        host_port_pairs: List[HostPortPair],
+        use_available_host: bool = False,
+        force_continue: bool = False,
+        n_measure_sample: int = 40,
+        n_thread: int = 1,
+    ):
+        super().__init__(
+            host_port_pairs,
+            use_available_host=use_available_host,
+            force_continue=force_continue,
+            n_measure_sample=n_measure_sample,
+        )
+        self.n_thread = n_thread
+
+    @staticmethod  # called only in generate
+    def send_and_recive_and_write(
+        hostport: HostPortPair, request: SampleProblemRequest, tmp_path: Path
+    ) -> None:
+        logger.debug("send_and_recive_and_write called on pid: {}".format(os.getpid()))
+        with http_connection(*hostport) as conn:
+            response = send_request(conn, request)
+        file_path = tmp_path / str(uuid.uuid4())
+        assert len(response.problems) > 0
+        with file_path.open(mode="wb") as f:
+            dill.dump((response.problems), f)
+        logger.debug("saved to {}".format(file_path))
+        logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
+
+    def sample_batch(
+        self,
+        n_sample: int,
+        pool: PredicatedIteratorProblemPool[ProblemT],
+    ) -> List[ProblemT]:
+        assert n_sample > 0
+
+        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
+        request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1, self.n_thread)
+        n_sample_table = self.create_gen_number_table(request_for_measure, n_sample)
+
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            process_list = []
+            for hostport in hostport_pairs:
+                n_sample_part = n_sample_table[hostport]
+                if n_sample_part > 0:
+                    n_process = self.hostport_cpuinfo_map[hostport].n_cpu
+                    req = SampleProblemRequest(n_sample_part, pool, n_process, self.n_thread)
+
+                    p = Process(
+                        target=self.send_and_recive_and_write, args=(hostport, req, td_path)
+                    )
+                    p.start()
+                    process_list.append(p)
+
+            for p in process_list:
+                p.join()
+
+            problems = []
+            for file_path in td_path.iterdir():
+                with file_path.open(mode="rb") as f:
+                    problems_part = dill.load(f)
+                    problems.extend(problems_part)
+        return problems

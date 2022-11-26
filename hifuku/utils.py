@@ -1,4 +1,5 @@
 import ast
+import contextlib
 import inspect
 import logging
 import pickle
@@ -10,6 +11,16 @@ from hashlib import md5
 from logging import Logger
 from pathlib import Path
 from typing import Any, Optional
+
+import torch
+
+
+@contextlib.contextmanager
+def num_torch_thread(n_thread: int):
+    n_thread_original = torch.get_num_threads()
+    torch.set_num_threads(n_thread)
+    yield
+    torch.set_num_threads(n_thread_original)
 
 
 def get_source_code_hash(any: Any) -> str:

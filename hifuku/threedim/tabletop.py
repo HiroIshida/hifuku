@@ -35,7 +35,7 @@ from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
 from hifuku.threedim.utils import skcoords_to_pose_vec
-from hifuku.types import PredicateInterface, ProblemInterface, ResultProtocol
+from hifuku.types import ProblemInterface, ResultProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +269,7 @@ class TabletopProblem(ProblemInterface):
     # fmt: off
     @classmethod
     @overload
-    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: PredicateInterface[TableTopProblemT], max_trial_factor: int = ...) -> Optional[TableTopProblemT]: ...  # noqa
+    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: Callable[[TableTopProblemT], bool], max_trial_factor: int = ...) -> Optional[TableTopProblemT]: ...  # noqa
 
     @classmethod
     @overload
@@ -284,7 +284,7 @@ class TabletopProblem(ProblemInterface):
     def sample(
         cls: Type[TableTopProblemT],
         n_pose: int,
-        predicate: Optional[PredicateInterface[TableTopProblemT]] = None,
+        predicate: Optional[Callable[[TableTopProblemT], bool]] = None,
         max_trial_factor: int = 40,
     ) -> Optional[TableTopProblemT]:
         """
