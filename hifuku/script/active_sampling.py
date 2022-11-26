@@ -16,8 +16,14 @@ from hifuku.utils import create_default_logger
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
 warnings.filterwarnings("ignore", message="texture specified in URDF is not supported")
 warnings.filterwarnings("ignore", message="Converting sparse A to a CSC")
+warnings.filterwarnings("ignore", message="urllib3")
 warnings.filterwarnings(
-    "ignore", message="`np.float` is a deprecated alias for the builtin `float`"
+    "ignore",
+    message="undefined symbol: _ZNK3c1010TensorImpl36is_contiguous_nondefault_policy_implENS_12MemoryFormatE",
+)
+warnings.filterwarnings(
+    "ignore",
+    message="`np.float` is a deprecated alias for the builtin `float`"
 )
 
 if __name__ == "__main__":
