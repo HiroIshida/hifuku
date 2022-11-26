@@ -4,6 +4,7 @@ import signal
 import subprocess
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
@@ -11,11 +12,14 @@ import numpy as np
 import pytest
 
 from hifuku.datagen import (
+    BatchProblemSampler,
     BatchProblemSolver,
     DistributedBatchProblemSolver,
+    MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
+from hifuku.pool import PredicatedIteratorProblemPool, SimpleProblemPool
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.types import RawData
 
@@ -38,7 +42,7 @@ def server():
     logger.info("kill servers")
 
 
-def test_consistency_of_all_generator(server):
+def test_consistency_of_all_batch_sovler(server):
     for n_problem in [1, 8]:  # to test edge case
         n_problem_inner = 2
         init_solutions = [TabletopPlanningProblem.get_default_init_solution()] * n_problem
@@ -77,6 +81,36 @@ def test_consistency_of_all_generator(server):
         # the same problem is provided.. maybe random variable is used inside???
         assert len(set(nits_list)) == 1
         assert len(set(successes_list)) == 1
+
+
+@dataclass
+class SimplePredicate:  # because we need non-local object, lambda is not ok
+    threshold: float = 0.0
+
+    def __call__(self, problem: TabletopPlanningProblem) -> bool:
+        assert problem.n_problem() == 1
+        pose = problem.target_pose_list[0]
+        is_y_positive = pose.worldpos()[1] > self.threshold
+        return is_y_positive
+
+
+def test_consistency_of_all_batch_sampler(server):
+    sampler_list: List[BatchProblemSampler[TabletopPlanningProblem]] = []
+    sampler_list.append(MultiProcessBatchProblemSampler(1))
+    sampler_list.append(MultiProcessBatchProblemSampler(2))
+
+    n_problem_inner = 5
+    pool_list: List[PredicatedIteratorProblemPool] = []
+    pool_base = SimpleProblemPool(TabletopPlanningProblem, n_problem_inner)
+    pool_list.append(pool_base.as_predicated())
+    pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
+
+    for n_sample in [1, 4, 20]:  # to test edge case
+        for pool in pool_list:
+            for sampler in sampler_list:
+                samples = sampler.sample_batch(n_sample, pool)
+                assert len(samples) == n_sample
+                assert samples[0].n_problem() == n_problem_inner
 
 
 def test_create_dataset():

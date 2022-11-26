@@ -297,7 +297,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
     n_process: int
     n_thread: int
 
-    def __init__(self, n_process: Optional[int] = None, n_thread: int = 1):
+    def __init__(self, n_process: Optional[int] = None):
         cpu_count = os.cpu_count()
         assert cpu_count is not None
         n_physical_cpu = int(0.5 * cpu_count)
@@ -305,6 +305,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         if n_process is None:
             good_thread_num = 2  # from my experience
             n_process = n_physical_cpu // good_thread_num
+        n_thread = n_physical_cpu // n_process
         logger.info("n_process is set to {}".format(n_process))
         logger.info("n_thread is set to {}".format(n_thread))
         assert n_process * n_thread == n_physical_cpu  # hmm, too strict
@@ -346,13 +347,13 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         n_sample: int,
         pool: PredicatedIteratorProblemPool[ProblemT],
     ) -> List[ProblemT]:
-
-        assert n_sample > self.n_process * 5  # this is random. i don't have time
+        assert n_sample > 0
+        n_process = min(self.n_process, n_sample)
 
         with tempfile.TemporaryDirectory() as td:
             # https://github.com/pytorch/pytorch/issues/89693
             ctx = multiprocessing.get_context(method="spawn")
-            n_sample_list = split_number(n_sample, self.n_process)
+            n_sample_list = split_number(n_sample, n_process)
             process_list = []
 
             td_path = Path(td)
