@@ -1,11 +1,12 @@
 import argparse
 import logging
 import os
-import pickle
 import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+
+import dill
 
 from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
@@ -69,6 +70,7 @@ class PostHandler(BaseHTTPRequestHandler):
         logging.info("request: {}".format(request))
         sampler = MultiProcessBatchProblemSampler(request.n_process)  # type: ignore[var-annotated]
         problems = sampler.sample_batch(request.n_sample, request.pool)
+        assert len(problems) > 0
         elapsed_time = time.time() - ts
         resp = SampleProblemResponse(problems, elapsed_time)
         return resp
@@ -77,7 +79,7 @@ class PostHandler(BaseHTTPRequestHandler):
         ts = time.time()
 
         content_length = int(self.headers["Content-Length"])
-        request = pickle.loads(self.rfile.read(content_length))
+        request = dill.loads(self.rfile.read(content_length))
         logging.info("recieved request type: {}".format(type(request)))
 
         self._set_response()
@@ -93,7 +95,7 @@ class PostHandler(BaseHTTPRequestHandler):
             resp = self.process_SampleProblemRequest(request)
         else:
             assert False, "request {} is not supported".format(type(request))
-        self.wfile.write(pickle.dumps(resp))
+        self.wfile.write(dill.dumps(resp))
         print("elapsed time to handle request: {}".format(time.time() - ts))
 
 

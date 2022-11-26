@@ -1,7 +1,6 @@
 import logging
 import multiprocessing
 import os
-import pickle
 import tempfile
 import time
 import uuid
@@ -231,7 +230,7 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
             response = send_request(conn, request)
         file_path = tmp_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
-            pickle.dump((indices, response.results_list), f)
+            dill.dump((indices, response.results_list), f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
@@ -273,7 +272,7 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
             indices_all: List[int] = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    indices_part, results_list_part = pickle.load(f)
+                    indices_part, results_list_part = dill.load(f)
                     results_list_all.extend(results_list_part)
                     indices_all.extend(indices_part)
 
@@ -405,6 +404,7 @@ class DistributeBatchProblemSampler(
         with http_connection(*hostport) as conn:
             response = send_request(conn, request)
         file_path = tmp_path / str(uuid.uuid4())
+        assert len(response.problems) > 0
         with file_path.open(mode="wb") as f:
             dill.dump((response.problems), f)
         logger.debug("saved to {}".format(file_path))
@@ -415,6 +415,7 @@ class DistributeBatchProblemSampler(
         n_sample: int,
         pool: PredicatedIteratorProblemPool[ProblemT],
     ) -> List[ProblemT]:
+        assert n_sample > 0
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1, self.n_thread)
@@ -425,12 +426,15 @@ class DistributeBatchProblemSampler(
             process_list = []
             for hostport in hostport_pairs:
                 n_sample_part = n_sample_table[hostport]
-                n_process = self.hostport_cpuinfo_map[hostport].n_cpu
-                req = SampleProblemRequest(n_sample_part, pool, n_process, self.n_thread)
+                if n_sample_part > 0:
+                    n_process = self.hostport_cpuinfo_map[hostport].n_cpu
+                    req = SampleProblemRequest(n_sample_part, pool, n_process, self.n_thread)
 
-                p = Process(target=self.send_and_recive_and_write, args=(hostport, req, td_path))
-                p.start()
-                process_list.append(p)
+                    p = Process(
+                        target=self.send_and_recive_and_write, args=(hostport, req, td_path)
+                    )
+                    p.start()
+                    process_list.append(p)
 
             for p in process_list:
                 p.join()
@@ -438,5 +442,6 @@ class DistributeBatchProblemSampler(
             problems = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    problems.extend(dill.load(f))
+                    problems_part = dill.load(f)
+                    problems.extend(problems_part)
         return problems
