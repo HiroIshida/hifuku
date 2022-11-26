@@ -305,8 +305,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         n_physical_cpu = int(0.5 * cpu_count)
 
         if n_process is None:
-            good_thread_num = 2  # from my experience
-            n_process = n_physical_cpu // good_thread_num
+            n_process = n_physical_cpu
         n_thread = n_physical_cpu // n_process
         logger.info("n_process is set to {}".format(n_process))
         logger.info("n_thread is set to {}".format(n_thread))
