@@ -341,7 +341,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
             dill.dump(problems, f)
         logger.debug("time to dump {}".format(time.time() - ts))
 
-    def sample(
+    def sample_batch(
         self,
         n_sample: int,
         pool: PredicatedIteratorProblemPool[ProblemT],
