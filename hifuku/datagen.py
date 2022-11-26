@@ -17,6 +17,7 @@ import tqdm
 
 from hifuku.http_datagen.client import ClientBase
 from hifuku.http_datagen.request import (
+    SampleProblemRequest,
     SolveProblemRequest,
     http_connection,
     send_request,
@@ -372,3 +373,69 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
                     problems_sampled.extend(dill.load(f))
             logger.debug("time to load {}".format(time.time() - ts))
         return problems_sampled
+
+
+class DistributeBatchProblemSampler(
+    ClientBase[SampleProblemRequest], BatchProblemSampler[ProblemT]
+):
+    n_thread: int
+
+    def __init__(
+        self,
+        host_port_pairs: List[HostPortPair],
+        use_available_host: bool = False,
+        force_continue: bool = False,
+        n_measure_sample: int = 40,
+        n_thread: int = 1,
+    ):
+        super().__init__(
+            host_port_pairs,
+            use_available_host=use_available_host,
+            force_continue=force_continue,
+            n_measure_sample=n_measure_sample,
+        )
+        self.n_thread = n_thread
+
+    @staticmethod  # called only in generate
+    def send_and_recive_and_write(
+        hostport: HostPortPair, request: SampleProblemRequest, tmp_path: Path
+    ) -> None:
+        logger.debug("send_and_recive_and_write called on pid: {}".format(os.getpid()))
+        with http_connection(*hostport) as conn:
+            response = send_request(conn, request)
+        file_path = tmp_path / str(uuid.uuid4())
+        with file_path.open(mode="wb") as f:
+            dill.dump((response.problems), f)
+        logger.debug("saved to {}".format(file_path))
+        logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
+
+    def sample_batch(
+        self,
+        n_sample: int,
+        pool: PredicatedIteratorProblemPool[ProblemT],
+    ) -> List[ProblemT]:
+
+        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
+        request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1, self.n_thread)
+        n_sample_table = self.create_gen_number_table(request_for_measure, n_sample)
+
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            process_list = []
+            for hostport in hostport_pairs:
+                n_sample_part = n_sample_table[hostport]
+                n_process = self.hostport_cpuinfo_map[hostport].n_cpu
+                req = SampleProblemRequest(n_sample_part, pool, n_process, self.n_thread)
+
+                p = Process(target=self.send_and_recive_and_write, args=(hostport, req, td_path))
+                p.start()
+                process_list.append(p)
+
+            for p in process_list:
+                p.join()
+
+            problems = []
+            for file_path in td_path.iterdir():
+                with file_path.open(mode="rb") as f:
+                    problems.extend(dill.load(f))
+        return problems
