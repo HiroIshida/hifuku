@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Generic, List, Optional, Tuple
+from typing import Generic, List, Literal, Optional, Tuple
 
 import dill
 import numpy as np
@@ -295,8 +295,11 @@ class BatchProblemSampler(Generic[ProblemT], ABC):
 class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
     n_process: int
     n_thread: int
+    process_context: Literal["spawn", "fork"]
 
-    def __init__(self, n_process: Optional[int] = None):
+    def __init__(
+        self, n_process: Optional[int] = None, process_context: Literal["spawn", "fork"] = "fork"
+    ):
         cpu_count = os.cpu_count()
         assert cpu_count is not None
         n_physical_cpu = int(0.5 * cpu_count)
@@ -310,6 +313,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         assert n_process * n_thread == n_physical_cpu  # hmm, too strict
         self.n_process = n_process
         self.n_thread = n_thread
+        self.process_context = process_context
 
     @staticmethod
     def task(
@@ -346,12 +350,13 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         n_sample: int,
         pool: PredicatedIteratorProblemPool[ProblemT],
     ) -> List[ProblemT]:
+        # https://github.com/pytorch/pytorch/issues/89693
+        # set this to "spawn" if you get stucked by pytorch
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
 
         with tempfile.TemporaryDirectory() as td:
-            # https://github.com/pytorch/pytorch/issues/89693
-            ctx = multiprocessing.get_context(method="spawn")
+            ctx = multiprocessing.get_context(method=self.process_context)
             n_sample_list = split_number(n_sample, n_process)
             process_list = []
 
@@ -359,7 +364,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
             for idx_process, n_sample_part in enumerate(n_sample_list):
                 show_progress = idx_process == 0
                 args = (n_sample_part, pool, show_progress, self.n_thread, td_path)
-                p = ctx.Process(target=self.task, args=args)
+                p = ctx.Process(target=self.task, args=args)  # type: ignore
                 p.start()
                 process_list.append(p)
 
@@ -379,7 +384,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 class DistributeBatchProblemSampler(
     ClientBase[SampleProblemRequest], BatchProblemSampler[ProblemT]
 ):
-    n_thread: int
+    process_context: Literal["spawn", "fork"]
 
     def __init__(
         self,
@@ -387,7 +392,7 @@ class DistributeBatchProblemSampler(
         use_available_host: bool = False,
         force_continue: bool = False,
         n_measure_sample: int = 40,
-        n_thread: int = 1,
+        process_context: Literal["spawn", "fork"] = "fork",
     ):
         super().__init__(
             host_port_pairs,
@@ -395,7 +400,7 @@ class DistributeBatchProblemSampler(
             force_continue=force_continue,
             n_measure_sample=n_measure_sample,
         )
-        self.n_thread = n_thread
+        self.process_context = process_context
 
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
@@ -419,7 +424,9 @@ class DistributeBatchProblemSampler(
         assert n_sample > 0
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
-        request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1, self.n_thread)
+        request_for_measure = SampleProblemRequest(
+            self.n_measure_sample, pool, -1, self.process_context
+        )
         n_sample_table = self.create_gen_number_table(request_for_measure, n_sample)
 
         with tempfile.TemporaryDirectory() as td:
@@ -429,7 +436,7 @@ class DistributeBatchProblemSampler(
                 n_sample_part = n_sample_table[hostport]
                 if n_sample_part > 0:
                     n_process = self.hostport_cpuinfo_map[hostport].n_cpu
-                    req = SampleProblemRequest(n_sample_part, pool, n_process, self.n_thread)
+                    req = SampleProblemRequest(n_sample_part, pool, n_process, self.process_context)
 
                     p = Process(
                         target=self.send_and_recive_and_write, args=(hostport, req, td_path)
