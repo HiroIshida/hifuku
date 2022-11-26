@@ -365,6 +365,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 
             for p in process_list:
                 p.join()
+            logger.debug("finish all subprocess")
 
             ts = time.time()
             problems_sampled = []

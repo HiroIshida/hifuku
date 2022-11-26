@@ -133,6 +133,9 @@ def send_request(conn: HTTPConnection, request):
 
 @contextlib.contextmanager
 def http_connection(host: str = "localhost", port: int = 8080):
+    logger.debug("try to connect {}".format((host, port)))
     conn = HTTPConnection(host, port)
+    logger.debug("connected to {}!".format((host, port)))
     yield conn
     conn.close()
+    logger.debug("closed connectionto {}!".format((host, port)))
