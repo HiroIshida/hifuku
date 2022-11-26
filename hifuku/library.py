@@ -21,7 +21,11 @@ import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 
 from hifuku.classifier import SVM, SVMDataset
-from hifuku.datagen import BatchProblemSolver, split_number
+from hifuku.datagen import (
+    BatchProblemSolver,
+    MultiProcessBatchProblemSampler,
+    split_number,
+)
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.margin import CoverageResult
 from hifuku.neuralnet import (
@@ -509,7 +513,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         logger.info("start generating dataset")
 
         # create dataset
-        problems = [next(problem_pool) for _ in range(self.config.n_problem)]
+        sampler = MultiProcessBatchProblemSampler[ProblemT]()  # temp. this should be arg?
+        problems = sampler.sample_batch(self.config.n_problem, problem_pool.as_predicated())
         init_solutions = [init_solution] * self.config.n_problem
         self.solver.create_dataset(problems, init_solutions, cache_dir_path, n_process=None)
 
