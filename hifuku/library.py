@@ -157,11 +157,20 @@ class SolutionLibrary(Generic[ProblemT]):
         assert len(self.predictors) > 0
 
         mesh_np = np.expand_dims(problem.get_mesh(), axis=(0, 1))
-        mesh = torch.from_numpy(mesh_np).float().to(self.device)
+        mesh = torch.from_numpy(mesh_np)
+        with num_torch_thread(1):
+            # float() must be run in single (cpp-layer) thread
+            # see https://github.com/pytorch/pytorch/issues/89693
+            mesh = mesh.float().to(self.device)
 
         desc_np = np.array(problem.get_descriptions())
-        desc = torch.from_numpy(desc_np).float()
+        desc = torch.from_numpy(desc_np)
+        with num_torch_thread(1):
+            # float() must be run in single (cpp-layer) thread
+            # see https://github.com/pytorch/pytorch/issues/89693
+            desc = desc.float()
         desc = desc.to(self.device)
+
         n_batch, _ = desc_np.shape
 
         encoded: torch.Tensor = self.ae_model.encoder(mesh)

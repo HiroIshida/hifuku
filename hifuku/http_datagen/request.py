@@ -3,7 +3,7 @@ import logging
 import time
 from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
-from typing import Generic, List, Literal, Optional, Tuple, TypeVar, overload
+from typing import Generic, List, Optional, Tuple, TypeVar, overload
 
 import dill
 import numpy as np
@@ -80,7 +80,6 @@ class SampleProblemRequest(Generic[ProblemT], MainRequest):
     n_sample: int
     pool: PredicatedIteratorProblemPool[ProblemT]
     n_process: int
-    process_context: Literal["fork", "spawn"] = "fork"
 
 
 @dataclass

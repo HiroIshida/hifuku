@@ -68,7 +68,7 @@ class PostHandler(BaseHTTPRequestHandler):
     def process_SampleProblemRequest(self, request: SampleProblemRequest) -> SampleProblemResponse:
         ts = time.time()
         logging.info("request: {}".format(request))
-        sampler = MultiProcessBatchProblemSampler(request.n_process, process_context=request.process_context)  # type: ignore[var-annotated]
+        sampler = MultiProcessBatchProblemSampler(request.n_process)  # type: ignore[var-annotated]
         problems = sampler.sample_batch(request.n_sample, request.pool)
         assert len(problems) > 0
         elapsed_time = time.time() - ts
