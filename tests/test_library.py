@@ -5,7 +5,10 @@ import numpy as np
 import torch
 from mohou.trainer import TrainConfig
 
-from hifuku.datagen import MultiProcessBatchProblemSolver
+from hifuku.datagen import (
+    MultiProcessBatchProblemSampler,
+    MultiProcessBatchProblemSolver,
+)
 from hifuku.library import (
     LibrarySamplerConfig,
     MultiProcessProblemSolver,
@@ -35,7 +38,8 @@ def test_compute_real_itervals():
 
 def test_SolutionLibrarySampler():
     problem_type = TabletopPlanningProblem
-    gen = MultiProcessBatchProblemSolver[TabletopPlanningProblem](n_process=2)
+    solver = MultiProcessBatchProblemSolver[TabletopPlanningProblem](n_process=2)
+    sampler = MultiProcessBatchProblemSampler[TabletopPlanningProblem](n_process=2)
     tconfig = TrainConfig(n_epoch=1)
     lconfig = LibrarySamplerConfig(
         n_problem=10,
@@ -61,7 +65,12 @@ def test_SolutionLibrarySampler():
             td_path = Path(td)
             create_default_logger(td_path, "test_trajectorylib")
             lib_sampler = SimpleSolutionLibrarySampler.initialize(
-                problem_type, ae_model, gen, lconfig, pool_validation=pool_validation
+                problem_type,
+                ae_model,
+                lconfig,
+                pool_validation=pool_validation,
+                solver=solver,
+                sampler=sampler,
             )
             # init
             lib_sampler.step_active_sampling(td_path)

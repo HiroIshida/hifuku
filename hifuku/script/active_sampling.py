@@ -6,7 +6,6 @@ from mohou.trainer import TrainConfig
 from mohou.utils import log_package_version_info
 
 import hifuku
-from hifuku.datagen import DistributedBatchProblemSolver
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
@@ -31,10 +30,7 @@ if __name__ == "__main__":
     log_package_version_info(logger, hifuku)
     log_package_version_info(logger, skplan)
 
-    gen = DistributedBatchProblemSolver[TabletopPlanningProblem]()
-    # gen = MultiProcessDatasetGenerator(TabletopPlanningProblem)
     ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
-
     lconfig = LibrarySamplerConfig(
         n_problem=3000,
         n_problem_inner=50,
@@ -44,7 +40,7 @@ if __name__ == "__main__":
         solvable_threshold_factor=0.6,
     )  # all pass
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
-        TabletopPlanningProblem, ae_model, gen, lconfig
+        TabletopPlanningProblem, ae_model, lconfig, use_distributed=True
     )
 
     for i in range(50):

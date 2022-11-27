@@ -23,8 +23,12 @@ from mohou.trainer import TrainCache, TrainConfig, train
 
 from hifuku.classifier import SVM, SVMDataset
 from hifuku.datagen import (
+    BatchProblemSampler,
     BatchProblemSolver,
+    DistributeBatchProblemSampler,
+    DistributedBatchProblemSolver,
     MultiProcessBatchProblemSampler,
+    MultiProcessBatchProblemSolver,
     split_number,
 )
 from hifuku.llazy.dataset import LazyDecomplessDataset
@@ -469,27 +473,34 @@ class LibrarySamplerConfig:
 class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT]
-    solver: BatchProblemSolver
     config: LibrarySamplerConfig
     pool_init_solution: IteratorProblemPool[ProblemT]
     pool_dataset: IteratorProblemPool[ProblemT]
     pool_validation: FixedProblemPool[ProblemT]
+    solver: BatchProblemSolver
+    sampler: BatchProblemSampler
 
     @classmethod
     def initialize(
         cls,
         problem_type: Type[ProblemT],
         ae_model: VoxelAutoEncoder,
-        solver: BatchProblemSolver,
         config: LibrarySamplerConfig,
         pool_init_solution: Optional[IteratorProblemPool[ProblemT]] = None,
         pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
         pool_validation: Optional[FixedProblemPool[ProblemT]] = None,
-    ) -> "_SolutionLibrarySampler[ProblemT]":  # FIXME
+        solver: Optional[BatchProblemSolver[ProblemT]] = None,
+        sampler: Optional[BatchProblemSampler[ProblemT]] = None,
+        use_distributed: bool = False,
+    ) -> "_SolutionLibrarySampler[ProblemT]":
+        """
+        use will be used only if either of solver and sampler is not set
+        """
         library = SolutionLibrary.initialize(
             problem_type, ae_model, config.solvable_threshold_factor
         )
 
+        # setup pools
         if pool_init_solution is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
             pool_init_solution = SimpleProblemPool(problem_type, 1)
@@ -504,9 +515,30 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             pool_validation = SimpleFixedProblemPool.initialize(problem_type, 1000)
         assert pool_validation.n_problem_inner == 1
 
+        # setup solver and sampler
+        if solver is None:
+            solver = (
+                DistributedBatchProblemSolver()
+                if use_distributed
+                else MultiProcessBatchProblemSolver()
+            )
+        if sampler is None:
+            sampler = (
+                DistributeBatchProblemSampler()
+                if use_distributed
+                else MultiProcessBatchProblemSampler()
+            )
+
         logger.info("library sampler config: {}".format(config))
         return cls(
-            problem_type, library, solver, config, pool_init_solution, pool_dataset, pool_validation
+            problem_type,
+            library,
+            config,
+            pool_init_solution,
+            pool_dataset,
+            pool_validation,
+            solver,
+            sampler,
         )
 
     def _determine_init_solution_init(self) -> np.ndarray:
@@ -515,9 +547,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         return init_solution
 
     def _generate_problem_samples_init(self) -> List[ProblemT]:
-        sampler = MultiProcessBatchProblemSampler[ProblemT]()  # temp. this should be arg?
         predicated_pool = self.pool_dataset.as_predicated()
-        problems = sampler.sample_batch(self.config.n_problem, predicated_pool)
+        problems = self.sampler.sample_batch(self.config.n_problem, predicated_pool)
         return problems
 
     @abstractmethod
