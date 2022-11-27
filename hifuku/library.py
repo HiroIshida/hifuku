@@ -11,7 +11,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, List, Optional, Sequence, Tuple, Type
+from typing import Generic, List, Optional, Tuple, Type
 
 import dill
 import numpy as np
@@ -46,84 +46,10 @@ from hifuku.pool import (
     SimpleIteratorProblemPool,
     TrivialIteratorPool,
 )
-from hifuku.types import ProblemInterface, ProblemT, RawData, ResultProtocol
+from hifuku.types import ProblemT, RawData
 from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
-
-
-class MultiProcessProblemSolver:
-    """
-    This is similar to MultiProcessDatasetGenerator but whilt MultiProcessDatasetGenerator
-    samples problems inside, this solver will solve problem specified.
-    """
-
-    @dataclass
-    class ProblemSolverArg:
-        indices: np.ndarray
-        problems: Sequence[ProblemInterface]
-        init_solutions: Sequence[np.ndarray]
-        disable_tqdm: bool
-
-    @staticmethod
-    def _solve(arg: ProblemSolverArg, q: multiprocessing.Queue):
-        with tqdm.tqdm(total=len(arg.problems), disable=arg.disable_tqdm) as pbar:
-            for idx, problem, init_solution in zip(arg.indices, arg.problems, arg.init_solutions):
-                assert problem.n_problem() == 1
-                result = problem.solve(init_solution)[0]
-                q.put((idx, result))
-                pbar.update(1)
-
-    @classmethod
-    def solve(
-        cls,
-        problems: Sequence[ProblemInterface],
-        init_solutions: Sequence[np.ndarray],
-        n_process: Optional[int],
-    ) -> Sequence[ResultProtocol]:
-
-        assert len(problems) == len(init_solutions)
-
-        if n_process is None:
-            cpu_count = os.cpu_count()
-            assert cpu_count is not None
-            n_process = int(0.5 * cpu_count)
-
-        n_process = min(n_process, len(problems))
-        logger.debug("*n_process: {}".format(n_process))
-
-        is_single_process = n_process == 1
-        if is_single_process:
-            results = []
-            maxiter = problems[0].get_solver_config().maxiter
-            logger.debug("*maxiter: {}".format(maxiter))
-            for problem, init_solution in zip(problems, init_solutions):
-                result = problem.solve(init_solution)[0]
-                results.append(result)
-            return results
-        else:
-            indices = np.array(list(range(len(problems))))
-            indices_list_per_worker = np.array_split(indices, n_process)
-
-            q = multiprocessing.Queue()  # type: ignore
-            indices_list_per_worker = np.array_split(indices, n_process)
-
-            process_list = []
-            for i, indices_part in enumerate(indices_list_per_worker):
-                disable_tqdm = i > 0
-                problems_part = [problems[idx] for idx in indices_part]
-                init_solutions_part = [init_solutions[idx] for idx in indices_part]
-                arg = cls.ProblemSolverArg(
-                    indices_part, problems_part, init_solutions_part, disable_tqdm
-                )
-                p = multiprocessing.Process(target=cls._solve, args=(arg, q))
-                p.start()
-                process_list.append(p)
-
-            idx_result_pairs = [q.get() for _ in range(len(problems))]
-            idx_result_pairs_sorted = sorted(idx_result_pairs, key=lambda x: x[0])  # type: ignore
-            _, results = zip(*idx_result_pairs_sorted)
-            return list(results)
 
 
 @dataclass
@@ -218,7 +144,7 @@ class SolutionLibrary(Generic[ProblemT]):
         threshold = config.maxiter * self.solvable_threshold_factor
         return threshold
 
-    def measure_full_coverage(self, problem_pool: FixedProblemPool[ProblemT]) -> CoverageResult:
+    def measure_full_coverage(self, problem_pool: FixedProblemPool[ProblemT], solver: BatchProblemSolver) -> CoverageResult:
         logger.info("**compute est values")
         iterval_est_list = []
         init_solution_est_list = []
@@ -230,10 +156,10 @@ class SolutionLibrary(Generic[ProblemT]):
 
         logger.info("**compute real values")
         problems = [p for p in problem_pool]
-        results = MultiProcessProblemSolver.solve(problems, init_solution_est_list, None)
+        results = solver.solve_batch(problems, init_solution_est_list)
 
         maxiter = self.problem_type.get_solver_config().maxiter
-        iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
+        iterval_real_list = [(maxiter if not r[0].success else r[0].nit) for r in results]
 
         success_iter = self.success_iter_threshold()
         coverage_result = CoverageResult(
@@ -585,7 +511,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
         )
-        coverage_result = singleton_library.measure_full_coverage(self.pool_validation)
+        coverage_result = singleton_library.measure_full_coverage(self.pool_validation, self.solver)
         logger.info(coverage_result)
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
@@ -707,8 +633,9 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         maxiter = self.problem_type.get_solver_config().maxiter
         for candidate in candidates:
             solution_guesses = [candidate] * len(problems)
-            results = MultiProcessProblemSolver.solve(problems, solution_guesses, None)
-            iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
+            results = self.solver.solve_batch(problems, solution_guesses)
+            # consider all problems has n_inner_problem = 1
+            iterval_real_list = [(maxiter if not r[0].success else r[0].nit) for r in results]
             score = -sum(iterval_real_list)  # must be nagative
             logger.debug("*score of solution cand: {}".format(score))
             score_list.append(score)
@@ -741,6 +668,13 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
 class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
     cached_problems: Optional[List[ProblemT]]
 
+    def _generate_problem_samples(self) -> List[ProblemT]:
+        assert self.cached_problems is not None
+        assert len(self.cached_problems) == self.config.n_problem
+        copied = copy.deepcopy(self.cached_problems)
+        self.cached_problems = None  # invalidate the cache
+        return copied
+
     def _determine_init_solution(self) -> np.ndarray:
         logger.info("sample solution candidates")
 
@@ -753,6 +687,8 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
             additional = self.sampler.sample_batch(n_remainder, self.pool_single.as_predicated())
             easy_problems.extend(additional)
         assert len(easy_problems) == n_sample_difficult
+
+        self.cached_problems = difficult_problems + easy_problems
 
         predicate = LargestDifficultClusterPredicate.create(
             self.library, difficult_problems, easy_problems

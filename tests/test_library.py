@@ -11,7 +11,6 @@ from hifuku.datagen import (
 )
 from hifuku.library import (
     LibrarySamplerConfig,
-    MultiProcessProblemSolver,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
 )
@@ -26,13 +25,15 @@ def test_compute_real_itervals():
     n_problem = 10
     problems = [TabletopPlanningProblem.sample(1) for _ in range(n_problem)]
     init_solutions = [x_init] * n_problem
-    results_mp = MultiProcessProblemSolver.solve(problems, init_solutions, n_process=4)
-    results_sp = MultiProcessProblemSolver.solve(problems, init_solutions, n_process=1)
+    solver_mp = MultiProcessBatchProblemSolver[TabletopPlanningProblem](n_process=4)
+    solver_sp = MultiProcessBatchProblemSolver[TabletopPlanningProblem](n_process=1)
+    results_mp = solver_mp.solve_batch(problems, init_solutions)
+    results_sp = solver_sp.solve_batch(problems, init_solutions)
     assert len(results_mp) == n_problem
     assert len(results_sp) == n_problem
 
-    itervals_mp = [r.nit for r in results_mp]
-    itervals_sp = [r.nit for r in results_sp]
+    itervals_mp = [r[0].nit for r in results_mp]
+    itervals_sp = [r[0].nit for r in results_sp]
     assert itervals_mp == itervals_sp
 
 
