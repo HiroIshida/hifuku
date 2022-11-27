@@ -1,11 +1,11 @@
 import contextlib
 import logging
+import pickle
 import time
 from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
 from typing import Generic, List, Optional, Tuple, TypeVar, overload
 
-import dill
 import numpy as np
 
 from hifuku.pool import PredicatedIteratorProblemPool
@@ -126,7 +126,7 @@ def send_request(conn: HTTPConnection, request):
     headers = {"Content-type": "application/json"}
 
     ts = time.time()
-    serialized = dill.dumps(request)
+    serialized = pickle.dumps(request)
     logger.debug("elapsed time to serialize: {}".format(time.time() - ts))
 
     conn.request("POST", "/post", serialized, headers)
@@ -136,7 +136,7 @@ def send_request(conn: HTTPConnection, request):
     logger.debug("got renpose from ({}, {})".format(conn.host, conn.port))
 
     ts = time.time()
-    response = dill.loads(raw_response)
+    response = pickle.loads(raw_response)
     logger.debug("elapsed time to deserialize: {}".format(time.time() - ts))
 
     logger.debug("response contents: {}".format(response))

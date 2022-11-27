@@ -1,6 +1,7 @@
 import logging
 import multiprocessing
 import os
+import pickle
 import tempfile
 import time
 import uuid
@@ -10,7 +11,6 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 from typing import Generic, List, Optional, Tuple
 
-import dill
 import numpy as np
 import tqdm
 
@@ -230,7 +230,7 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
             response = send_request(conn, request)
         file_path = tmp_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
-            dill.dump((indices, response.results_list), f)
+            pickle.dump((indices, response.results_list), f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
@@ -272,7 +272,7 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
             indices_all: List[int] = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    indices_part, results_list_part = dill.load(f)
+                    indices_part, results_list_part = pickle.load(f)
                     results_list_all.extend(results_list_part)
                     indices_all.extend(indices_part)
 
@@ -337,7 +337,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         ts = time.time()
         file_path = cache_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
-            dill.dump(problems, f)
+            pickle.dump(problems, f)
         logger.debug("time to dump {}".format(time.time() - ts))
 
     def sample_batch(
@@ -370,7 +370,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
             problems_sampled = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    problems_sampled.extend(dill.load(f))
+                    problems_sampled.extend(pickle.load(f))
             logger.debug("time to load {}".format(time.time() - ts))
         return problems_sampled
 
@@ -388,7 +388,7 @@ class DistributeBatchProblemSampler(
         file_path = tmp_path / str(uuid.uuid4())
         assert len(response.problems) > 0
         with file_path.open(mode="wb") as f:
-            dill.dump((response.problems), f)
+            pickle.dump((response.problems), f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
@@ -424,6 +424,6 @@ class DistributeBatchProblemSampler(
             problems = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    problems_part = dill.load(f)
+                    problems_part = pickle.load(f)
                     problems.extend(problems_part)
         return problems

@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generic, List, Optional, Tuple, Type
 
-import dill
 import numpy as np
 import pyclustering.cluster.xmeans as xmeans
 import threadpoolctl
@@ -144,7 +143,9 @@ class SolutionLibrary(Generic[ProblemT]):
         threshold = config.maxiter * self.solvable_threshold_factor
         return threshold
 
-    def measure_full_coverage(self, problem_pool: FixedProblemPool[ProblemT], solver: BatchProblemSolver) -> CoverageResult:
+    def measure_full_coverage(
+        self, problem_pool: FixedProblemPool[ProblemT], solver: BatchProblemSolver
+    ) -> CoverageResult:
         logger.info("**compute est values")
         iterval_est_list = []
         init_solution_est_list = []
@@ -326,7 +327,7 @@ class LargestDifficultClusterPredicate(Generic[ProblemT]):
         ts = time.time()
         file_path = cache_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
-            dill.dump(problems, f)
+            pickle.dump(problems, f)
         logger.debug("time to dump {}".format(time.time() - ts))
 
     def sample(
@@ -379,7 +380,7 @@ class LargestDifficultClusterPredicate(Generic[ProblemT]):
             problems_sampled = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    problems_sampled.extend(dill.load(f))
+                    problems_sampled.extend(pickle.load(f))
             print("time to load {}".format(time.time() - ts))
         return problems_sampled
 
