@@ -274,7 +274,9 @@ class LargestDifficultClusterPredicate(Generic[ProblemT]):
         initial_centers = initializer.initialize()
         xm = xmeans.xmeans(data=difficult_iters_list, initial_centers=initial_centers)
         xm.process()
-        larget_cluster_indices: np.ndarray = sorted(xm.get_clusters(), key=lambda c: len(c))[-1]  # type: ignore
+        clusters = xm.get_clusters()
+        larget_cluster_indices: np.ndarray = sorted(clusters, key=lambda c: len(c))[-1]  # type: ignore
+        logger.info("{} clusters with {} elements".format(len(clusters), [len(c) for c in clusters]))  # type: ignore
 
         X = difficult_iters_list + easy_iters_list
         Y = np.zeros(len(X), dtype=bool)
