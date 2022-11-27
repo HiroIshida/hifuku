@@ -681,14 +681,20 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
 
 
 class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
-    cached_problems: Optional[List[ProblemT]]
+    predicate_cache: Optional[LargestDifficultClusterPredicate] = None
 
     def _generate_problem_samples(self) -> List[ProblemT]:
-        assert self.cached_problems is not None
-        assert len(self.cached_problems) == self.config.n_problem
-        copied = copy.deepcopy(self.cached_problems)
-        self.cached_problems = None  # invalidate the cache
-        return copied
+        assert self.predicate_cache is not None
+        n_problem_half = int(self.config.n_problem * 0.5)
+        predicated_pool = self.pool_multiple.make_predicated(
+            self.predicate_cache, max_trial_factor=50
+        )
+        problems_in_clf = self.sampler.sample_batch(n_problem_half, predicated_pool)
+        problems_ambient = self.sampler.sample_batch(
+            n_problem_half, self.pool_multiple.as_predicated()
+        )
+        problems = problems_in_clf + problems_ambient
+        return problems
 
     def _determine_init_solution(self) -> np.ndarray:
         logger.info("sample solution candidates")
@@ -706,14 +712,14 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
             logger.debug("additional easy {} problems sampling".format(n_remainder))
             additional = self.sampler.sample_batch(n_remainder, self.pool_single.as_predicated())
             easy_problems.extend(additional)
-        assert len(easy_problems) == n_sample_difficult
-
-        self.cached_problems = difficult_problems + easy_problems
+        easy_problems = easy_problems[:n_sample_difficult]
 
         predicate = LargestDifficultClusterPredicate.create(
             self.library, difficult_problems, easy_problems
         )
-        predicated_pool = self.pool_multiple.make_predicated(predicate, max_trial_factor=50)
+        self.predicate_cache = predicate
+
+        predicated_pool = self.pool_single.make_predicated(predicate, max_trial_factor=50)
         n_problem_half = int(self.config.n_problem * 0.5)
         logger.info("sample in-clf problems")
         problems_in_clf = self.sampler.sample_batch(n_problem_half, predicated_pool)
