@@ -1,0 +1,7 @@
+server:
+    - name: phobos
+      port: 8080
+      perf: 1.0
+    - name: mars
+      port: 8080
+      perf: 1.0

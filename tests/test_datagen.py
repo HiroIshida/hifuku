@@ -10,6 +10,7 @@ from typing import List
 import numpy as np
 import pytest
 
+from hifuku.config import ServerSpec
 from hifuku.datagen import (
     BatchProblemSampler,
     BatchProblemSolver,
@@ -52,10 +53,8 @@ def test_consistency_of_all_batch_sovler(server):
         gen_list.append(MultiProcessBatchProblemSolver(1))
         gen_list.append(MultiProcessBatchProblemSolver(2))
 
-        hostport_pairs = [("localhost", 8081), ("localhost", 8082)]
-        gen = DistributedBatchProblemSolver[TabletopPlanningProblem](
-            hostport_pairs, n_measure_sample=1
-        )
+        specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
+        gen = DistributedBatchProblemSolver[TabletopPlanningProblem](specs, n_measure_sample=1)
         gen_list.append(gen)
 
         # compare generated nit and success
@@ -85,12 +84,12 @@ def test_consistency_of_all_batch_sovler(server):
 
 
 def test_consistency_of_all_batch_sampler(server):
-    hostport_pairs = [("localhost", 8081), ("localhost", 8082)]
+    specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
 
     sampler_list: List[BatchProblemSampler[TabletopPlanningProblem]] = []
     sampler_list.append(MultiProcessBatchProblemSampler(1))
     sampler_list.append(MultiProcessBatchProblemSampler(2))
-    sampler_list.append(DistributeBatchProblemSampler[TabletopPlanningProblem](hostport_pairs))
+    sampler_list.append(DistributeBatchProblemSampler[TabletopPlanningProblem](specs))
 
     n_problem_inner = 5
     pool_list: List[PredicatedIteratorProblemPool] = []

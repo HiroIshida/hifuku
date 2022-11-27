@@ -7,7 +7,7 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 from typing import ClassVar, Dict, Generic, List, Optional, Tuple
 
-from hifuku.config import global_config
+from hifuku.config import ServerSpec, global_config
 from hifuku.http_datagen.request import (
     GetCPUInfoRequest,
     GetCPUInfoResponse,
@@ -30,19 +30,30 @@ def split_number(num, div):
 
 class ClientBase(Generic[MainRequestT]):
     hostport_cpuinfo_map: Dict[HostPortPair, GetCPUInfoResponse]
+    perf_table: Optional[Dict[HostPortPair, float]] = None
     n_measure_sample: int
     check_module_names: ClassVar[Tuple[str, ...]] = ("skplan", "voxbloxpy")
 
     def __init__(
         self,
-        host_port_pairs: Optional[List[HostPortPair]] = None,
+        server_specs: Optional[Tuple[ServerSpec, ...]] = None,
         use_available_host: bool = False,
         force_continue: bool = False,
         n_measure_sample: int = 40,
     ):
-        if host_port_pairs is None:
-            host_port_pairs = global_config.hostport_pairs
-        self.hostport_cpuinfo_map = self._init_get_cpu_infos(host_port_pairs, use_available_host)
+        if server_specs is None:
+            server_specs = global_config.server_specs
+            assert server_specs is not None
+        perf_table = {}
+        hostport_pairs = []
+        for server in server_specs:
+            hostport = (server.name, server.port)
+            hostport_pairs.append(hostport)
+            perf_table[hostport] = server.perf
+        # TODO: current implementation assume that perf is given
+        self.perf_table = perf_table
+
+        self.hostport_cpuinfo_map = self._init_get_cpu_infos(hostport_pairs, use_available_host)
         list(self.hostport_cpuinfo_map.keys())
         # self._init_check_dependent_module_hash(available_hostport_pairs, force_continue)
         self.n_measure_sample = n_measure_sample
@@ -92,13 +103,16 @@ class ClientBase(Generic[MainRequestT]):
                 raise RuntimeError(message)
 
     def create_gen_number_table(self, request: MainRequestT, n_gen) -> Dict[HostPortPair, int]:
-        performance_table = self._measure_performance_of_each_server(request)
-        logger.info("performance table: {}".format(performance_table))
+        if self.perf_table is None:
+            perf_table = self._measure_performance_of_each_server(request)
+            logger.info("performance table: {}".format(perf_table))
+        else:
+            perf_table = self.perf_table
 
         n_gen_table: Dict[HostPortPair, int] = {}
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         for hostport in hostport_pairs:
-            n_problem_host = math.floor(n_gen * performance_table[hostport])
+            n_problem_host = math.floor(n_gen * perf_table[hostport])
             n_gen_table[hostport] = n_problem_host
 
         # allocate remainders

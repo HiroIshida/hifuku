@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Tuple
@@ -6,9 +6,16 @@ from typing import List, Tuple
 import yaml
 
 
+@dataclass
+class ServerSpec:
+    name: str
+    port: int
+    perf: float
+
+
 @dataclass(frozen=True)
 class GlobalConfig:
-    hostport_pairs: List[Tuple[str, int]]
+    server_specs: Tuple[ServerSpec, ...]
 
     @classmethod
     def load(cls, yaml_like=None):
@@ -28,15 +35,20 @@ class GlobalConfig:
             else:
                 conf = {}
 
-        pairs = []
-        if "hostport_pairs" in conf:
-            hostport_pairs = conf["hostport_pairs"]
-            assert isinstance(hostport_pairs, Sequence)
-            assert not isinstance(hostport_pairs, str)
-            for host, port in hostport_pairs:
-                pair = (str(host), int(port))
-                pairs.append(pair)
-        return cls(hostport_pairs=pairs)
+        specs: List[ServerSpec] = []
+        if "server" in conf:
+            for spec_dict in conf["server"]:
+                spec = ServerSpec(
+                    spec_dict["name"], int(spec_dict["port"]), float(spec_dict["perf"])
+                )
+                specs.append(spec)
+
+        if len(specs) > 0:
+            perf_total = sum(spec.perf for spec in specs)
+            for spec in specs:
+                spec.perf /= perf_total
+
+        return cls(tuple(specs))
 
 
 global_config = GlobalConfig.load()
