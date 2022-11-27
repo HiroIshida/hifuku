@@ -16,6 +16,7 @@ from typing import Generic, List, Optional, Sequence, Tuple, Type
 import dill
 import numpy as np
 import pyclustering.cluster.xmeans as xmeans
+import threadpoolctl
 import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
@@ -156,20 +157,18 @@ class SolutionLibrary(Generic[ProblemT]):
         """
         assert len(self.predictors) > 0
 
-        mesh_np = np.expand_dims(problem.get_mesh(), axis=(0, 1))
-        mesh = torch.from_numpy(mesh_np)
-        with num_torch_thread(1):
-            # float() must be run in single (cpp-layer) thread
-            # see https://github.com/pytorch/pytorch/issues/89693
-            mesh = mesh.float().to(self.device)
+        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+            # limiting numpy thread seems to make stable. but not sure why..
+            mesh_np = np.expand_dims(problem.get_mesh(), axis=(0, 1))
+            desc_np = np.array(problem.get_descriptions())
 
-        desc_np = np.array(problem.get_descriptions())
-        desc = torch.from_numpy(desc_np)
         with num_torch_thread(1):
             # float() must be run in single (cpp-layer) thread
             # see https://github.com/pytorch/pytorch/issues/89693
-            desc = desc.float()
-        desc = desc.to(self.device)
+            mesh = torch.from_numpy(mesh_np)
+            mesh = mesh.float().to(self.device)
+            desc = torch.from_numpy(desc_np)
+            desc = desc.float().to(self.device)
 
         n_batch, _ = desc_np.shape
 
