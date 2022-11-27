@@ -35,7 +35,12 @@ from hifuku.neuralnet import (
     IterationPredictorDataset,
     VoxelAutoEncoder,
 )
-from hifuku.pool import FixedProblemPool, IteratorProblemPool, SimpleProblemPool
+from hifuku.pool import (
+    FixedProblemPool,
+    IteratorProblemPool,
+    SimpleFixedProblemPool,
+    SimpleProblemPool,
+)
 from hifuku.types import ProblemInterface, ProblemT, RawData, ResultProtocol
 from hifuku.utils import num_torch_thread
 
@@ -466,7 +471,9 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     library: SolutionLibrary[ProblemT]
     solver: BatchProblemSolver
     config: LibrarySamplerConfig
-    validation_problem_pool: FixedProblemPool[ProblemT]
+    pool_init_solution: IteratorProblemPool[ProblemT]
+    pool_dataset: IteratorProblemPool[ProblemT]
+    pool_validation: FixedProblemPool[ProblemT]
 
     @classmethod
     def initialize(
@@ -475,65 +482,65 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         ae_model: VoxelAutoEncoder,
         solver: BatchProblemSolver,
         config: LibrarySamplerConfig,
-        validation_problem_pool: FixedProblemPool[ProblemT],
+        pool_init_solution: Optional[IteratorProblemPool[ProblemT]] = None,
+        pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
+        pool_validation: Optional[FixedProblemPool[ProblemT]] = None,
     ) -> "_SolutionLibrarySampler[ProblemT]":  # FIXME
         library = SolutionLibrary.initialize(
             problem_type, ae_model, config.solvable_threshold_factor
         )
-        logger.info("library sampler config: {}".format(config))
-        return cls(problem_type, library, solver, config, validation_problem_pool)
 
-    def _determine_init_solution_init(
-        self, problem_pool: IteratorProblemPool[ProblemT]
-    ) -> np.ndarray:
+        if pool_init_solution is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            pool_init_solution = SimpleProblemPool(problem_type, 1)
+        assert pool_init_solution.n_problem_inner == 1
+
+        if pool_dataset is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            # TODO: smelling! n_problem_inner should not be set here
+            pool_dataset = SimpleProblemPool(problem_type, config.n_problem_inner)
+
+        if pool_validation is None:
+            pool_validation = SimpleFixedProblemPool.initialize(problem_type, 1000)
+        assert pool_validation.n_problem_inner == 1
+
+        logger.info("library sampler config: {}".format(config))
+        return cls(
+            problem_type, library, solver, config, pool_init_solution, pool_dataset, pool_validation
+        )
+
+    def _determine_init_solution_init(self) -> np.ndarray:
         logger.info("start determine init solution using standard problem")
         init_solution = self.problem_type.get_default_init_solution()
         return init_solution
 
-    def _generate_problem_samples_init(
-        self, problem_pool_dataset: IteratorProblemPool[ProblemT]
-    ) -> List[ProblemT]:
+    def _generate_problem_samples_init(self) -> List[ProblemT]:
         sampler = MultiProcessBatchProblemSampler[ProblemT]()  # temp. this should be arg?
-        predicated_pool = problem_pool_dataset.as_predicated()
+        predicated_pool = self.pool_dataset.as_predicated()
         problems = sampler.sample_batch(self.config.n_problem, predicated_pool)
         return problems
 
     @abstractmethod
-    def _determine_init_solution_init(
-        self, problem_pool_init_solution: IteratorProblemPool[ProblemT]
-    ) -> np.ndarray:
+    def _determine_init_solution(self) -> np.ndarray:
         ...
 
     @abstractmethod
-    def _determine_init_solution(
-        self, problem_pool_init_solution: IteratorProblemPool[ProblemT]
-    ) -> np.ndarray:
+    def _generate_problem_samples(self) -> List[ProblemT]:
         ...
 
     def step_active_sampling(
         self,
         project_path: Path,
-        problem_pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
-        problem_pool_init_traj: Optional[IteratorProblemPool[ProblemT]] = None,
     ) -> None:
         logger.info("active sampling step")
 
-        if problem_pool_dataset is None:
-            logger.info("problem pool is not specified. use SimpleProblemPool")
-            # TODO: smelling! n_problem_inner should not be set here
-            problem_pool_dataset = SimpleProblemPool(self.problem_type, self.config.n_problem_inner)
-
-        if problem_pool_init_traj is None:
-            logger.info("problem pool is not specified. use SimpleProblemPool")
-            problem_pool_init_traj = SimpleProblemPool(self.problem_type, 1)
-
         is_initialized = len(self.library.predictors) > 0
         if is_initialized:
-            init_solution = self._determine_init_solution(problem_pool_init_traj)
-            problems = self._generate_problem_samples(problem_pool_dataset)
+            init_solution = self._determine_init_solution()
+            problems = self._generate_problem_samples()
         else:
-            init_solution = self._determine_init_solution_init(problem_pool_init_traj)
-            problems = self._generate_problem_samples_init(problem_pool_dataset)
+            init_solution = self._determine_init_solution_init()
+            problems = self._generate_problem_samples_init()
         predictor = self.learn_predictors(init_solution, project_path, problems)
 
         logger.info("start measuring coverage")
@@ -546,14 +553,14 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
         )
-        coverage_result = singleton_library.measure_full_coverage(self.validation_problem_pool)
+        coverage_result = singleton_library.measure_full_coverage(self.pool_validation)
         logger.info(coverage_result)
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
         logger.info("margin is set to {}".format(margin))
         self.library.add(predictor, margin, coverage_result)
 
-        coverage = self.library.measure_coverage(self.validation_problem_pool)
+        coverage = self.library.measure_coverage(self.pool_validation)
         logger.info("current library's coverage estimate: {}".format(coverage))
 
         self.library.dump(project_path)
@@ -663,13 +670,12 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
 
 
 class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
-    def _generate_problem_samples(
-        self, problem_pool_dataset: IteratorProblemPool[ProblemT]
-    ) -> List[ProblemT]:
-        return self._generate_problem_samples_init(problem_pool_dataset)
+    def _generate_problem_samples(self) -> List[ProblemT]:
+        return self._generate_problem_samples_init()
 
-    def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
+    def _determine_init_solution(self) -> np.ndarray:
         logger.info("sample solution candidates")
+        problem_pool = self.pool_init_solution
         solution_candidates = self._sample_solution_canidates(
             self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
         )

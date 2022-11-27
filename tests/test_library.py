@@ -55,13 +55,13 @@ def test_SolutionLibrarySampler():
     for device in test_devices:
         ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
         ae_model.put_on_device(device)
-        validation_pool = SimpleFixedProblemPool.initialize(problem_type, 10)
+        pool_validation = SimpleFixedProblemPool.initialize(problem_type, 10)
 
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             create_default_logger(td_path, "test_trajectorylib")
             lib_sampler = SimpleSolutionLibrarySampler.initialize(
-                problem_type, ae_model, gen, lconfig, validation_pool
+                problem_type, ae_model, gen, lconfig, pool_validation=pool_validation
             )
             # init
             lib_sampler.step_active_sampling(td_path)

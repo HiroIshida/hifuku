@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 class ProblemPool(Iterable[ProblemT]):
     problem_type: Type[ProblemT]
+    n_problem_inner: int
 
 
 class PredicatedIteratorProblemPool(Iterator[Optional[ProblemT]], ProblemPool[ProblemT]):
@@ -66,13 +67,14 @@ class FixedProblemPool(Sized, ProblemPool[ProblemT]):
 class SimpleFixedProblemPool(FixedProblemPool[ProblemT]):
     problem_type: Type[ProblemT]
     problem_list: List[ProblemT]
+    n_problem_inner: int
 
     @classmethod
     def initialize(
-        cls, problem_type: Type[ProblemT], n_problem: int
+        cls, problem_type: Type[ProblemT], n_problem: int, n_problem_inner: int = 1
     ) -> "SimpleFixedProblemPool[ProblemT]":
-        problem_list = [problem_type.sample(1) for _ in range(n_problem)]
-        return cls(problem_type, problem_list)
+        problem_list = [problem_type.sample(n_problem_inner) for _ in range(n_problem)]
+        return cls(problem_type, problem_list, n_problem_inner)
 
     def __len__(self) -> int:
         return len(self.problem_list)
