@@ -5,8 +5,9 @@ import os
 import tempfile
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import ClassVar, Dict, Generic, List, Tuple
+from typing import ClassVar, Dict, Generic, List, Optional, Tuple
 
+from hifuku.config import global_config
 from hifuku.http_datagen.request import (
     GetCPUInfoRequest,
     GetCPUInfoResponse,
@@ -34,11 +35,13 @@ class ClientBase(Generic[MainRequestT]):
 
     def __init__(
         self,
-        host_port_pairs: List[HostPortPair],
+        host_port_pairs: Optional[List[HostPortPair]] = None,
         use_available_host: bool = False,
         force_continue: bool = False,
         n_measure_sample: int = 40,
     ):
+        if host_port_pairs is None:
+            host_port_pairs = global_config.hostport_pairs
         self.hostport_cpuinfo_map = self._init_get_cpu_infos(host_port_pairs, use_available_host)
         list(self.hostport_cpuinfo_map.keys())
         # self._init_check_dependent_module_hash(available_hostport_pairs, force_continue)

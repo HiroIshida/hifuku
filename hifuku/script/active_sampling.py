@@ -32,12 +32,7 @@ if __name__ == "__main__":
     log_package_version_info(logger, hifuku)
     log_package_version_info(logger, skplan)
 
-    hostport_pairs = [
-        ("phobos", 8080),
-        ("mars", 8080),
-    ]
-
-    gen = DistributedBatchProblemSolver[TabletopPlanningProblem](hostport_pairs)
+    gen = DistributedBatchProblemSolver[TabletopPlanningProblem]()
     # gen = MultiProcessDatasetGenerator(TabletopPlanningProblem)
     ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
 

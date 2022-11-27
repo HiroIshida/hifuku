@@ -378,20 +378,6 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 class DistributeBatchProblemSampler(
     ClientBase[SampleProblemRequest], BatchProblemSampler[ProblemT]
 ):
-    def __init__(
-        self,
-        host_port_pairs: List[HostPortPair],
-        use_available_host: bool = False,
-        force_continue: bool = False,
-        n_measure_sample: int = 40,
-    ):
-        super().__init__(
-            host_port_pairs,
-            use_available_host=use_available_host,
-            force_continue=force_continue,
-            n_measure_sample=n_measure_sample,
-        )
-
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
         hostport: HostPortPair, request: SampleProblemRequest, tmp_path: Path
