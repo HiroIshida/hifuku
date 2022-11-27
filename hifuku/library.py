@@ -474,8 +474,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT]
     config: LibrarySamplerConfig
-    pool_init_solution: IteratorProblemPool[ProblemT]
-    pool_dataset: IteratorProblemPool[ProblemT]
+    pool_single: IteratorProblemPool[ProblemT]
+    pool_multiple: IteratorProblemPool[ProblemT]
     pool_validation: FixedProblemPool[ProblemT]
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
@@ -486,8 +486,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         problem_type: Type[ProblemT],
         ae_model: VoxelAutoEncoder,
         config: LibrarySamplerConfig,
-        pool_init_solution: Optional[IteratorProblemPool[ProblemT]] = None,
-        pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
+        pool_single: Optional[IteratorProblemPool[ProblemT]] = None,
+        pool_multiple: Optional[IteratorProblemPool[ProblemT]] = None,
         pool_validation: Optional[FixedProblemPool[ProblemT]] = None,
         solver: Optional[BatchProblemSolver[ProblemT]] = None,
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
@@ -501,15 +501,15 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         )
 
         # setup pools
-        if pool_init_solution is None:
+        if pool_single is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
-            pool_init_solution = SimpleProblemPool(problem_type, 1)
-        assert pool_init_solution.n_problem_inner == 1
+            pool_single = SimpleProblemPool(problem_type, 1)
+        assert pool_single.n_problem_inner == 1
 
-        if pool_dataset is None:
+        if pool_multiple is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
             # TODO: smelling! n_problem_inner should not be set here
-            pool_dataset = SimpleProblemPool(problem_type, config.n_problem_inner)
+            pool_multiple = SimpleProblemPool(problem_type, config.n_problem_inner)
 
         if pool_validation is None:
             pool_validation = SimpleFixedProblemPool.initialize(problem_type, 1000)
@@ -534,8 +534,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             problem_type,
             library,
             config,
-            pool_init_solution,
-            pool_dataset,
+            pool_single,
+            pool_multiple,
             pool_validation,
             solver,
             sampler,
@@ -547,7 +547,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         return init_solution
 
     def _generate_problem_samples_init(self) -> List[ProblemT]:
-        predicated_pool = self.pool_dataset.as_predicated()
+        predicated_pool = self.pool_multiple.as_predicated()
         problems = self.sampler.sample_batch(self.config.n_problem, predicated_pool)
         return problems
 
@@ -706,7 +706,7 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
 
     def _determine_init_solution(self) -> np.ndarray:
         logger.info("sample solution candidates")
-        problem_pool = self.pool_init_solution
+        problem_pool = self.pool_single
         solution_candidates = self._sample_solution_canidates(
             self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
         )
