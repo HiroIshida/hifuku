@@ -721,7 +721,7 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
         )
         self.predicate_cache = predicate
 
-        predicated_pool = self.pool_single.make_predicated(predicate, max_trial_factor=50)
+        predicated_pool = self.pool_single.make_predicated(predicate, max_trial_factor=10)
         n_problem_half = int(self.config.n_problem * 0.5)
         logger.info("sample in-clf problems")
         problems_in_clf = self.sampler.sample_batch(n_problem_half, predicated_pool)

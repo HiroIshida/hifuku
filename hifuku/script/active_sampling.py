@@ -6,7 +6,7 @@ from mohou.trainer import TrainConfig
 from mohou.utils import log_package_version_info
 
 import hifuku
-from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
+from hifuku.library import ClusterBasedSolutionLibrarySampler, LibrarySamplerConfig
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.utils import create_default_logger
@@ -31,15 +31,23 @@ if __name__ == "__main__":
     log_package_version_info(logger, skplan)
 
     ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
+    # lconfig = LibrarySamplerConfig(
+    #    n_problem=1000,
+    #    n_problem_inner=50,
+    #    train_config=TrainConfig(n_epoch=40),
+    #    n_solution_candidate=10,
+    #    n_difficult_problem=100,
+    #    solvable_threshold_factor=0.6,
+    # )  # all pass
     lconfig = LibrarySamplerConfig(
-        n_problem=3000,
+        n_problem=1000,
         n_problem_inner=50,
         train_config=TrainConfig(n_epoch=40),
         n_solution_candidate=10,
         n_difficult_problem=100,
         solvable_threshold_factor=0.6,
     )  # all pass
-    lib_sampler = SimpleSolutionLibrarySampler.initialize(
+    lib_sampler = ClusterBasedSolutionLibrarySampler.initialize(
         TabletopPlanningProblem, ae_model, lconfig, use_distributed=True
     )
 
