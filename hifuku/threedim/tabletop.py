@@ -25,6 +25,7 @@ from skplan.solver.rrt import BidirectionalRRT, RRTConfig, StartConstraintRRT
 from skplan.space import ConfigurationSpace, TaskSpace
 from skplan.trajectory import Trajectory
 from skplan.viewer.skrobot_viewer import get_robot_config, set_robot_config
+from skrobot.coordinates import Coordinates
 from skrobot.model import Axis
 from skrobot.model.link import Link
 from skrobot.model.primitives import Box, Cylinder
@@ -76,7 +77,7 @@ class TableTopWorld:
         values = sdf.__call__(pts)
         return GridSDF(grid, values, fill_value, create_itp_lazy=True)
 
-    def sample_pose(self) -> Axis:
+    def sample_pose(self) -> Coordinates:
         table = self.table
         table_depth, table_width, table_height = table._extents
         max_trial = 500
@@ -93,18 +94,15 @@ class TableTopWorld:
             points = np.expand_dims(table_tip.worldpos(), axis=0)
             sd_val = sdf(points)[0]
             if sd_val > 0.0:
-                ax = Axis()
-                ax.newcoords(table_tip.copy_worldcoords())
-                return ax
+                return table_tip.copy_worldcoords()
         assert False
 
-    def sample_standard_pose(self) -> Axis:
+    def sample_standard_pose(self) -> Coordinates:
         table = self.table
         table_depth, table_width, table_height = table._extents
-        ax = Axis()
-        ax.newcoords(table.copy_worldcoords())
-        ax.translate([-0.1, 0.0, 0.5 * table_height + 0.1])
-        return ax
+        co = table.copy_worldcoords()
+        co.translate([-0.1, 0.0, 0.5 * table_height + 0.1])
+        return co
 
     @classmethod
     def sample(cls) -> "TableTopWorld":
@@ -202,7 +200,7 @@ TableTopProblemT = TypeVar("TableTopProblemT", bound="TabletopProblem")
 @dataclass
 class TabletopProblem(ProblemInterface):
     world: TableTopWorld
-    target_pose_list: List[Axis]
+    target_pose_list: List[Coordinates]
 
     @cached_property
     def grid_sdf(self) -> GridSDF:
@@ -236,7 +234,8 @@ class TabletopProblem(ProblemInterface):
         for obs in self.world.obstacles:
             viewer.add(obs)
         for pose in self.target_pose_list:
-            viewer.add(pose)
+            axis = Axis.from_coords(pose)
+            viewer.add(axis)
 
     def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
         sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
