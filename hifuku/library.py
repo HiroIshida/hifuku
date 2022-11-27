@@ -485,13 +485,13 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
 
     @abstractmethod
     def _generate_problem_samples(
-        self, problem_pool_dataset: IteratorProblemPool[ProblemT]
+        self, problem_pool_dataset: IteratorProblemPool[ProblemT], is_initialized: bool
     ) -> List[ProblemT]:
         ...
 
     @abstractmethod
     def _determine_init_solution(
-        self, problem_pool_init_solution: IteratorProblemPool[ProblemT]
+        self, problem_pool_init_solution: IteratorProblemPool[ProblemT], is_initialized: bool
     ) -> np.ndarray:
         ...
 
@@ -512,8 +512,9 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             logger.info("problem pool is not specified. use SimpleProblemPool")
             problem_pool_init_traj = SimpleProblemPool(self.problem_type, 1)
 
-        init_solution = self._determine_init_solution(problem_pool_init_traj)
-        problems = self._generate_problem_samples(problem_pool_dataset)
+        is_initialized = len(self.library.predictors) > 0
+        init_solution = self._determine_init_solution(problem_pool_init_traj, is_initialized)
+        problems = self._generate_problem_samples(problem_pool_dataset, is_initialized)
         predictor = self.learn_predictors(init_solution, project_path, problems)
 
         logger.info("start measuring coverage")
@@ -644,16 +645,16 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
 
 class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
     def _generate_problem_samples(
-        self, problem_pool_dataset: IteratorProblemPool[ProblemT]
+        self, problem_pool_dataset: IteratorProblemPool[ProblemT], is_initialized: bool
     ) -> List[ProblemT]:
         sampler = MultiProcessBatchProblemSampler[ProblemT]()  # temp. this should be arg?
         predicated_pool = problem_pool_dataset.as_predicated()
         problems = sampler.sample_batch(self.config.n_problem, predicated_pool)
         return problems
 
-    def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
-
-        is_initialized = len(self.library.predictors) > 0
+    def _determine_init_solution(
+        self, problem_pool: IteratorProblemPool[ProblemT], is_initialized: bool
+    ) -> np.ndarray:
         if not is_initialized:
             logger.info("start determine init solution using standard problem")
             init_solution = self.problem_type.get_default_init_solution()
