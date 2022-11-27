@@ -645,7 +645,10 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         maxiter = self.problem_type.get_solver_config().maxiter
         for candidate in candidates:
             solution_guesses = [candidate] * len(problems)
-            results = self.solver.solve_batch(problems, solution_guesses)
+            # results = self.solver.solve_batch(problems, solution_guesses)
+            # TODO: make flatten problem and use distributed
+            solver = MultiProcessBatchProblemSolver[ProblemT]()  # distribute here is really slow
+            results = solver.solve_batch(problems, solution_guesses)
             # consider all problems has n_inner_problem = 1
             iterval_real_list = [(maxiter if not r[0].success else r[0].nit) for r in results]
             score = -sum(iterval_real_list)  # must be nagative
