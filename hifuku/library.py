@@ -698,6 +698,25 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
                     easy_problems.append(problem)
         return difficult_problems, easy_problems
 
+    def _select_solution_candidates(
+        self, candidates: List[np.ndarray], problems: List[ProblemT]
+    ) -> np.ndarray:
+        logger.info("compute scores")
+        score_list = []
+        maxiter = self.problem_type.get_solver_config().maxiter
+        for candidate in candidates:
+            solution_guesses = [candidate] * len(problems)
+            results = MultiProcessProblemSolver.solve(problems, solution_guesses, None)
+            iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
+            score = -sum(iterval_real_list)  # must be nagative
+            logger.debug("*score of solution cand: {}".format(score))
+            score_list.append(score)
+
+        best_idx = np.argmax(score_list)
+        best_solution = candidates[best_idx]
+        logger.debug("best score: {}".format(score_list[best_idx]))
+        return best_solution
+
 
 class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
     def _generate_problem_samples(self) -> List[ProblemT]:
@@ -714,19 +733,5 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
         difficult_problems, _ = self._sample_difficult_problems(
             self.config.n_difficult_problem, problem_pool
         )
-
-        logger.info("compute scores")
-        score_list = []
-        maxiter = self.problem_type.get_solver_config().maxiter
-        for solution_guess in solution_candidates:
-            solution_guesses = [solution_guess] * len(difficult_problems)
-            results = MultiProcessProblemSolver.solve(difficult_problems, solution_guesses, None)
-            iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
-            score = -sum(iterval_real_list)  # must be nagative
-            logger.debug("*score of solution cand: {}".format(score))
-            score_list.append(score)
-
-        best_idx = np.argmax(score_list)
-        best_solution = solution_candidates[best_idx]
-        logger.debug("best score: {}".format(score_list[best_idx]))
+        best_solution = self._select_solution_candidates(solution_candidates, difficult_problems)
         return best_solution
