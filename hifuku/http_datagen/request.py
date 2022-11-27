@@ -128,12 +128,16 @@ def send_request(conn: HTTPConnection, request):
     ts = time.time()
     serialized = pickle.dumps(request)
     logger.debug("elapsed time to serialize: {}".format(time.time() - ts))
+    logger.debug("serialized object sizes: {} byte".format(len(serialized)))
 
+    ts = time.time()
     conn.request("POST", "/post", serialized, headers)
     logger.debug("send request to ({}, {}): {}".format(conn.host, conn.port, request))
+    logger.debug("elapsed time to send request: {}".format(time.time() - ts))
 
     raw_response = conn.getresponse().read()
     logger.debug("got renpose from ({}, {})".format(conn.host, conn.port))
+    logger.debug("raw response object sizes: {} byte".format(len(raw_response)))
 
     ts = time.time()
     response = pickle.loads(raw_response)

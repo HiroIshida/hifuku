@@ -249,10 +249,21 @@ class LargestDifficultClusterPredicate(Generic[ProblemT]):
         difficult problems for detect the largest cluster
         ambient_problems + difficult_problems for fit the clf
         """
+
+        # sanity check (only first element)c:
+        assert difficult_problems[0].n_problem() == 1
+        assert ambient_problems[0].n_problem() == 1
+
+        # lirary should be put on cpu
+        cpu_device = torch.device("cpu")
+        if library.device != cpu_device:
+            logger.debug("library is on gpu. copy and put the library on cpu")
+            library = copy.deepcopy(library)
+            library._put_on_device(cpu_device)
+
         difficult_iters_list = [
             library._infer_iteration_num(p).flatten() for p in tqdm.tqdm(difficult_problems)
         ]
-        len(difficult_iters_list)
         easy_iters_list = [
             library._infer_iteration_num(p).flatten() for p in tqdm.tqdm(ambient_problems)
         ]
@@ -680,11 +691,16 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
         logger.info("sample solution candidates")
 
         n_sample_difficult = 1000
+        logger.info("sample difficult problem")
         difficult_problems, easy_problems = self._sample_difficult_problems(
             n_sample_difficult, self.pool_single
         )
+        logger.debug(
+            "n_difficult: {}, n_easy: {}".format(len(difficult_problems), len(easy_problems))
+        )
         n_remainder = max(0, n_sample_difficult - len(easy_problems))
         if n_remainder > 0:
+            logger.debug("additional easy {} problems sampling".format(n_remainder))
             additional = self.sampler.sample_batch(n_remainder, self.pool_single.as_predicated())
             easy_problems.extend(additional)
         assert len(easy_problems) == n_sample_difficult
@@ -696,12 +712,14 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
         )
         predicated_pool = self.pool_multiple.make_predicated(predicate, max_trial_factor=50)
         n_problem_half = int(self.config.n_problem * 0.5)
+        logger.info("sample in-clf problems")
         problems_in_clf = self.sampler.sample_batch(n_problem_half, predicated_pool)
 
         n_max_trial = 10
         trial_count = 0
         while True:
             trial_count += 1
+            logger.debug("trial count increment to {}".format(trial_count))
             iter_pool = TrivialIteratorPool(problems_in_clf.__iter__())
             try:
                 solution_candidates = self._sample_solution_canidates(
@@ -712,7 +730,7 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
                 if trial_count > n_max_trial:
                     assert False, "reached max trial"
                 # if not enough, double the size
-                logger.info("iter pool size is not enough. do additional samplign")
+                logger.debug("iter pool size is not enough. do additional sampling")
                 n_current_size = len(problems_in_clf)
                 additional_problem_in_clf = self.sampler.sample_batch(
                     2 * n_current_size, predicated_pool
