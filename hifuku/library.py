@@ -43,7 +43,7 @@ from hifuku.pool import (
     FixedProblemPool,
     IteratorProblemPool,
     SimpleFixedProblemPool,
-    SimpleProblemPool,
+    SimpleIteratorProblemPool,
 )
 from hifuku.types import ProblemInterface, ProblemT, RawData, ResultProtocol
 from hifuku.utils import num_torch_thread
@@ -503,13 +503,13 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         # setup pools
         if pool_single is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
-            pool_single = SimpleProblemPool(problem_type, 1)
+            pool_single = SimpleIteratorProblemPool(problem_type, 1)
         assert pool_single.n_problem_inner == 1
 
         if pool_multiple is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
             # TODO: smelling! n_problem_inner should not be set here
-            pool_multiple = SimpleProblemPool(problem_type, config.n_problem_inner)
+            pool_multiple = SimpleIteratorProblemPool(problem_type, config.n_problem_inner)
 
         if pool_validation is None:
             pool_validation = SimpleFixedProblemPool.initialize(problem_type, 1000)

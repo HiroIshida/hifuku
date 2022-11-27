@@ -1,12 +1,16 @@
 import numpy as np
 import pytest
 
-from hifuku.pool import IteratorProblemPool, SimpleFixedProblemPool, SimpleProblemPool
+from hifuku.pool import (
+    IteratorProblemPool,
+    SimpleFixedProblemPool,
+    SimpleIteratorProblemPool,
+)
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 
 def test_simple_pool():
-    pool = SimpleProblemPool(TabletopPlanningProblem, 10)
+    pool = SimpleIteratorProblemPool(TabletopPlanningProblem, 10)
 
     for _ in range(5):
         next(pool)

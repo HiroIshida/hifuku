@@ -29,7 +29,7 @@ class IteratorProblemPool(Iterator[ProblemT], ProblemPool[ProblemT], ABC):
 
 
 @dataclass
-class SimplePredicatedProblemPool(PredicatedIteratorProblemPool[ProblemT]):
+class SimplePredicatedIteratorProblemPool(PredicatedIteratorProblemPool[ProblemT]):
     problem_type: Type[ProblemT]
     predicate: Callable[[ProblemT], bool]
     max_trial_factor: int
@@ -42,7 +42,7 @@ class SimplePredicatedProblemPool(PredicatedIteratorProblemPool[ProblemT]):
 
 
 @dataclass
-class SimpleProblemPool(IteratorProblemPool[ProblemT]):
+class SimpleIteratorProblemPool(IteratorProblemPool[ProblemT]):
     problem_type: Type[ProblemT]
     n_problem_inner: int = 1
 
@@ -51,8 +51,8 @@ class SimpleProblemPool(IteratorProblemPool[ProblemT]):
 
     def make_predicated(
         self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
-    ) -> SimplePredicatedProblemPool[ProblemT]:
-        return SimplePredicatedProblemPool(
+    ) -> SimplePredicatedIteratorProblemPool[ProblemT]:
+        return SimplePredicatedIteratorProblemPool(
             self.problem_type, predicate, max_trial_factor, self.n_problem_inner
         )
 
