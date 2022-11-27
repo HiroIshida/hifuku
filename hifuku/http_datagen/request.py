@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import time
 from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
 from typing import Generic, List, Literal, Optional, Tuple, TypeVar, overload
@@ -124,10 +125,22 @@ def send_request(conn: HTTPConnection, request: MainRequest) -> MainResponse:
 
 def send_request(conn: HTTPConnection, request):
     headers = {"Content-type": "application/json"}
-    conn.request("POST", "/post", dill.dumps(request), headers)
+
+    ts = time.time()
+    serialized = dill.dumps(request)
+    logger.debug("elapsed time to serialize: {}".format(time.time() - ts))
+
+    conn.request("POST", "/post", serialized, headers)
     logger.debug("send request to ({}, {}): {}".format(conn.host, conn.port, request))
-    response = dill.loads(conn.getresponse().read())
-    logger.debug("got renpose from ({}, {}): {}".format(conn.host, conn.port, response))
+
+    raw_response = conn.getresponse().read()
+    logger.debug("got renpose from ({}, {})".format(conn.host, conn.port))
+
+    ts = time.time()
+    response = dill.loads(raw_response)
+    logger.debug("elapsed time to deserialize: {}".format(time.time() - ts))
+
+    logger.debug("response contents: {}".format(response))
     return response
 
 
