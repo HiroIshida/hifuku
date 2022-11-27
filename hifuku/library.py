@@ -642,8 +642,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         self,
         n_sample: int,
         problem_pool: IteratorProblemPool[ProblemT],
-        difficult_iter_threshold: float,
     ) -> List[np.ndarray]:
+        difficult_iter_threshold = self.difficult_iter_threshold
 
         solution_candidates: List[np.ndarray] = []
         with tqdm.tqdm(total=n_sample) as pbar:
@@ -678,7 +678,6 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         self,
         n_sample: int,
         problem_pool: IteratorProblemPool[ProblemT],
-        difficult_iter_threshold: float,
     ) -> Tuple[List[ProblemT], List[ProblemT]]:
 
         difficult_problems: List[ProblemT] = []
@@ -690,7 +689,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
                 assert problem.n_problem() == 1
                 infer_res = self.library.infer(problem)[0]
                 iterval = infer_res.nit
-                is_difficult = iterval > difficult_iter_threshold
+                is_difficult = iterval > self.difficult_iter_threshold
                 if is_difficult:
                     logger.debug("sampled! number: {}".format(len(difficult_problems)))
                     difficult_problems.append(problem)
@@ -708,12 +707,12 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
         logger.info("sample solution candidates")
         problem_pool = self.pool_single
         solution_candidates = self._sample_solution_canidates(
-            self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
+            self.config.n_solution_candidate, problem_pool
         )
 
         logger.info("sample difficult problems")
         difficult_problems, _ = self._sample_difficult_problems(
-            self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
+            self.config.n_difficult_problem, problem_pool
         )
 
         logger.info("compute scores")
