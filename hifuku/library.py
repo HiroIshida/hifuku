@@ -484,17 +484,59 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         return cls(problem_type, library, solver, config, validation_problem_pool)
 
     @abstractmethod
+    def _generate_problem_samples(
+        self, problem_pool_dataset: IteratorProblemPool[ProblemT]
+    ) -> List[ProblemT]:
+        ...
+
+    @abstractmethod
+    def _determine_init_solution(
+        self, problem_pool_init_solution: IteratorProblemPool[ProblemT]
+    ) -> np.ndarray:
+        ...
+
     def step_active_sampling(
         self,
         project_path: Path,
         problem_pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
         problem_pool_init_traj: Optional[IteratorProblemPool[ProblemT]] = None,
     ) -> None:
-        ...
+        logger.info("active sampling step")
 
-    @abstractmethod
-    def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
-        ...
+        if problem_pool_dataset is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            # TODO: smelling! n_problem_inner should not be set here
+            problem_pool_dataset = SimpleProblemPool(self.problem_type, self.config.n_problem_inner)
+
+        if problem_pool_init_traj is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            problem_pool_init_traj = SimpleProblemPool(self.problem_type, 1)
+
+        init_solution = self._determine_init_solution(problem_pool_init_traj)
+        problems = self._generate_problem_samples(problem_pool_dataset)
+        predictor = self.learn_predictors(init_solution, project_path, problems)
+
+        logger.info("start measuring coverage")
+        singleton_library = SolutionLibrary(
+            problem_type=self.problem_type,
+            ae_model=self.library.ae_model,
+            predictors=[predictor],
+            margins=[0.0],
+            coverage_results=[None],
+            solvable_threshold_factor=self.config.solvable_threshold_factor,
+            uuidval="dummy",
+        )
+        coverage_result = singleton_library.measure_full_coverage(self.validation_problem_pool)
+        logger.info(coverage_result)
+        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+
+        logger.info("margin is set to {}".format(margin))
+        self.library.add(predictor, margin, coverage_result)
+
+        coverage = self.library.measure_coverage(self.validation_problem_pool)
+        logger.info("current library's coverage estimate: {}".format(coverage))
+
+        self.library.dump(project_path)
 
     @property
     def difficult_iter_threshold(self) -> float:
@@ -507,7 +549,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         self,
         init_solution: np.ndarray,
         project_path: Path,
-        problem_pool: IteratorProblemPool[ProblemT],
+        problems: List[ProblemT],
     ) -> IterationPredictor:
         pp = project_path
         cache_dir_base = pp / "dataset_cache"
@@ -521,8 +563,6 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         logger.info("start generating dataset")
 
         # create dataset
-        sampler = MultiProcessBatchProblemSampler[ProblemT]()  # temp. this should be arg?
-        problems = sampler.sample_batch(self.config.n_problem, problem_pool.as_predicated())
         init_solutions = [init_solution] * self.config.n_problem
         self.solver.create_dataset(problems, init_solutions, cache_dir_path, n_process=None)
 
@@ -603,47 +643,13 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
 
 
 class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
-    def step_active_sampling(
-        self,
-        project_path: Path,
-        problem_pool_dataset: Optional[IteratorProblemPool[ProblemT]] = None,
-        problem_pool_init_traj: Optional[IteratorProblemPool[ProblemT]] = None,
-    ) -> None:
-        logger.info("active sampling step")
-
-        if problem_pool_dataset is None:
-            logger.info("problem pool is not specified. use SimpleProblemPool")
-            # TODO: smelling! n_problem_inner should not be set here
-            problem_pool_dataset = SimpleProblemPool(self.problem_type, self.config.n_problem_inner)
-
-        if problem_pool_init_traj is None:
-            logger.info("problem pool is not specified. use SimpleProblemPool")
-            problem_pool_init_traj = SimpleProblemPool(self.problem_type, 1)
-
-        init_solution = self._determine_init_solution(problem_pool_init_traj)
-        predictor = self.learn_predictors(init_solution, project_path, problem_pool_dataset)
-
-        logger.info("start measuring coverage")
-        singleton_library = SolutionLibrary(
-            problem_type=self.problem_type,
-            ae_model=self.library.ae_model,
-            predictors=[predictor],
-            margins=[0.0],
-            coverage_results=[None],
-            solvable_threshold_factor=self.config.solvable_threshold_factor,
-            uuidval="dummy",
-        )
-        coverage_result = singleton_library.measure_full_coverage(self.validation_problem_pool)
-        logger.info(coverage_result)
-        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
-
-        logger.info("margin is set to {}".format(margin))
-        self.library.add(predictor, margin, coverage_result)
-
-        coverage = self.library.measure_coverage(self.validation_problem_pool)
-        logger.info("current library's coverage estimate: {}".format(coverage))
-
-        self.library.dump(project_path)
+    def _generate_problem_samples(
+        self, problem_pool_dataset: IteratorProblemPool[ProblemT]
+    ) -> List[ProblemT]:
+        sampler = MultiProcessBatchProblemSampler[ProblemT]()  # temp. this should be arg?
+        predicated_pool = problem_pool_dataset.as_predicated()
+        problems = sampler.sample_batch(self.config.n_problem, predicated_pool)
+        return problems
 
     def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
 
