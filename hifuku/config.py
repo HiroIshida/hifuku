@@ -1,14 +1,17 @@
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, List, Tuple
+from typing import List, Tuple
 
 import yaml
 
 
+@dataclass(frozen=True)
 class GlobalConfig:
-    hostport_pairs: Final[List[Tuple[str, int]]]
+    hostport_pairs: List[Tuple[str, int]]
 
-    def __init__(self, yaml_like=None):
+    @classmethod
+    def load(cls, yaml_like=None):
         if isinstance(yaml_like, Mapping):
             conf = yaml_like
         else:
@@ -18,9 +21,12 @@ class GlobalConfig:
                 yaml_path = Path("~/.config/hifuku.yaml").expanduser()
             else:
                 assert False
-            assert yaml_path.exists()
-            with yaml_path.open(mode="r") as f:
-                conf = yaml.safe_load(f)
+
+            if yaml_path.exists():
+                with yaml_path.open(mode="r") as f:
+                    conf = yaml.safe_load(f)
+            else:
+                conf = {}
 
         pairs = []
         if "hostport_pairs" in conf:
@@ -30,7 +36,7 @@ class GlobalConfig:
             for host, port in hostport_pairs:
                 pair = (str(host), int(port))
                 pairs.append(pair)
-        self.hostport_pairs = pairs
+        return cls(hostport_pairs=pairs)
 
 
-global_config = GlobalConfig()
+global_config = GlobalConfig.load()
