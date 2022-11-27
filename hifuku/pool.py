@@ -57,10 +57,26 @@ class SimpleProblemPool(IteratorProblemPool[ProblemT]):
         )
 
 
+@dataclass
+class TrivialIteratorPool(IteratorProblemPool[ProblemT]):
+    iterator: Iterator[ProblemT]
+
+    def __next__(self) -> ProblemT:
+        return next(self.iterator)
+
+    def make_predicated(
+        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
+    ) -> PredicatedIteratorProblemPool[ProblemT]:
+        raise NotImplementedError("under construction")
+
+
 class FixedProblemPool(Sized, ProblemPool[ProblemT]):
     @abstractmethod
     def __len__(self) -> int:
         ...
+
+    def as_iterator(self) -> TrivialIteratorPool[ProblemT]:
+        return TrivialIteratorPool(self.__iter__())
 
 
 @dataclass
