@@ -44,6 +44,7 @@ from hifuku.pool import (
     IteratorProblemPool,
     SimpleFixedProblemPool,
     SimpleIteratorProblemPool,
+    TrivialIteratorPool,
 )
 from hifuku.types import ProblemInterface, ProblemT, RawData, ResultProtocol
 from hifuku.utils import num_torch_thread
@@ -734,4 +735,54 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
             self.config.n_difficult_problem, problem_pool
         )
         best_solution = self._select_solution_candidates(solution_candidates, difficult_problems)
+        return best_solution
+
+
+class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
+    cached_problems: Optional[List[ProblemT]]
+
+    def _determine_init_solution(self) -> np.ndarray:
+        logger.info("sample solution candidates")
+
+        n_sample_difficult = 1000
+        difficult_problems, easy_problems = self._sample_difficult_problems(
+            n_sample_difficult, self.pool_single
+        )
+        n_remainder = max(0, n_sample_difficult - len(easy_problems))
+        if n_remainder > 0:
+            additional = self.sampler.sample_batch(n_remainder, self.pool_single.as_predicated())
+            easy_problems.extend(additional)
+        assert len(easy_problems) == n_sample_difficult
+
+        predicate = LargestDifficultClusterPredicate.create(
+            self.library, difficult_problems, easy_problems
+        )
+        predicated_pool = self.pool_multiple.make_predicated(predicate, max_trial_factor=50)
+        n_problem_half = int(self.config.n_problem * 0.5)
+        problems_in_clf = self.sampler.sample_batch(n_problem_half, predicated_pool)
+
+        n_max_trial = 10
+        trial_count = 0
+        while True:
+            trial_count += 1
+            iter_pool = TrivialIteratorPool(problems_in_clf.__iter__())
+            try:
+                solution_candidates = self._sample_solution_canidates(
+                    self.config.n_solution_candidate, iter_pool
+                )
+                break
+            except StopIteration:
+                if trial_count > n_max_trial:
+                    assert False, "reached max trial"
+                # if not enough, double the size
+                logger.info("iter pool size is not enough. do additional samplign")
+                n_current_size = len(problems_in_clf)
+                additional_problem_in_clf = self.sampler.sample_batch(
+                    2 * n_current_size, predicated_pool
+                )
+                problems_in_clf.extend(additional_problem_in_clf)  # dobuled
+        assert len(problems_in_clf) > self.config.n_difficult_problem
+
+        problems_for_eval = problems_in_clf[: self.config.n_difficult_problem]
+        best_solution = self._select_solution_candidates(solution_candidates, problems_for_eval)
         return best_solution
