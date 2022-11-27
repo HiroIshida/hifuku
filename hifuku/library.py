@@ -483,15 +483,30 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         logger.info("library sampler config: {}".format(config))
         return cls(problem_type, library, solver, config, validation_problem_pool)
 
-    @abstractmethod
-    def _generate_problem_samples(
-        self, problem_pool_dataset: IteratorProblemPool[ProblemT], is_initialized: bool
+    def _determine_init_solution_init(
+        self, problem_pool: IteratorProblemPool[ProblemT]
+    ) -> np.ndarray:
+        logger.info("start determine init solution using standard problem")
+        init_solution = self.problem_type.get_default_init_solution()
+        return init_solution
+
+    def _generate_problem_samples_init(
+        self, problem_pool_dataset: IteratorProblemPool[ProblemT]
     ) -> List[ProblemT]:
+        sampler = MultiProcessBatchProblemSampler[ProblemT]()  # temp. this should be arg?
+        predicated_pool = problem_pool_dataset.as_predicated()
+        problems = sampler.sample_batch(self.config.n_problem, predicated_pool)
+        return problems
+
+    @abstractmethod
+    def _determine_init_solution_init(
+        self, problem_pool_init_solution: IteratorProblemPool[ProblemT]
+    ) -> np.ndarray:
         ...
 
     @abstractmethod
     def _determine_init_solution(
-        self, problem_pool_init_solution: IteratorProblemPool[ProblemT], is_initialized: bool
+        self, problem_pool_init_solution: IteratorProblemPool[ProblemT]
     ) -> np.ndarray:
         ...
 
@@ -513,8 +528,12 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             problem_pool_init_traj = SimpleProblemPool(self.problem_type, 1)
 
         is_initialized = len(self.library.predictors) > 0
-        init_solution = self._determine_init_solution(problem_pool_init_traj, is_initialized)
-        problems = self._generate_problem_samples(problem_pool_dataset, is_initialized)
+        if is_initialized:
+            init_solution = self._determine_init_solution(problem_pool_init_traj)
+            problems = self._generate_problem_samples(problem_pool_dataset)
+        else:
+            init_solution = self._determine_init_solution_init(problem_pool_init_traj)
+            problems = self._generate_problem_samples_init(problem_pool_dataset)
         predictor = self.learn_predictors(init_solution, project_path, problems)
 
         logger.info("start measuring coverage")
@@ -645,47 +664,33 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
 
 class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
     def _generate_problem_samples(
-        self, problem_pool_dataset: IteratorProblemPool[ProblemT], is_initialized: bool
+        self, problem_pool_dataset: IteratorProblemPool[ProblemT]
     ) -> List[ProblemT]:
-        sampler = MultiProcessBatchProblemSampler[ProblemT]()  # temp. this should be arg?
-        predicated_pool = problem_pool_dataset.as_predicated()
-        problems = sampler.sample_batch(self.config.n_problem, predicated_pool)
-        return problems
+        return self._generate_problem_samples_init(problem_pool_dataset)
 
-    def _determine_init_solution(
-        self, problem_pool: IteratorProblemPool[ProblemT], is_initialized: bool
-    ) -> np.ndarray:
-        if not is_initialized:
-            logger.info("start determine init solution using standard problem")
-            init_solution = self.problem_type.get_default_init_solution()
-            return init_solution
-        else:
-            logger.info("start determine init solution len(lib) > 0")
+    def _determine_init_solution(self, problem_pool: IteratorProblemPool[ProblemT]) -> np.ndarray:
+        logger.info("sample solution candidates")
+        solution_candidates = self._sample_solution_canidates(
+            self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
+        )
 
-            logger.info("sample solution candidates")
-            solution_candidates = self._sample_solution_canidates(
-                self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
-            )
+        logger.info("sample difficult problems")
+        difficult_problems, _ = self._sample_difficult_problems(
+            self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
+        )
 
-            logger.info("sample difficult problems")
-            difficult_problems, _ = self._sample_difficult_problems(
-                self.config.n_difficult_problem, problem_pool, self.difficult_iter_threshold
-            )
+        logger.info("compute scores")
+        score_list = []
+        maxiter = self.problem_type.get_solver_config().maxiter
+        for solution_guess in solution_candidates:
+            solution_guesses = [solution_guess] * len(difficult_problems)
+            results = MultiProcessProblemSolver.solve(difficult_problems, solution_guesses, None)
+            iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
+            score = -sum(iterval_real_list)  # must be nagative
+            logger.debug("*score of solution cand: {}".format(score))
+            score_list.append(score)
 
-            logger.info("compute scores")
-            score_list = []
-            maxiter = self.problem_type.get_solver_config().maxiter
-            for solution_guess in solution_candidates:
-                solution_guesses = [solution_guess] * len(difficult_problems)
-                results = MultiProcessProblemSolver.solve(
-                    difficult_problems, solution_guesses, None
-                )
-                iterval_real_list = [(maxiter if not r.success else r.nit) for r in results]
-                score = -sum(iterval_real_list)  # must be nagative
-                logger.debug("*score of solution cand: {}".format(score))
-                score_list.append(score)
-
-            best_idx = np.argmax(score_list)
-            best_solution = solution_candidates[best_idx]
-            logger.debug("best score: {}".format(score_list[best_idx]))
-            return best_solution
+        best_idx = np.argmax(score_list)
+        best_solution = solution_candidates[best_idx]
+        logger.debug("best score: {}".format(score_list[best_idx]))
+        return best_solution
