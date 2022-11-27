@@ -1,0 +1,1 @@
+import hifuku.config  # noqa
