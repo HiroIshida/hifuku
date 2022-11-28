@@ -7,20 +7,17 @@ from skplan.viewer.skrobot_viewer import set_robot_config
 from skrobot.model.primitives import LineString
 
 from hifuku.library import SolutionLibrary
-from hifuku.threedim.tabletop import (
-    TabletopPlanningProblem,
-    create_simple_tabletop_world,
-)
+from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 # common setup
 pr2 = TabletopPlanningProblem.setup_pr2()
 efkin, colkin = TabletopPlanningProblem.setup_kinmaps()
 
 # problem definition
-world = create_simple_tabletop_world(with_obstacle=True)
-pose = world.sample_standard_pose()
-pose.translate([0.0, -0.15, 0.0])
-problem = TabletopPlanningProblem(world, [pose])
+# world = create_simple_tabletop_world(with_obstacle=True)
+# pose = world.sample_standard_pose()
+# pose.translate([0.0, -0.15, 0.0])
+problem = TabletopPlanningProblem.sample(1)
 
 # common viewer setup
 viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
@@ -46,6 +43,7 @@ if p.exists():
     res = lib.infer(problem)[0]
     print("(using library) time to infer: {}".format(time.time() - ts))
     result = problem.solve(res.init_solution)[0]
+    print(result.success)
     linestrings[res.idx].visual_mesh.colors = [[255, 0, 0, 255]]
     print("(using library) time to solve: {}".format(time.time() - ts))
 else:

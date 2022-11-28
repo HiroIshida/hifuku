@@ -28,7 +28,7 @@ from skplan.viewer.skrobot_viewer import get_robot_config, set_robot_config
 from skrobot.coordinates import Coordinates
 from skrobot.model import Axis
 from skrobot.model.link import Link
-from skrobot.model.primitives import Box, Cylinder
+from skrobot.model.primitives import Box
 from skrobot.models.pr2 import PR2
 from skrobot.sdf import UnionSDF
 from skrobot.viewers import TrimeshSceneViewer
@@ -45,6 +45,11 @@ logger = logging.getLogger(__name__)
 class TableTopWorld:
     table: Box
     obstacles: List[Link]
+    box_center: Coordinates
+    box_d: float
+    box_w: float
+    box_h: float
+    box_t: float
 
     def get_union_sdf(self) -> UnionSDF:
         lst = [self.table.sdf]
@@ -77,35 +82,34 @@ class TableTopWorld:
         values = sdf.__call__(pts)
         return GridSDF(grid, values, fill_value, create_itp_lazy=True)
 
-    def sample_pose(self) -> Coordinates:
+    def sample_pose(self, standard: bool = False) -> Coordinates:
         table = self.table
         table_depth, table_width, table_height = table._extents
-        max_trial = 500
+
+        co = self.box_center.copy_worldcoords()
+        if standard:
+            d_trans = 0.0
+            w_trans = 0.0
+            h_trans = 0.5 * self.box_h
+        else:
+            margin = 0.03
+            box_dt = self.box_d - 2 * (self.box_t + margin)
+            box_wt = self.box_w - 2 * (self.box_t + margin)
+            box_ht = self.box_h - 2 * (self.box_t + margin)
+            d_trans = -0.5 * box_dt + np.random.rand() * box_dt
+            w_trans = -0.5 * box_wt + np.random.rand() * box_wt
+            h_trans = self.box_t + margin + np.random.rand() * box_ht
+        co.translate([d_trans, w_trans, h_trans])
+
+        points = np.expand_dims(co.worldpos(), axis=0)
         sdf = self.get_union_sdf()
-        for _ in range(max_trial):
-            table_tip = table.copy_worldcoords()
-            table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
-            table_tip.translate([0, 0, 0.05])
 
-            diff = np.random.rand(3) * np.array([table_depth, table_width, 0.2])
-            table_tip.translate(diff)
-            table_tip.rotate(-1.0 + np.random.rand() * 2.0, axis="z")
-
-            points = np.expand_dims(table_tip.worldpos(), axis=0)
-            sd_val = sdf(points)[0]
-            if sd_val > 0.0:
-                return table_tip.copy_worldcoords()
-        assert False
-
-    def sample_standard_pose(self) -> Coordinates:
-        table = self.table
-        table_depth, table_width, table_height = table._extents
-        co = table.copy_worldcoords()
-        co.translate([-0.1, 0.0, 0.5 * table_height + 0.1])
+        sd_val = sdf(points)[0]
+        assert sd_val > -0.0001
         return co
 
     @classmethod
-    def sample(cls) -> "TableTopWorld":
+    def sample(cls, standard: bool = False) -> "TableTopWorld":
         table = cls.create_standard_table()
         table_depth, table_width, table_height = table._extents
         x = np.random.rand() * 0.2
@@ -116,39 +120,51 @@ class TableTopWorld:
         table_tip = table.copy_worldcoords()
         table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
 
-        n_box = np.random.randint(4) + 1
-        np.random.randint(8) + 1
-
         obstacles = []
 
-        color = np.array([255, 0, 0, 200])
+        color = np.array([255, 100, 0, 200])
 
-        for _ in range(n_box):
-            dimension = np.array([0.05, 0.05, 0.1]) + np.random.rand(3) * np.array([0.15, 0.2, 0.4])
-            box = Box(extents=dimension, with_sdf=True, face_colors=color)
+        # box
+        d = 0.2 + np.random.rand() * 0.3
+        w = 0.3 + np.random.rand() * 0.3
+        h = 0.2 + np.random.rand() * 0.3
+        t = 0.03
 
-            co = table_tip.copy_worldcoords()
-            box.newcoords(co)
-            x = dimension[0] * 0.5 + np.random.rand() * (table_depth - dimension[0])
-            y = dimension[1] * 0.5 + np.random.rand() * (table_width - dimension[1])
-            z = dimension[2] * 0.5
-            box.translate([x, y, z])
-            obstacles.append(box)
+        if standard:
+            box_center = table.copy_worldcoords()
+            box_center.translate([0, 0, 0.5 * table_height])
+        else:
+            box_center = table_tip.copy_worldcoords()
+            box_center.translate([0.5 * d, 0.5 * w, 0.0])
+            pos_from_tip = np.array([table_depth - d, table_width - w, 0]) * np.random.rand(3)
+            box_center.translate(pos_from_tip)
 
-        # for _ in range(n_cylinder):
-        #    r = np.random.rand() * 0.03 + 0.01
-        #    h = np.random.rand() * 0.2 + 0.05
-        #    cylinder = Cylinder(radius=r, height=h, with_sdf=True, face_colors=color)
+        lower_plate = Box([d, w, t], with_sdf=True, face_colors=color)
+        lower_plate.newcoords(box_center.copy_worldcoords())
+        lower_plate.translate([0, 0, 0.5 * t])
+        obstacles.append(lower_plate)
 
-        #    co = table_tip.copy_worldcoords()
-        #    cylinder.newcoords(co)
-        #    x = r + np.random.rand() * (table_depth - r)
-        #    y = r + np.random.rand() * (table_width - r)
-        #    z = 0.5 * h
-        #    cylinder.translate([x, y, z])
-        #    obstacles.append(cylinder)
+        upper_plate = Box([d, w, t], with_sdf=True, face_colors=color)
+        upper_plate.newcoords(box_center.copy_worldcoords())
+        upper_plate.translate([0, 0, h - 0.5 * t])
+        obstacles.append(upper_plate)
 
-        return cls(table, obstacles)
+        left_plate = Box([d, t, h], with_sdf=True, face_colors=color)
+        left_plate.newcoords(box_center.copy_worldcoords())
+        left_plate.translate([0, 0.5 * w - 0.5 * t, 0.5 * h])
+        obstacles.append(left_plate)
+
+        right_plate = Box([d, t, h], with_sdf=True, face_colors=color)
+        right_plate.newcoords(box_center.copy_worldcoords())
+        right_plate.translate([0, -0.5 * w + 0.5 * t, 0.5 * h])
+        obstacles.append(right_plate)
+
+        opposite_plate = Box([t, w, h], with_sdf=True, face_colors=color)
+        opposite_plate.newcoords(box_center.copy_worldcoords())
+        opposite_plate.translate([0.5 * d - 0.5 * t, 0.0, 0.5 * h])
+        obstacles.append(opposite_plate)
+
+        return cls(table, obstacles, box_center, d, w, h, t)
 
     @staticmethod
     def create_standard_table() -> Box:
@@ -159,36 +175,6 @@ class TableTopWorld:
         pos = [0.5 + table_depth * 0.5, 0.0, table_height * 0.5]
         table = Box(extents=[table_depth, table_width, table_height], pos=pos, with_sdf=True)
         return table
-
-
-def create_simple_tabletop_world(with_obstacle: bool = False) -> TableTopWorld:
-    table = TableTopWorld.create_standard_table()
-    table_depth, table_width, table_height = table._extents
-
-    table_tip = table.copy_worldcoords()
-    table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
-
-    obstacles = []
-    if with_obstacle:
-        box_co = table_tip.copy_worldcoords()
-        box_co.translate([0.2, 0.5, 0.1])
-        box = Box(extents=[0.1, 0.2, 0.2], with_sdf=True)
-        box.newcoords(box_co)
-        obstacles.append(box)
-
-        cylinder_co = table_tip.copy_worldcoords()
-        cylinder_co.translate([0.45, 0.1, 0.15])
-        cylinder = Cylinder(radius=0.05, height=0.3, with_sdf=True)
-        cylinder.newcoords(cylinder_co)
-        obstacles.append(cylinder)
-
-        cylinder_co = table_tip.copy_worldcoords()
-        cylinder_co.translate([0.0, 0.1, 0.15])
-        cylinder = Cylinder(radius=0.05, height=0.3, with_sdf=True)
-        cylinder.newcoords(cylinder_co)
-        obstacles.append(cylinder)
-
-    return TableTopWorld(table, obstacles)
 
 
 _cache = {"kinmap": None, "pr2": None}
@@ -261,8 +247,9 @@ class TabletopProblem(ProblemInterface):
 
     @classmethod
     def create_standard(cls: Type[TableTopProblemT]) -> TableTopProblemT:
-        world = create_simple_tabletop_world(with_obstacle=False)
-        pose = world.sample_standard_pose()
+        # TODO: move to sample(standard=True) ??
+        world = TableTopWorld.sample(standard=True)
+        pose = world.sample_pose(standard=True)
         return cls(world, [pose])
 
     # fmt: off
