@@ -89,17 +89,21 @@ class BatchProblemSolverTask(Process, Generic[ProblemT]):
 
 
 @dataclass
-class DumpResultTask(Generic[ProblemT]):
+class DumpDatasetTask(Generic[ProblemT]):
     problems: List[ProblemT]
     init_solutions: List[np.ndarray]
     results_list: List[Tuple[ResultProtocol, ...]]
     cache_path: Path
+    show_progress_bar: bool
 
     def __len__(self) -> int:
         return len(self.problems)
 
     def run(self):
-        for i in range(len(self)):
+        if self.show_progress_bar:
+            logger.info("dump dataset")
+        disable_progress_bar = not self.show_progress_bar
+        for i in tqdm.tqdm(range(len(self)), disable=disable_progress_bar):
             problem = self.problems[i]
             init_solution = self.init_solutions[i]
             results = self.results_list[i]
@@ -140,13 +144,19 @@ class BatchProblemSolver(Generic[ProblemT], ABC):
 
         logger.debug("dump results")
         process_list = []
-        for indices_part in indices_list:
+        for i, indices_part in enumerate(indices_list):
+            show_progress_bar = i == 0
+
             problems_part = [problems[i] for i in indices_part]
             init_solutions_part = [init_solutions[i] for i in indices_part]
             results_list_part = [results_list[i] for i in indices_part]
 
-            task = DumpResultTask(
-                problems_part, init_solutions_part, results_list_part, cache_dir_path
+            task = DumpDatasetTask(
+                problems_part,
+                init_solutions_part,
+                results_list_part,
+                cache_dir_path,
+                show_progress_bar,
             )
             p = Process(target=task.run, args=())
             p.start()
