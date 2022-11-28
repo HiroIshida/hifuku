@@ -126,6 +126,7 @@ class BatchProblemSolver(Generic[ProblemT], ABC):
         n_process: Optional[int],
     ) -> None:
 
+        logger.debug("run self.solve_batch")
         results_list = self.solve_batch(problems, init_solutions)
 
         if n_process is None:
@@ -137,6 +138,7 @@ class BatchProblemSolver(Generic[ProblemT], ABC):
         indices = np.array(list(range(n_problem)))
         indices_list = np.array_split(indices, n_process)
 
+        logger.debug("dump results")
         process_list = []
         for indices_part in indices_list:
             problems_part = [problems[i] for i in indices_part]
