@@ -124,7 +124,9 @@ class TableTopWorld:
         color = np.array([255, 0, 0, 200])
 
         for _ in range(n_box):
-            dimension = np.array([0.1, 0.1, 0.05]) + np.random.rand(3) * np.array([0.2, 0.2, 0.2])
+            dimension = np.array([0.05, 0.05, 0.05]) + np.random.rand(3) * np.array(
+                [0.15, 0.2, 0.2]
+            )
             box = Box(extents=dimension, with_sdf=True, face_colors=color)
 
             co = table_tip.copy_worldcoords()
@@ -135,18 +137,18 @@ class TableTopWorld:
             box.translate([x, y, z])
             obstacles.append(box)
 
-        for _ in range(n_cylinder):
-            r = np.random.rand() * 0.03 + 0.01
-            h = np.random.rand() * 0.2 + 0.05
-            cylinder = Cylinder(radius=r, height=h, with_sdf=True, face_colors=color)
+        # for _ in range(n_cylinder):
+        #    r = np.random.rand() * 0.03 + 0.01
+        #    h = np.random.rand() * 0.2 + 0.05
+        #    cylinder = Cylinder(radius=r, height=h, with_sdf=True, face_colors=color)
 
-            co = table_tip.copy_worldcoords()
-            cylinder.newcoords(co)
-            x = r + np.random.rand() * (table_depth - r)
-            y = r + np.random.rand() * (table_width - r)
-            z = 0.5 * h
-            cylinder.translate([x, y, z])
-            obstacles.append(cylinder)
+        #    co = table_tip.copy_worldcoords()
+        #    cylinder.newcoords(co)
+        #    x = r + np.random.rand() * (table_depth - r)
+        #    y = r + np.random.rand() * (table_width - r)
+        #    z = 0.5 * h
+        #    cylinder.translate([x, y, z])
+        #    obstacles.append(cylinder)
 
         return cls(table, obstacles)
 
