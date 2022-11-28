@@ -53,7 +53,7 @@ class TableTopWorld:
         return UnionSDF(lst)
 
     def get_grid(
-        self, grid_sizes: Tuple[int, int, int] = (56, 56, 28), mesh_height: float = 0.3
+        self, grid_sizes: Tuple[int, int, int] = (56, 56, 28), mesh_height: float = 0.5
     ) -> Grid:
         depth, width, height = self.table._extents
         lb = np.array([-0.5 * depth, -0.5 * width, 0.5 * height - 0.1])
@@ -116,17 +116,15 @@ class TableTopWorld:
         table_tip = table.copy_worldcoords()
         table_tip.translate([-table_depth * 0.5, -table_width * 0.5, +0.5 * table_height])
 
-        n_box = np.random.randint(3) + 1
-        n_cylinder = np.random.randint(8) + 1
+        n_box = np.random.randint(4) + 1
+        np.random.randint(8) + 1
 
         obstacles = []
 
         color = np.array([255, 0, 0, 200])
 
         for _ in range(n_box):
-            dimension = np.array([0.05, 0.05, 0.05]) + np.random.rand(3) * np.array(
-                [0.15, 0.2, 0.2]
-            )
+            dimension = np.array([0.05, 0.05, 0.1]) + np.random.rand(3) * np.array([0.15, 0.2, 0.4])
             box = Box(extents=dimension, with_sdf=True, face_colors=color)
 
             co = table_tip.copy_worldcoords()
