@@ -61,6 +61,9 @@ class SolutionLibrary(Generic[ProblemT]):
     solvable_threshold_factor: float
     uuidval: str
 
+    def __post_init__(self):
+        assert self.ae_model.loss_called
+
     @dataclass
     class InferenceResult:
         nit: float

@@ -203,6 +203,7 @@ class VoxelAutoEncoderConfig(ModelConfigBase):
 class VoxelAutoEncoder(ModelBase[VoxelAutoEncoderConfig]):
     encoder: nn.Sequential
     decoder: nn.Sequential
+    loss_called: bool = False  # flag to show the model is trained
 
     class Reshape(nn.Module):
         def __init__(self, *args):
@@ -246,6 +247,7 @@ class VoxelAutoEncoder(ModelBase[VoxelAutoEncoderConfig]):
         self.decoder = nn.Sequential(*decoder_layers)
 
     def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
+        self.loss_called = True
         mesh, _, _, _ = sample
         mesh = sample[0]
         encoded = self.encoder(mesh)
