@@ -18,5 +18,5 @@ valid_loader = LazyDecomplessDataLoader(dataset_valid, batch_size=50, shuffle=Fa
 
 model_conf = VoxelAutoEncoderConfig()
 tcache = TrainCache.from_model(VoxelAutoEncoder(model_conf))
-train_conf = TrainConfig(n_epoch=50)
+train_conf = TrainConfig(n_epoch=100)
 train_lower(pp, tcache, train_loader, valid_loader, train_conf)

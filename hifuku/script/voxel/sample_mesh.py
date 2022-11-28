@@ -14,13 +14,20 @@ warnings.filterwarnings("ignore", message="texture specified in URDF is not supp
 np.random.seed(0)
 
 if __name__ == "__main__":
-    n_problem = 1000
     pp = get_project_path("tabletop_mesh")
     logger = create_default_logger(pp, "mesh_generation")
     cache_base_path = pp / "cache"
     cache_base_path.mkdir(exist_ok=True, parents=True)
-    sampler = DistributeBatchProblemSampler[TabletopMeshProblem]()
-    pool = SimpleIteratorProblemPool(TabletopMeshProblem, n_problem_inner=0)
-    problems = sampler.sample_batch(n_problem, pool.as_predicated())
-    solver = MultiProcessBatchProblemSolver[TabletopMeshProblem]()  # this doesn't actually solve
-    solver.create_dataset(problems, [np.zeros(0)] * len(problems), cache_base_path, None)
+
+    for i in range(30):
+        n_problem = 10000
+        logger.info("iteration {}".format(i))
+        logger.info("create {} problems".format(n_problem))
+
+        sampler = DistributeBatchProblemSampler[TabletopMeshProblem]()
+        pool = SimpleIteratorProblemPool(TabletopMeshProblem, n_problem_inner=0)
+        problems = sampler.sample_batch(n_problem, pool.as_predicated())
+        solver = MultiProcessBatchProblemSolver[
+            TabletopMeshProblem
+        ]()  # this doesn't actually solve
+        solver.create_dataset(problems, [np.zeros(0)] * len(problems), cache_base_path, None)
