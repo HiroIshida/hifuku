@@ -91,6 +91,7 @@ class TableTopWorld:
             d_trans = 0.0
             w_trans = 0.0
             h_trans = 0.5 * self.box_h
+            theta = 0.0
         else:
             margin = 0.03
             box_dt = self.box_d - 2 * (self.box_t + margin)
@@ -99,7 +100,10 @@ class TableTopWorld:
             d_trans = -0.5 * box_dt + np.random.rand() * box_dt
             w_trans = -0.5 * box_wt + np.random.rand() * box_wt
             h_trans = self.box_t + margin + np.random.rand() * box_ht
+            theta = -np.deg2rad(45) + np.random.rand() * np.deg2rad(90)
+
         co.translate([d_trans, w_trans, h_trans])
+        co.rotate(theta, "z")
 
         points = np.expand_dims(co.worldpos(), axis=0)
         sdf = self.get_union_sdf()
