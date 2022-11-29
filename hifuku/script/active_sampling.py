@@ -40,6 +40,7 @@ if __name__ == "__main__":
         n_solution_candidate=10,
         n_difficult_problem=100,
         solvable_threshold_factor=0.6,
+        acceptable_false_positive_rate=0.01,
     )  # all pass
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
         TabletopPlanningProblem, ae_model, lconfig, use_distributed=True
