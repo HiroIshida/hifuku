@@ -2,12 +2,12 @@ import warnings
 
 import skplan
 from mohou.file import get_project_path
-from mohou.trainer import TrainConfig
+from mohou.trainer import TrainCache, TrainConfig
 from mohou.utils import log_package_version_info
 
 import hifuku
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
-from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
+from hifuku.neuralnet import VoxelAutoEncoder
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.utils import create_default_logger
 
@@ -30,7 +30,9 @@ if __name__ == "__main__":
     log_package_version_info(logger, hifuku)
     log_package_version_info(logger, skplan)
 
-    ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
+    pp_ae = get_project_path("tabletop_mesh")
+
+    ae_model = TrainCache.load_latest(pp_ae, VoxelAutoEncoder).best_model
     lconfig = LibrarySamplerConfig(
         n_problem=3000,
         n_problem_inner=200,
