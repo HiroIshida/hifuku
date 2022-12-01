@@ -59,6 +59,7 @@ def test_SolutionLibrarySampler():
 
     for device in test_devices:
         ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
+        ae_model.loss_called = True  # mock that model is already trained
         ae_model.put_on_device(device)
         pool_validation = SimpleFixedProblemPool.initialize(problem_type, 10)
 
