@@ -559,6 +559,17 @@ class CachedProblemPool(ProblemPool[TableTopProblemT]):
         )
         self.dataset_iter = DatasetIterator(dataset)
 
+    def split(self, n_split: int) -> List["CachedProblemPool[TableTopProblemT]"]:
+        indices_list = np.array_split(np.arange(len(self.cache_path_list)), n_split)
+        pools = []
+        for indices in indices_list:
+            paths = [self.cache_path_list[i] for i in indices]
+            pool = CachedProblemPool(
+                self.problem_type, self.n_problem_inner, paths, self.cache_problem_type, None
+            )
+            pools.append(pool)
+        return pools
+
     def __next__(self) -> TableTopProblemT:
         assert self.dataset_iter is not None
         data = next(self.dataset_iter)

@@ -95,3 +95,9 @@ def test_CachedProblemPool():
         assert len(probs) == n_problem
         for p in probs:
             assert p.n_problem() == 5
+
+        pools = pool.split(3)
+        paths = []
+        for p in pools:
+            paths.extend(p.cache_path_list)
+        assert len(set(paths)) == 20

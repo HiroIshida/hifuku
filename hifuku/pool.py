@@ -1,11 +1,16 @@
+import copy
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Iterator, Optional, Type, cast
+from typing import Callable, Iterator, List, Optional, Type, TypeVar, cast
 
 from hifuku.types import ProblemT
 
 logger = logging.getLogger(__name__)
+
+
+ProblemPoolT = TypeVar("ProblemPoolT", bound="ProblemPoolLike")
+T = TypeVar("T")
 
 
 class ProblemPoolLike(ABC):
@@ -14,8 +19,23 @@ class ProblemPoolLike(ABC):
         ...
 
     @abstractmethod
+    def split(self: ProblemPoolT, n_split: int) -> List[ProblemPoolT]:
+        ...
+
+    @abstractmethod
     def parallelizable(self) -> bool:
         ...
+
+
+class TypicalProblemPoolMixin:
+    def reset(self) -> None:
+        pass
+
+    def split(self: ProblemPoolT, n_split: int) -> List[ProblemPoolT]:  # type: ignore[misc]
+        return [copy.deepcopy(self) for _ in range(n_split)]
+
+    def parallelizable(self) -> bool:
+        return True
 
 
 @dataclass
@@ -40,7 +60,7 @@ class ProblemPool(ProblemPoolLike, Iterator[ProblemT]):
 
 
 @dataclass
-class TrivialPredicatedProblemPool(PredicatedProblemPool[ProblemT]):
+class TrivialPredicatedProblemPool(TypicalProblemPoolMixin, PredicatedProblemPool[ProblemT]):
     predicate: Callable[[ProblemT], bool]
     max_trial_factor: int
 
@@ -49,15 +69,9 @@ class TrivialPredicatedProblemPool(PredicatedProblemPool[ProblemT]):
             self.n_problem_inner, predicate=self.predicate, max_trial_factor=self.max_trial_factor
         )
 
-    def reset(self) -> None:
-        pass
-
-    def parallelizable(self) -> bool:
-        return True
-
 
 @dataclass
-class TrivialProblemPool(ProblemPool[ProblemT]):
+class TrivialProblemPool(TypicalProblemPoolMixin, ProblemPool[ProblemT]):
     def __next__(self) -> ProblemT:
         return self.problem_type.sample(self.n_problem_inner)
 
@@ -68,15 +82,9 @@ class TrivialProblemPool(ProblemPool[ProblemT]):
             self.problem_type, self.n_problem_inner, predicate, max_trial_factor
         )
 
-    def reset(self) -> None:
-        pass
-
-    def parallelizable(self) -> bool:
-        return True
-
 
 @dataclass
-class PseudoIteratorPool(ProblemPool[ProblemT]):
+class PseudoIteratorPool(TypicalProblemPoolMixin, ProblemPool[ProblemT]):
     iterator: Iterator[ProblemT]
 
     def __next__(self) -> ProblemT:
