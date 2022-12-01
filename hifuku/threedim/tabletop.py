@@ -421,8 +421,7 @@ class TabletopPlanningProblem(TabletopActualProblem):
         pr2 = setup_pr2()
         efkin, colkin = setup_kinmaps()
         start = get_robot_config(pr2, efkin.control_joint_names, with_base=True)
-
-        tspace = TaskSpace(3, sdf=self.world.get_union_sdf())  # type: ignore
+        tspace = TaskSpace(3, sdf=self.get_sdf())
         cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
 
         if traj_vec_init is not None:
