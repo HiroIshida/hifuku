@@ -1,6 +1,6 @@
 import copy
 import logging
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Callable, List, Optional, Tuple, Type, TypeVar, overload
@@ -36,25 +36,6 @@ from hifuku.threedim.utils import skcoords_to_pose_vec
 from hifuku.types import ProblemInterface, ResultProtocol
 
 logger = logging.getLogger(__name__)
-
-
-class GridSDFCreator(ABC):
-    @abstractmethod
-    def create(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
-        pass
-
-
-@dataclass
-class ExactGridSDFCreator(GridSDFCreator):
-    quantize: bool = True
-
-    def create(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
-        X, Y, Z = grid.get_meshgrid(indexing="ij")
-        pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
-        values = sdf.__call__(pts)
-        gridsdf = GridSDF(grid, values, 2.0, create_itp_lazy=True)
-        gridsdf = gridsdf.get_quantized()
-        return gridsdf
 
 
 @dataclass
@@ -182,19 +163,23 @@ class TableTopWorld:
         return table
 
 
-TableTopProblemT = TypeVar("TableTopProblemT", bound="TabletopProblem")
+TableTopProblemT = TypeVar("TableTopProblemT", bound="_TabletopProblem")
 
 
 @dataclass
-class TabletopProblem(ProblemInterface):
+class _TabletopProblem(ProblemInterface):
     world: TableTopWorld
     target_pose_list: List[Coordinates]
+
+    @abstractmethod
+    def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+        ...
 
     @cached_property
     def grid_sdf(self) -> GridSDF:
         grid = self.world.get_grid()
         exact_obstacle_sdf = UnionSDF([obs.sdf for obs in self.world.obstacles])
-        gridsdf = ExactGridSDFCreator().create(grid, exact_obstacle_sdf)
+        gridsdf = self.create_gridsdf(grid, exact_obstacle_sdf)
         return gridsdf
 
     def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
@@ -314,7 +299,7 @@ class TabletopProblem(ProblemInterface):
         viewer.show()
 
 
-class TabletopActualProblem(TabletopProblem):
+class _TabletopActualProblem(_TabletopProblem):
     @classmethod
     def get_default_init_solution(cls) -> np.ndarray:
         problem_standard = cls.create_standard()
@@ -340,7 +325,7 @@ class TabletopActualProblem(TabletopProblem):
 
 
 @dataclass
-class TabletopMeshProblem(TabletopProblem):
+class _TabletopMeshProblem(_TabletopProblem):
     """this problem is actually not a problem.
     This class is for generating data for mesh to train autoencoder.
     So the noth config and result are dummy and will not be used in
@@ -365,7 +350,7 @@ class TabletopMeshProblem(TabletopProblem):
 
 
 @dataclass
-class TabletopIKProblem(TabletopActualProblem):
+class _TabletopIKProblem(_TabletopActualProblem):
     @classmethod
     def get_solver_config(cls) -> IKConfig:
         config = IKConfig(disp=False)
@@ -408,7 +393,7 @@ class TabletopIKProblem(TabletopActualProblem):
 
 
 @dataclass
-class TabletopPlanningProblem(TabletopActualProblem):
+class _TabletopPlanningProblem(_TabletopActualProblem):
     @classmethod
     def get_solver_config(cls) -> OsqpSqpPlanner.SolverConfig:
         config = OsqpSqpPlanner.SolverConfig(verbose=False, maxiter=10, maxfev=10)
@@ -466,3 +451,20 @@ class TabletopPlanningProblem(TabletopActualProblem):
             result = planner.solve(traj_init, solver_config=solver_config)
             result_list.append(result)
         return tuple(result_list)
+
+
+class ExactGridSDFCreatorMixin:
+    def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+        X, Y, Z = grid.get_meshgrid(indexing="ij")
+        pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
+        values = sdf.__call__(pts)
+        gridsdf = GridSDF(grid, values, 2.0, create_itp_lazy=True)
+        gridsdf = gridsdf.get_quantized()
+        return gridsdf
+
+
+# fmt: off
+class TabletopMeshProblem(ExactGridSDFCreatorMixin, _TabletopMeshProblem): ...  # noqa
+class TabletopIKProblem(ExactGridSDFCreatorMixin, _TabletopIKProblem): ...  # noqa
+class TabletopPlanningProblem(ExactGridSDFCreatorMixin, _TabletopPlanningProblem): ...  # noqa
+# fmt: on
