@@ -3,6 +3,7 @@ import logging
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Type, TypeVar, Union, overload
 
 import numpy as np
@@ -31,7 +32,12 @@ from skrobot.sdf import SignedDistanceFunction, UnionSDF
 from skrobot.viewers import TrimeshSceneViewer
 from voxbloxpy.core import EsdfMap, Grid, GridSDF, IntegratorType
 
-from hifuku.llazy.dataset import PicklableChunkBase
+from hifuku.llazy.dataset import (
+    DatasetIterator,
+    LazyDecomplessDataset,
+    PicklableChunkBase,
+)
+from hifuku.pool import PredicatedProblemPool, ProblemPool
 from hifuku.sdf import create_union_sdf
 from hifuku.threedim.camera import RayMarchingConfig, create_synthetic_esdf
 from hifuku.threedim.robot import get_pr2_kinect_camera, setup_kinmaps, setup_pr2
@@ -537,45 +543,44 @@ class VoxbloxTabletopPlanningProblem(VoxbloxGridSDFCreatorMixin, _TabletopPlanni
 # fmt: on
 
 
-# @dataclass
-# class CachedMeshFixedProblemPool(FixedProblemPool[TableTopProblemT]):
-#     dataset: LazyDecomplessDataset
-#     size: int
-#
-#     def __len__(self) -> int:
-#         return self.size
-#
-#     def __iter__(self) -> Iterator[TableTopProblemT]:
-#         @dataclass
-#         class _Iter(Iterator):
-#             dataset_iter: DatasetIterator
-#             problem_type: _TabletopMeshProblem
-#             n_problem_inner: int
-#
-#             def __next__(self):
-#                 data = next(self.dataset_iter)
-#                 problem: _TabletopProblem = data.cast_to(self.problem_type)
-#                 assert problem.n_problem() == 0
-#                 for _ in range(self.n_problem_inner):
-#                     pose = problem.world.sample_pose()
-#                     problem.target_pose_list.append(pose)
-#                 return problem
-#
-#         return _Iter(self.dataset.__iter__(max_size=self.size), self.problem_type, self.n_problem_inner)  # type: ignore
-#
-#     @classmethod
-#     def load(
-#         cls,
-#         problem_type: Type[TableTopProblemT],
-#         mesh_problem_type: Type[_TabletopMeshProblem],
-#         n_problem_inner: int,
-#         cache_dir_path: Path,
-#         size: Optional[int] = None,
-#     ):
-#         dataset = LazyDecomplessDataset[_TabletopMeshProblem].load(
-#             cache_dir_path, mesh_problem_type
-#         )
-#         if size is None:
-#             size = len(dataset)
-#         assert size <= len(dataset)
-#         return cls(problem_type, n_problem_inner, dataset, size)
+@dataclass
+class CachedProblemPool(ProblemPool[TableTopProblemT]):
+    cache_path_list: List[Path]
+    cache_problem_type: Type[_TabletopMeshProblem]
+    dataset_iter: Optional[DatasetIterator] = None
+
+    def __post_init__(self):
+        assert len(self.cache_path_list) > 0
+        assert self.dataset_iter is None
+
+    def reset(self):
+        dataset = LazyDecomplessDataset[_TabletopMeshProblem](
+            self.cache_path_list, self.cache_problem_type, 1
+        )
+        self.dataset_iter = DatasetIterator(dataset)
+
+    def __next__(self) -> TableTopProblemT:
+        assert self.dataset_iter is not None
+        data = next(self.dataset_iter)
+        problem: TableTopProblemT = data.cast_to(self.problem_type)
+        assert problem.n_problem() == 0
+        for _ in range(self.n_problem_inner):
+            pose = problem.world.sample_pose()
+            problem.target_pose_list.append(pose)
+        return problem
+
+    @classmethod
+    def load(
+        cls,
+        problem_type: Type[TableTopProblemT],
+        mesh_problem_type: Type[_TabletopMeshProblem],
+        n_problem_inner: int,
+        cache_dir_path: Path,
+    ):
+        cache_path_list = [p for p in cache_dir_path.iterdir() if p.name.endswith(".gz")]
+        return cls(problem_type, n_problem_inner, cache_path_list, mesh_problem_type)
+
+    def make_predicated(
+        self, predicate: Callable[[TableTopProblemT], bool], max_trial_factor: int
+    ) -> PredicatedProblemPool[TableTopProblemT]:
+        raise NotImplementedError("under construction")

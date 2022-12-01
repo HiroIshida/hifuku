@@ -9,9 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class PredicatedProblemPool(Iterator[Optional[ProblemT]]):
+class PredicatedProblemPool(ABC, Iterator[Optional[ProblemT]]):
     problem_type: Type[ProblemT]
     n_problem_inner: int
+
+    @abstractmethod
+    def reset(self) -> None:
+        ...
 
 
 @dataclass
@@ -28,6 +32,10 @@ class ProblemPool(Iterator[ProblemT], ABC):
     def as_predicated(self) -> PredicatedProblemPool[ProblemT]:
         return cast(PredicatedProblemPool[ProblemT], self)
 
+    @abstractmethod
+    def reset(self) -> None:
+        ...
+
 
 @dataclass
 class TrivialPredicatedProblemPool(PredicatedProblemPool[ProblemT]):
@@ -38,6 +46,9 @@ class TrivialPredicatedProblemPool(PredicatedProblemPool[ProblemT]):
         return self.problem_type.sample(
             self.n_problem_inner, predicate=self.predicate, max_trial_factor=self.max_trial_factor
         )
+
+    def reset(self) -> None:
+        pass
 
 
 @dataclass
@@ -52,6 +63,9 @@ class TrivialProblemPool(ProblemPool[ProblemT]):
             self.problem_type, self.n_problem_inner, predicate, max_trial_factor
         )
 
+    def reset(self) -> None:
+        pass
+
 
 @dataclass
 class PseudoIteratorPool(ProblemPool[ProblemT]):
@@ -64,3 +78,6 @@ class PseudoIteratorPool(ProblemPool[ProblemT]):
         self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
     ) -> PredicatedProblemPool[ProblemT]:
         raise NotImplementedError("under construction")
+
+    def reset(self) -> None:
+        pass

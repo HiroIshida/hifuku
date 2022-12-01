@@ -78,11 +78,9 @@ class PicklableChunkBase(ChunkBase):
 
 @dataclass
 class LazyDecomplessDataset(Iterable[ChunkT], Generic[ChunkT]):
-    base_path: Path
     compressed_path_list: List[Path]
     chunk_type: Type[ChunkT]
     n_worker: int
-    parallelize_threshold: int = 20
 
     def __post_init__(self):
         if self.n_worker == -1:
@@ -99,7 +97,7 @@ class LazyDecomplessDataset(Iterable[ChunkT], Generic[ChunkT]):
         for p in base_path.iterdir():
             if p.name.endswith(".gz"):
                 path_list.append(p)
-        return cls(base_path, path_list, chunk_type, n_worker)
+        return cls(path_list, chunk_type, n_worker)
 
     def __len__(self) -> int:
         return len(self.compressed_path_list)

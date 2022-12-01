@@ -1,10 +1,16 @@
+import tempfile
+import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
 from hifuku.threedim.robot import setup_kinmaps
 from hifuku.threedim.tabletop import (
+    CachedProblemPool,
     TabletopIKProblem,
+    TabletopMeshProblem,
+    TabletopPlanningProblem,
     VoxbloxTabletopMeshProblem,
     VoxbloxTabletopPlanningProblem,
 )
@@ -76,17 +82,16 @@ def test_solve_problem():
     print("sample count {}".format(sample_count))
 
 
-# def test_CachedMeshFixedProblemPool():
-#    with tempfile.TemporaryDirectory() as td:
-#        td_path = Path(td)
-#        n_problem = 20
-#        for _ in range(n_problem):
-#            mesh_problem = TabletopMeshProblem.sample(0)
-#            mesh_problem.dump(td_path / (str(uuid.uuid4()) + ".pkl"))
-#        pool = CachedMeshFixedProblemPool.load(
-#            TabletopPlanningProblem, TabletopMeshProblem, 5, td_path
-#        )
-#        probs = [p for p in pool]
-#        assert len(probs) == n_problem
-#        for p in probs:
-#            assert p.n_problem() == 5
+def test_CachedProblemPool():
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        n_problem = 20
+        for _ in range(n_problem):
+            mesh_problem = TabletopMeshProblem.sample(0)
+            mesh_problem.dump(td_path / (str(uuid.uuid4()) + ".pkl"))
+        pool = CachedProblemPool.load(TabletopPlanningProblem, TabletopMeshProblem, 5, td_path)
+        pool.reset()
+        probs = [p for p in pool]
+        assert len(probs) == n_problem
+        for p in probs:
+            assert p.n_problem() == 5
