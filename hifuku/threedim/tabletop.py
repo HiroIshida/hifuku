@@ -28,10 +28,11 @@ from skrobot.model.link import Link
 from skrobot.model.primitives import Box
 from skrobot.sdf import SignedDistanceFunction, UnionSDF
 from skrobot.viewers import TrimeshSceneViewer
-from voxbloxpy.core import Grid, GridSDF
+from voxbloxpy.core import EsdfMap, Grid, GridSDF, IntegratorType
 
 from hifuku.sdf import create_union_sdf
-from hifuku.threedim.robot import setup_kinmaps, setup_pr2
+from hifuku.threedim.camera import RayMarchingConfig, create_synthetic_esdf
+from hifuku.threedim.robot import get_pr2_kinect_camera, setup_kinmaps, setup_pr2
 from hifuku.threedim.utils import skcoords_to_pose_vec
 from hifuku.types import ProblemInterface, ResultProtocol
 
@@ -463,8 +464,22 @@ class ExactGridSDFCreatorMixin:
         return gridsdf
 
 
+class VoxbloxGridSDFCreatorMixin:
+    def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+        camera = get_pr2_kinect_camera()
+        rm_config = RayMarchingConfig(max_dist=2.0)
+
+        esdf = EsdfMap.create(0.02, integrator_type=IntegratorType.MERGED)
+        esdf = create_synthetic_esdf(sdf, camera, rm_config=rm_config, esdf=esdf)
+        grid_sdf = esdf.get_grid_sdf(grid, fill_value=1.0, create_itp_lazy=True)
+        return grid_sdf
+
+
 # fmt: off
 class TabletopMeshProblem(ExactGridSDFCreatorMixin, _TabletopMeshProblem): ...  # noqa
 class TabletopIKProblem(ExactGridSDFCreatorMixin, _TabletopIKProblem): ...  # noqa
 class TabletopPlanningProblem(ExactGridSDFCreatorMixin, _TabletopPlanningProblem): ...  # noqa
+class VoxbloxTabletopMeshProblem(VoxbloxGridSDFCreatorMixin, _TabletopMeshProblem): ...  # noqa
+class VoxbloxTabletopIKProblem(VoxbloxGridSDFCreatorMixin, _TabletopIKProblem): ...  # noqa
+class VoxbloxTabletopPlanningProblem(VoxbloxGridSDFCreatorMixin, _TabletopPlanningProblem): ...  # noqa
 # fmt: on
