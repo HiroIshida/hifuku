@@ -6,7 +6,17 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Generic, List, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Generic,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import numpy as np
 import torch
@@ -67,7 +77,7 @@ class PicklableChunkBase(ChunkBase):
 
 
 @dataclass
-class LazyDecomplessDataset(Generic[ChunkT]):
+class LazyDecomplessDataset(Iterable[ChunkT], Generic[ChunkT]):
     base_path: Path
     compressed_path_list: List[Path]
     chunk_type: Type[ChunkT]
@@ -132,6 +142,25 @@ class LazyDecomplessDataset(Generic[ChunkT]):
         dataset_valid = copy.deepcopy(self)
         dataset_valid.compressed_path_list = path_list[-n_valid:]
         return dataset_train, dataset_valid
+
+    def __iter__(self) -> Iterator[ChunkT]:
+        return DatasetIterator(self)
+
+
+@dataclass
+class DatasetIterator(Iterator[ChunkT], Generic[ChunkT]):
+    dataset: LazyDecomplessDataset
+    _idx: int = 0
+
+    def __post_init__(self):
+        assert self._idx == 0
+
+    def __next__(self):
+        if self._idx == len(self.dataset):
+            raise StopIteration
+        data = self.dataset.get_data(np.array([self._idx]))[0]
+        self._idx += 1
+        return data
 
 
 @dataclass

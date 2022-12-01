@@ -94,6 +94,25 @@ def test_dataset():
             assert elapsed_times[1] < elapsed_times[0] * 0.9
 
 
+def test_dataset_iterator():
+
+    for chunk_size in [3, 10, 13]:
+        with tempfile.TemporaryDirectory() as td:
+            base_path = Path(td)
+
+            # prepare chunks
+            for _ in range(chunk_size):
+                data = np.random.randn(2, 3, 4)
+                chunk = ExampleChunk(data)
+                name = str(uuid.uuid4()) + ".pkl"
+                path = base_path / name
+                chunk.dump(path)
+
+            dataset = LazyDecomplessDataset.load(base_path, ExampleChunk, n_worker=2)  # type: ignore
+            for e in dataset:
+                pass
+
+
 def test_dataloader():
 
     with tempfile.TemporaryDirectory() as td:
