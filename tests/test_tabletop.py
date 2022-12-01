@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from hifuku.threedim.robot import setup_kinmaps
 from hifuku.threedim.tabletop import TabletopIKProblem
 
 
@@ -59,7 +60,7 @@ def test_solve_problem():
             problem = TabletopIKProblem.sample(n_pose=1)
             res = problem.solve(av_init)[0]
             if res.success:
-                efkin, colkin = problem.setup_kinmaps()
+                efkin, colkin = setup_kinmaps()
                 assert not colkin.is_colliding(problem.get_sdf(), res.x)
                 break
     print("sample count {}".format(sample_count))

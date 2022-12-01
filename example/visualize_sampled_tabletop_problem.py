@@ -7,11 +7,12 @@ from skplan.viewer.skrobot_viewer import set_robot_config
 from skrobot.model.primitives import LineString
 
 from hifuku.library import SolutionLibrary
+from hifuku.threedim.robot import setup_kinmaps, setup_pr2
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 # common setup
-pr2 = TabletopPlanningProblem.setup_pr2()
-efkin, colkin = TabletopPlanningProblem.setup_kinmaps()
+pr2 = setup_pr2()
+efkin, colkin = setup_kinmaps()
 
 # problem definition
 # world = create_simple_tabletop_world(with_obstacle=True)

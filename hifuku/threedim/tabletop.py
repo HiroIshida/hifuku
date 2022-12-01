@@ -7,10 +7,6 @@ from typing import Callable, List, Optional, Tuple, Type, TypeVar, overload
 
 import numpy as np
 import skrobot
-from skplan.kinematics import (
-    ArticulatedCollisionKinematicsMap,
-    ArticulatedEndEffectorKinematicsMap,
-)
 from skplan.robot.pr2 import PR2Paramter
 from skplan.solver.constraint import (
     ConstraintSatisfactionFail,
@@ -30,12 +26,12 @@ from skrobot.coordinates import Coordinates
 from skrobot.model import Axis
 from skrobot.model.link import Link
 from skrobot.model.primitives import Box
-from skrobot.models.pr2 import PR2
 from skrobot.sdf import SignedDistanceFunction, UnionSDF
 from skrobot.viewers import TrimeshSceneViewer
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.sdf import create_union_sdf
+from hifuku.threedim.robot import setup_kinmaps, setup_pr2
 from hifuku.threedim.utils import skcoords_to_pose_vec
 from hifuku.types import ProblemInterface, ResultProtocol
 
@@ -187,9 +183,6 @@ class TableTopWorld:
         return table
 
 
-_cache = {"kinmap": None, "pr2": None}
-
-
 TableTopProblemT = TypeVar("TableTopProblemT", bound="TabletopProblem")
 
 
@@ -213,26 +206,6 @@ class TabletopProblem(ProblemInterface):
     def get_mesh(self) -> np.ndarray:
         grid_sdf = self.grid_sdf
         return grid_sdf.values.reshape(grid_sdf.grid.sizes)
-
-    @classmethod
-    def setup_pr2(cls) -> PR2:
-        if _cache["pr2"] is None:
-            pr2 = PR2(use_tight_joint_limit=False)
-            pr2.reset_manip_pose()
-            _cache["pr2"] = pr2
-        return _cache["pr2"]  # type: ignore
-
-    @classmethod
-    def setup_kinmaps(
-        cls,
-    ) -> Tuple[ArticulatedEndEffectorKinematicsMap, ArticulatedCollisionKinematicsMap]:
-        if _cache["kinmap"] is None:
-            pr2 = cls.setup_pr2()
-            efkin = PR2Paramter.rarm_kinematics(with_base=True)
-            efkin.reflect_skrobot_model(pr2)
-            colkin = PR2Paramter.collision_kinematics(with_base=True)
-            colkin.reflect_skrobot_model(pr2)
-            _cache["kinmap"] = (efkin, colkin)  # type: ignore
         return _cache["kinmap"]  # type: ignore
 
     def add_elements_to_viewer(self, viewer: TrimeshSceneViewer) -> None:
@@ -288,8 +261,8 @@ class TabletopProblem(ProblemInterface):
         """
         max_trial_factor is used only if predicate is specified
         """
-        pr2 = cls.setup_pr2()
-        efkin, colkin = cls.setup_kinmaps()
+        pr2 = setup_pr2()
+        efkin, colkin = setup_kinmaps()
 
         def is_collision_init_config(world: TableTopWorld):
             sdf = world.get_union_sdf()
@@ -328,8 +301,8 @@ class TabletopProblem(ProblemInterface):
                     return cls(world, target_pose_list)
 
     def visualize(self, av: np.ndarray):
-        pr2 = copy.deepcopy(self.setup_pr2())
-        efkin, colkin = self.setup_kinmaps()
+        pr2 = copy.deepcopy(setup_pr2())
+        efkin, colkin = setup_kinmaps()
         set_robot_config(pr2, efkin.control_joint_names, av, with_base=True)
 
         viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
@@ -402,7 +375,7 @@ class TabletopIKProblem(TabletopActualProblem):
         return config
 
     def solve(self, av_init: Optional[np.ndarray] = None) -> Tuple[IKResult, ...]:
-        efkin, colkin = self.setup_kinmaps()
+        efkin, colkin = setup_kinmaps()
         tspace = TaskSpace(3, sdf=self.get_sdf())  # type: ignore
         cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
 
@@ -448,8 +421,8 @@ class TabletopPlanningProblem(TabletopActualProblem):
         self, traj_vec_init: Optional[np.ndarray] = None
     ) -> Tuple[OsqpSqpPlanner.Result, ...]:
         n_wp = 15
-        pr2 = self.setup_pr2()
-        efkin, colkin = self.setup_kinmaps()
+        pr2 = setup_pr2()
+        efkin, colkin = setup_kinmaps()
         start = get_robot_config(pr2, efkin.control_joint_names, with_base=True)
 
         tspace = TaskSpace(3, sdf=self.world.get_union_sdf())  # type: ignore
