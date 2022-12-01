@@ -417,6 +417,14 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
 
+    def __post_init__(self):
+        self.reset_pool()
+
+    def reset_pool(self) -> None:
+        logger.info("resetting pool")
+        self.pool_single.reset()
+        self.pool_multiple.reset()
+
     @classmethod
     def initialize(
         cls,
@@ -433,6 +441,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         """
         use will be used only if either of solver and sampler is not set
         """
+        assert pool_multiple.parallelizable()
+
         library = SolutionLibrary.initialize(
             problem_type, ae_model, config.solvable_threshold_factor
         )
@@ -503,6 +513,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         project_path: Path,
     ) -> None:
         logger.info("active sampling step")
+        self.reset_pool()
 
         is_initialized = len(self.library.predictors) > 0
         if is_initialized:
