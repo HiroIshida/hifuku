@@ -39,9 +39,7 @@ from hifuku.neuralnet import (
     VoxelAutoEncoder,
 )
 from hifuku.pool import (
-    FixedProblemPool,
     IteratorProblemPool,
-    SimpleFixedProblemPool,
     SimpleIteratorProblemPool,
     TrivialIteratorPool,
 )
@@ -147,19 +145,18 @@ class SolutionLibrary(Generic[ProblemT]):
         return threshold
 
     def measure_full_coverage(
-        self, problem_pool: FixedProblemPool[ProblemT], solver: BatchProblemSolver
+        self, problems: List[ProblemT], solver: BatchProblemSolver
     ) -> CoverageResult:
         logger.info("**compute est values")
         iterval_est_list = []
         init_solution_est_list = []
-        for problem in tqdm.tqdm(problem_pool):
+        for problem in tqdm.tqdm(problems):
             assert problem.n_problem() == 1
             infer_res = self.infer(problem)[0]
             iterval_est_list.append(infer_res.nit)
             init_solution_est_list.append(infer_res.init_solution)
 
         logger.info("**compute real values")
-        problems = [p for p in problem_pool]
         results = solver.solve_batch(problems, init_solution_est_list)
 
         maxiter = self.problem_type.get_solver_config().maxiter
@@ -172,15 +169,15 @@ class SolutionLibrary(Generic[ProblemT]):
         logger.info(coverage_result)
         return coverage_result
 
-    def measure_coverage(self, problem_pool: FixedProblemPool[ProblemT]) -> float:
+    def measure_coverage(self, problems: List[ProblemT]) -> float:
         threshold = self.success_iter_threshold()
         count = 0
-        for problem in problem_pool:
+        for problem in problems:
             assert problem.n_problem() == 1
             infer_res = self.infer(problem)[0]
             if infer_res.nit < threshold:
                 count += 1
-        return count / float(len(problem_pool))
+        return count / float(len(problems))
 
     def add(
         self,
@@ -420,7 +417,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     config: LibrarySamplerConfig
     pool_single: IteratorProblemPool[ProblemT]
     pool_multiple: IteratorProblemPool[ProblemT]
-    pool_validation: FixedProblemPool[ProblemT]
+    problems_validation: List[ProblemT]
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
 
@@ -432,7 +429,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         config: LibrarySamplerConfig,
         pool_single: Optional[IteratorProblemPool[ProblemT]] = None,
         pool_multiple: Optional[IteratorProblemPool[ProblemT]] = None,
-        pool_validation: Optional[FixedProblemPool[ProblemT]] = None,
+        problems_validation: Optional[List[ProblemT]] = None,
         solver: Optional[BatchProblemSolver[ProblemT]] = None,
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
         use_distributed: bool = False,
@@ -455,9 +452,10 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             # TODO: smelling! n_problem_inner should not be set here
             pool_multiple = SimpleIteratorProblemPool(problem_type, config.n_problem_inner)
 
-        if pool_validation is None:
-            pool_validation = SimpleFixedProblemPool.initialize(problem_type, 1000)
-        assert pool_validation.n_problem_inner == 1
+        if problems_validation is None:
+            problems_validation = [problem_type.sample(1) for _ in range(1000)]
+        for prob in problems_validation:
+            assert prob.n_problem() == 1
 
         # setup solver and sampler
         if solver is None:
@@ -480,7 +478,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             config,
             pool_single,
             pool_multiple,
-            pool_validation,
+            problems_validation,
             solver,
             sampler,
         )
@@ -528,14 +526,16 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
         )
-        coverage_result = singleton_library.measure_full_coverage(self.pool_validation, self.solver)
+        coverage_result = singleton_library.measure_full_coverage(
+            self.problems_validation, self.solver
+        )
         logger.info(coverage_result)
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
         logger.info("margin is set to {}".format(margin))
         self.library.add(predictor, margin, coverage_result)
 
-        coverage = self.library.measure_coverage(self.pool_validation)
+        coverage = self.library.measure_coverage(self.problems_validation)
         logger.info("current library's coverage estimate: {}".format(coverage))
 
         self.library.dump(project_path)

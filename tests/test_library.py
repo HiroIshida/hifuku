@@ -15,7 +15,6 @@ from hifuku.library import (
     SolutionLibrary,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
-from hifuku.pool import SimpleFixedProblemPool
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 from hifuku.utils import create_default_logger
 
@@ -61,7 +60,7 @@ def test_SolutionLibrarySampler():
         ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
         ae_model.loss_called = True  # mock that model is already trained
         ae_model.put_on_device(device)
-        pool_validation = SimpleFixedProblemPool.initialize(problem_type, 10)
+        pool_validation = [problem_type.sample(1) for _ in range(10)]
 
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
@@ -70,7 +69,7 @@ def test_SolutionLibrarySampler():
                 problem_type,
                 ae_model,
                 lconfig,
-                pool_validation=pool_validation,
+                problems_validation=pool_validation,
                 solver=solver,
                 sampler=sampler,
             )
