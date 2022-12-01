@@ -5,7 +5,7 @@ from mohou.trainer import TrainCache
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.neuralnet import VoxelAutoEncoder
-from hifuku.threedim.tabletop import TableTopWorld
+from hifuku.threedim.tabletop import TabletopMeshProblem, TableTopWorld
 
 
 def render(mesh):
@@ -17,9 +17,9 @@ def render(mesh):
 pp = get_project_path("tabletop_mesh")
 best_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
 
+problem = TabletopMeshProblem.sample(0)
 world = TableTopWorld.sample()
-gridsdf = world.compute_exact_gridsdf(fill_value=2.0)
-gridsdf = gridsdf.get_quantized()
+gridsdf = problem.grid_sdf
 mesh = gridsdf.values.reshape(*gridsdf.grid.sizes)
 
 sample = torch.from_numpy(np.expand_dims(np.expand_dims(mesh, axis=0), axis=0)).float()

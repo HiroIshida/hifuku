@@ -1,5 +1,6 @@
 import copy
 import logging
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Callable, List, Optional, Tuple, Type, TypeVar, overload
@@ -30,7 +31,7 @@ from skrobot.model import Axis
 from skrobot.model.link import Link
 from skrobot.model.primitives import Box
 from skrobot.models.pr2 import PR2
-from skrobot.sdf import UnionSDF
+from skrobot.sdf import SignedDistanceFunction, UnionSDF
 from skrobot.viewers import TrimeshSceneViewer
 from voxbloxpy.core import Grid, GridSDF
 
@@ -39,6 +40,26 @@ from hifuku.threedim.utils import skcoords_to_pose_vec
 from hifuku.types import ProblemInterface, ResultProtocol
 
 logger = logging.getLogger(__name__)
+
+
+class GridSDFCreator(ABC):
+    @abstractmethod
+    def create(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+        pass
+
+
+@dataclass
+class ExactGridSDFCreator(GridSDFCreator):
+    quantize: bool = True
+
+    def create(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+        X, Y, Z = grid.get_meshgrid(indexing="ij")
+        pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
+        values = sdf.__call__(pts)
+        gridsdf = GridSDF(grid, values, 2.0, create_itp_lazy=True)
+        if self.quantize:
+            gridsdf = gridsdf.get_quantized()
+        return gridsdf
 
 
 @dataclass
@@ -66,21 +87,6 @@ class TableTopWorld:
         lb = self.table.transform_vector(lb)
         ub = self.table.transform_vector(ub)
         return Grid(lb, ub, grid_sizes)
-
-    def compute_exact_gridsdf(
-        self,
-        grid_sizes: Tuple[int, int, int] = (56, 56, 28),
-        mesh_height: float = 0.3,
-        fill_value: float = np.nan,
-    ) -> GridSDF:
-
-        grid = self.get_grid()
-        X, Y, Z = grid.get_meshgrid(indexing="ij")
-        pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
-
-        sdf = UnionSDF([obs.sdf for obs in self.obstacles])
-        values = sdf.__call__(pts)
-        return GridSDF(grid, values, fill_value, create_itp_lazy=True)
 
     def sample_pose(self, standard: bool = False) -> Coordinates:
         table = self.table
@@ -194,9 +200,19 @@ class TabletopProblem(ProblemInterface):
 
     @cached_property
     def grid_sdf(self) -> GridSDF:
-        gridsdf = self.world.compute_exact_gridsdf(fill_value=2.0)
+        grid = self.world.get_grid()
+        exact_obstacle_sdf = UnionSDF([obs.sdf for obs in self.world.obstacles])
+        gridsdf = ExactGridSDFCreator().create(grid, exact_obstacle_sdf)
         gridsdf = gridsdf.get_quantized()
         return gridsdf
+
+    def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
+        sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
+        return sdf
+
+    def get_mesh(self) -> np.ndarray:
+        grid_sdf = self.grid_sdf
+        return grid_sdf.values.reshape(grid_sdf.grid.sizes)
 
     @classmethod
     def setup_pr2(cls) -> PR2:
@@ -227,20 +243,12 @@ class TabletopProblem(ProblemInterface):
             axis = Axis.from_coords(pose)
             viewer.add(axis)
 
-    def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
-        sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
-        return sdf
-
     def get_descriptions(self) -> List[np.ndarray]:
         table_pose = skcoords_to_pose_vec(self.world.table.worldcoords())
         # description vector is composed of 6 + 6 dimension
         return [
             np.hstack([skcoords_to_pose_vec(pose), table_pose]) for pose in self.target_pose_list
         ]
-
-    def get_mesh(self) -> np.ndarray:
-        grid_sdf = self.grid_sdf
-        return grid_sdf.values.reshape(grid_sdf.grid.sizes)
 
     def n_problem(self) -> int:
         return len(self.target_pose_list)
