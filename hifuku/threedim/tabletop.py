@@ -3,10 +3,11 @@ import logging
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Callable, List, Optional, Tuple, Type, TypeVar, overload
+from typing import Callable, List, Optional, Tuple, Type, TypeVar, Union, overload
 
 import numpy as np
 import skrobot
+import torch
 from skplan.robot.pr2 import PR2Paramter
 from skplan.solver.constraint import (
     ConstraintSatisfactionFail,
@@ -30,6 +31,7 @@ from skrobot.sdf import SignedDistanceFunction, UnionSDF
 from skrobot.viewers import TrimeshSceneViewer
 from voxbloxpy.core import EsdfMap, Grid, GridSDF, IntegratorType
 
+from hifuku.llazy.dataset import PicklableChunkBase
 from hifuku.sdf import create_union_sdf
 from hifuku.threedim.camera import RayMarchingConfig, create_synthetic_esdf
 from hifuku.threedim.robot import get_pr2_kinect_camera, setup_kinmaps, setup_pr2
@@ -168,13 +170,19 @@ TableTopProblemT = TypeVar("TableTopProblemT", bound="_TabletopProblem")
 
 
 @dataclass
-class _TabletopProblem(ProblemInterface):
+class _TabletopProblem(PicklableChunkBase, ProblemInterface):
     world: TableTopWorld
     target_pose_list: List[Coordinates]
 
     # The reason for this aux cache is to enable to set cache from outside
     # Primary usecase for this cache is in mesh generation problems.
     _aux_gridsdf_cache: Optional[GridSDF] = None
+
+    def cast_to(self, problem_type: Type[TableTopProblemT]) -> TableTopProblemT:
+        return problem_type(self.world, self.target_pose_list, self._aux_gridsdf_cache)
+
+    def to_tensors(self) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
+        raise NotImplementedError
 
     @abstractmethod
     def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:

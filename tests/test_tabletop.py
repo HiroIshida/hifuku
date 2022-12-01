@@ -3,7 +3,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from hifuku.threedim.robot import setup_kinmaps
-from hifuku.threedim.tabletop import TabletopIKProblem
+from hifuku.threedim.tabletop import (
+    TabletopIKProblem,
+    VoxbloxTabletopMeshProblem,
+    VoxbloxTabletopPlanningProblem,
+)
 
 
 @dataclass
@@ -48,6 +52,12 @@ def test_sample_problem():
 
     problem = TabletopIKProblem.sample(30, predicate=infeasible_predicate)
     assert problem is None
+
+
+def tset_casting():
+    prob1 = VoxbloxTabletopMeshProblem.sample(0)
+    prob2 = prob1.cast_to(VoxbloxTabletopPlanningProblem)
+    prob2._aux_gridsdf_cache is not None
 
 
 def test_solve_problem():
