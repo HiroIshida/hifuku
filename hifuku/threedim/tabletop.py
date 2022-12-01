@@ -584,3 +584,6 @@ class CachedProblemPool(ProblemPool[TableTopProblemT]):
         self, predicate: Callable[[TableTopProblemT], bool], max_trial_factor: int
     ) -> PredicatedProblemPool[TableTopProblemT]:
         raise NotImplementedError("under construction")
+
+    def parallelizable(self) -> bool:
+        return False

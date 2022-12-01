@@ -357,6 +357,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         n_sample: int,
         pool: PredicatedProblemPool[ProblemT],
     ) -> List[ProblemT]:
+        assert pool.parallelizable()
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
 
@@ -410,6 +411,7 @@ class DistributeBatchProblemSampler(
         pool: PredicatedProblemPool[ProblemT],
     ) -> List[ProblemT]:
         assert n_sample > 0
+        assert pool.parallelizable()
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1)

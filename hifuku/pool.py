@@ -8,18 +8,24 @@ from hifuku.types import ProblemT
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class PredicatedProblemPool(ABC, Iterator[Optional[ProblemT]]):
-    problem_type: Type[ProblemT]
-    n_problem_inner: int
-
+class ProblemPoolLike(ABC):
     @abstractmethod
     def reset(self) -> None:
         ...
 
+    @abstractmethod
+    def parallelizable(self) -> bool:
+        ...
+
 
 @dataclass
-class ProblemPool(Iterator[ProblemT], ABC):
+class PredicatedProblemPool(ProblemPoolLike, Iterator[Optional[ProblemT]]):
+    problem_type: Type[ProblemT]
+    n_problem_inner: int
+
+
+@dataclass
+class ProblemPool(ProblemPoolLike, Iterator[ProblemT]):
     problem_type: Type[ProblemT]
     n_problem_inner: int
 
@@ -31,10 +37,6 @@ class ProblemPool(Iterator[ProblemT], ABC):
 
     def as_predicated(self) -> PredicatedProblemPool[ProblemT]:
         return cast(PredicatedProblemPool[ProblemT], self)
-
-    @abstractmethod
-    def reset(self) -> None:
-        ...
 
 
 @dataclass
@@ -49,6 +51,9 @@ class TrivialPredicatedProblemPool(PredicatedProblemPool[ProblemT]):
 
     def reset(self) -> None:
         pass
+
+    def parallelizable(self) -> bool:
+        return True
 
 
 @dataclass
@@ -66,6 +71,9 @@ class TrivialProblemPool(ProblemPool[ProblemT]):
     def reset(self) -> None:
         pass
 
+    def parallelizable(self) -> bool:
+        return True
+
 
 @dataclass
 class PseudoIteratorPool(ProblemPool[ProblemT]):
@@ -81,3 +89,6 @@ class PseudoIteratorPool(ProblemPool[ProblemT]):
 
     def reset(self) -> None:
         pass
+
+    def parallelizable(self) -> bool:
+        return True

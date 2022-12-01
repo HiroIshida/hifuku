@@ -447,6 +447,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             logger.info("problem pool is not specified. use SimpleProblemPool")
             # TODO: smelling! n_problem_inner should not be set here
             pool_multiple = TrivialProblemPool(problem_type, config.n_problem_inner)
+        assert pool_multiple.parallelizable()
 
         if problems_validation is None:
             problems_validation = [problem_type.sample(1) for _ in range(1000)]
