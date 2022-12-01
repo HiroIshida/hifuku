@@ -1,11 +1,11 @@
 import numpy as np
 
-from hifuku.pool import SimpleIteratorProblemPool
+from hifuku.pool import TrivialProblemPool
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 
 def test_simple_pool():
-    pool = SimpleIteratorProblemPool(TabletopPlanningProblem, 10)
+    pool = TrivialProblemPool(TabletopPlanningProblem, 10)
 
     for _ in range(5):
         next(pool)

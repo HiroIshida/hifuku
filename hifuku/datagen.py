@@ -21,7 +21,7 @@ from hifuku.http_datagen.request import (
     http_connection,
     send_request,
 )
-from hifuku.pool import PredicatedIteratorProblemPool
+from hifuku.pool import PredicatedProblemPool
 from hifuku.types import ProblemT, RawData, ResultProtocol
 from hifuku.utils import num_torch_thread
 
@@ -299,7 +299,7 @@ class BatchProblemSampler(Generic[ProblemT], ABC):
     def sample_batch(
         self,
         n_sample: int,
-        pool: PredicatedIteratorProblemPool[ProblemT],
+        pool: PredicatedProblemPool[ProblemT],
     ) -> List[ProblemT]:
         ...
 
@@ -325,7 +325,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
     @staticmethod
     def task(
         n_sample: int,
-        pool: PredicatedIteratorProblemPool[ProblemT],
+        pool: PredicatedProblemPool[ProblemT],
         show_progress_bar: bool,
         n_thread: int,
         cache_path: Path,
@@ -355,7 +355,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
     def sample_batch(
         self,
         n_sample: int,
-        pool: PredicatedIteratorProblemPool[ProblemT],
+        pool: PredicatedProblemPool[ProblemT],
     ) -> List[ProblemT]:
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
@@ -407,7 +407,7 @@ class DistributeBatchProblemSampler(
     def sample_batch(
         self,
         n_sample: int,
-        pool: PredicatedIteratorProblemPool[ProblemT],
+        pool: PredicatedProblemPool[ProblemT],
     ) -> List[ProblemT]:
         assert n_sample > 0
 

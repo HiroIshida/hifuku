@@ -11,7 +11,7 @@ import tqdm
 from mohou.file import get_project_path
 
 from hifuku.datagen import DistributeBatchProblemSampler
-from hifuku.pool import SimpleIteratorProblemPool
+from hifuku.pool import TrivialProblemPool
 from hifuku.threedim.tabletop import (
     TabletopMeshProblem,
     VoxbloxTabletopMeshProblem,
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     n_problem = 10000
     for _ in range(30):
         sampler = DistributeBatchProblemSampler()  # type: ignore
-        pool = SimpleIteratorProblemPool(problem_type, n_problem_inner=0)
+        pool = TrivialProblemPool(problem_type, n_problem_inner=0)
         problems: List[_TabletopProblem] = sampler.sample_batch(n_problem, pool.as_predicated())
 
         def f(args):

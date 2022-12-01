@@ -38,11 +38,7 @@ from hifuku.neuralnet import (
     IterationPredictorDataset,
     VoxelAutoEncoder,
 )
-from hifuku.pool import (
-    IteratorProblemPool,
-    SimpleIteratorProblemPool,
-    TrivialIteratorPool,
-)
+from hifuku.pool import ProblemPool, PseudoIteratorPool, TrivialProblemPool
 from hifuku.types import ProblemT, RawData
 from hifuku.utils import num_torch_thread
 
@@ -296,7 +292,7 @@ class LargestDifficultClusterPredicate(Generic[ProblemT]):
         library: SolutionLibrary[ProblemT],
         svm: SVM,
         n_sample: int,
-        pool: IteratorProblemPool[ProblemT],
+        pool: ProblemPool[ProblemT],
         accept_threshold: float,
         ambient_rate: float,
         show_progress_bar: bool,
@@ -346,7 +342,7 @@ class LargestDifficultClusterPredicate(Generic[ProblemT]):
     def sample(
         self,
         n_sample: int,
-        pool: IteratorProblemPool[ProblemT],
+        pool: ProblemPool[ProblemT],
         accept_threshold: float = 0.4,
         ambient_rate: float = 0.2,
         n_process: Optional[int] = None,
@@ -415,8 +411,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT]
     config: LibrarySamplerConfig
-    pool_single: IteratorProblemPool[ProblemT]
-    pool_multiple: IteratorProblemPool[ProblemT]
+    pool_single: ProblemPool[ProblemT]
+    pool_multiple: ProblemPool[ProblemT]
     problems_validation: List[ProblemT]
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
@@ -427,8 +423,8 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         problem_type: Type[ProblemT],
         ae_model: VoxelAutoEncoder,
         config: LibrarySamplerConfig,
-        pool_single: Optional[IteratorProblemPool[ProblemT]] = None,
-        pool_multiple: Optional[IteratorProblemPool[ProblemT]] = None,
+        pool_single: Optional[ProblemPool[ProblemT]] = None,
+        pool_multiple: Optional[ProblemPool[ProblemT]] = None,
         problems_validation: Optional[List[ProblemT]] = None,
         solver: Optional[BatchProblemSolver[ProblemT]] = None,
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
@@ -444,13 +440,13 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         # setup pools
         if pool_single is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
-            pool_single = SimpleIteratorProblemPool(problem_type, 1)
+            pool_single = TrivialProblemPool(problem_type, 1)
         assert pool_single.n_problem_inner == 1
 
         if pool_multiple is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
             # TODO: smelling! n_problem_inner should not be set here
-            pool_multiple = SimpleIteratorProblemPool(problem_type, config.n_problem_inner)
+            pool_multiple = TrivialProblemPool(problem_type, config.n_problem_inner)
 
         if problems_validation is None:
             problems_validation = [problem_type.sample(1) for _ in range(1000)]
@@ -585,7 +581,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     def _sample_solution_canidates(
         self,
         n_sample: int,
-        problem_pool: IteratorProblemPool[ProblemT],
+        problem_pool: ProblemPool[ProblemT],
     ) -> List[np.ndarray]:
         difficult_iter_threshold = self.difficult_iter_threshold
 
@@ -621,7 +617,7 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
     def _sample_difficult_problems(
         self,
         n_sample: int,
-        problem_pool: IteratorProblemPool[ProblemT],
+        problem_pool: ProblemPool[ProblemT],
     ) -> Tuple[List[ProblemT], List[ProblemT]]:
 
         difficult_problems: List[ProblemT] = []
@@ -734,7 +730,7 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
         while True:
             trial_count += 1
             logger.debug("trial count increment to {}".format(trial_count))
-            iter_pool = TrivialIteratorPool(self.problem_type, 1, problems_in_clf.__iter__())
+            iter_pool = PseudoIteratorPool(self.problem_type, 1, problems_in_clf.__iter__())
             try:
                 solution_candidates = self._sample_solution_canidates(
                     self.config.n_solution_candidate, iter_pool

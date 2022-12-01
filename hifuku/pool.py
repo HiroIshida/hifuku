@@ -9,28 +9,28 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class PredicatedIteratorProblemPool(Iterator[Optional[ProblemT]]):
+class PredicatedProblemPool(Iterator[Optional[ProblemT]]):
     problem_type: Type[ProblemT]
     n_problem_inner: int
 
 
 @dataclass
-class IteratorProblemPool(Iterator[ProblemT], ABC):
+class ProblemPool(Iterator[ProblemT], ABC):
     problem_type: Type[ProblemT]
     n_problem_inner: int
 
     @abstractmethod
     def make_predicated(
         self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
-    ) -> PredicatedIteratorProblemPool[ProblemT]:
+    ) -> PredicatedProblemPool[ProblemT]:
         pass
 
-    def as_predicated(self) -> PredicatedIteratorProblemPool[ProblemT]:
-        return cast(PredicatedIteratorProblemPool[ProblemT], self)
+    def as_predicated(self) -> PredicatedProblemPool[ProblemT]:
+        return cast(PredicatedProblemPool[ProblemT], self)
 
 
 @dataclass
-class SimplePredicatedIteratorProblemPool(PredicatedIteratorProblemPool[ProblemT]):
+class TrivialPredicatedProblemPool(PredicatedProblemPool[ProblemT]):
     predicate: Callable[[ProblemT], bool]
     max_trial_factor: int
 
@@ -41,20 +41,20 @@ class SimplePredicatedIteratorProblemPool(PredicatedIteratorProblemPool[ProblemT
 
 
 @dataclass
-class SimpleIteratorProblemPool(IteratorProblemPool[ProblemT]):
+class TrivialProblemPool(ProblemPool[ProblemT]):
     def __next__(self) -> ProblemT:
         return self.problem_type.sample(self.n_problem_inner)
 
     def make_predicated(
         self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
-    ) -> SimplePredicatedIteratorProblemPool[ProblemT]:
-        return SimplePredicatedIteratorProblemPool(
+    ) -> TrivialPredicatedProblemPool[ProblemT]:
+        return TrivialPredicatedProblemPool(
             self.problem_type, self.n_problem_inner, predicate, max_trial_factor
         )
 
 
 @dataclass
-class TrivialIteratorPool(IteratorProblemPool[ProblemT]):
+class PseudoIteratorPool(ProblemPool[ProblemT]):
     iterator: Iterator[ProblemT]
 
     def __next__(self) -> ProblemT:
@@ -62,5 +62,5 @@ class TrivialIteratorPool(IteratorProblemPool[ProblemT]):
 
     def make_predicated(
         self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
-    ) -> PredicatedIteratorProblemPool[ProblemT]:
+    ) -> PredicatedProblemPool[ProblemT]:
         raise NotImplementedError("under construction")

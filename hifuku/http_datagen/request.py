@@ -8,7 +8,7 @@ from typing import Generic, List, Optional, Tuple, TypeVar, overload
 
 import numpy as np
 
-from hifuku.pool import PredicatedIteratorProblemPool
+from hifuku.pool import PredicatedProblemPool
 from hifuku.types import ProblemT, ResultProtocol
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ class SolveProblemResponse(MainResponse):
 @dataclass
 class SampleProblemRequest(Generic[ProblemT], MainRequest):
     n_sample: int
-    pool: PredicatedIteratorProblemPool[ProblemT]
+    pool: PredicatedProblemPool[ProblemT]
     n_process: int
 
 
