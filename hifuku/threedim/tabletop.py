@@ -357,6 +357,11 @@ class _TabletopMeshProblem(_TabletopProblem):
     class DummySolverConfig:
         maxiter: int = -1
 
+    def to_tensors(self) -> torch.Tensor:
+        mesh = self.get_mesh()
+        mesh_tensor = torch.from_numpy(mesh).float().unsqueeze(dim=0)
+        return mesh_tensor
+
     # fmt: off
     @classmethod
     @overload
