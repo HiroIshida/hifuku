@@ -53,8 +53,7 @@ class ExactGridSDFCreator(GridSDFCreator):
         pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
         values = sdf.__call__(pts)
         gridsdf = GridSDF(grid, values, 2.0, create_itp_lazy=True)
-        if self.quantize:
-            gridsdf = gridsdf.get_quantized()
+        gridsdf = gridsdf.get_quantized()
         return gridsdf
 
 
@@ -196,7 +195,6 @@ class TabletopProblem(ProblemInterface):
         grid = self.world.get_grid()
         exact_obstacle_sdf = UnionSDF([obs.sdf for obs in self.world.obstacles])
         gridsdf = ExactGridSDFCreator().create(grid, exact_obstacle_sdf)
-        gridsdf = gridsdf.get_quantized()
         return gridsdf
 
     def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
@@ -206,7 +204,6 @@ class TabletopProblem(ProblemInterface):
     def get_mesh(self) -> np.ndarray:
         grid_sdf = self.grid_sdf
         return grid_sdf.values.reshape(grid_sdf.grid.sizes)
-        return _cache["kinmap"]  # type: ignore
 
     def add_elements_to_viewer(self, viewer: TrimeshSceneViewer) -> None:
         viewer.add(self.world.table)
