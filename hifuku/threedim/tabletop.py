@@ -172,15 +172,27 @@ class _TabletopProblem(ProblemInterface):
     world: TableTopWorld
     target_pose_list: List[Coordinates]
 
+    # The reason for this aux cache is to enable to set cache from outside
+    # Primary usecase for this cache is in mesh generation problems.
+    _aux_gridsdf_cache: Optional[GridSDF] = None
+
     @abstractmethod
     def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
         ...
 
     @cached_property
     def grid_sdf(self) -> GridSDF:
-        grid = self.world.get_grid()
-        exact_obstacle_sdf = UnionSDF([obs.sdf for obs in self.world.obstacles])
-        gridsdf = self.create_gridsdf(grid, exact_obstacle_sdf)
+        # NOTE: you may think, removing cached_property and rather, put the cache
+        # into _aux_gridsdf_caceh. However, this is problematic if we sending and
+        # back the problems through network, because the size of the instance will
+        # be huge. Cached property is free from this problem, as when pickling the
+        # problem, the internal state inside cached_property will be removed.
+        if self._aux_gridsdf_cache is not None:
+            return self._aux_gridsdf_cache
+        else:
+            grid = self.world.get_grid()
+            exact_obstacle_sdf = UnionSDF([obs.sdf for obs in self.world.obstacles])
+            gridsdf = self.create_gridsdf(grid, exact_obstacle_sdf)
         return gridsdf
 
     def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
@@ -336,6 +348,33 @@ class _TabletopMeshProblem(_TabletopProblem):
     @dataclass
     class DummySolverConfig:
         maxiter: int = -1
+
+    # fmt: off
+    @classmethod
+    @overload
+    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: Callable[[TableTopProblemT], bool], max_trial_factor: int = ...) -> Optional[TableTopProblemT]: ...  # noqa
+
+    @classmethod
+    @overload
+    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: None, max_trial_factor: int = ...) -> TableTopProblemT: ...  # noqa
+
+    @classmethod
+    @overload
+    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: None=..., max_trial_factor: int = ...) -> TableTopProblemT: ...  # noqa
+    # fmt: on
+
+    @classmethod
+    def sample(
+        cls: Type[TableTopProblemT],
+        n_pose: int,
+        predicate: Optional[Callable[[TableTopProblemT], bool]] = None,
+        max_trial_factor: int = 40,
+    ) -> Optional[TableTopProblemT]:
+
+        problem: Optional[TableTopProblemT] = super().sample(n_pose, predicate, max_trial_factor)
+        if problem is not None:
+            problem._aux_gridsdf_cache = problem.grid_sdf
+        return problem
 
     @classmethod
     def get_solver_config(cls) -> DummySolverConfig:
