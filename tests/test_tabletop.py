@@ -1,10 +1,16 @@
+import tempfile
+import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
 from hifuku.threedim.robot import setup_kinmaps
 from hifuku.threedim.tabletop import (
+    CachedMeshFixedProblemPool,
     TabletopIKProblem,
+    TabletopMeshProblem,
+    TabletopPlanningProblem,
     VoxbloxTabletopMeshProblem,
     VoxbloxTabletopPlanningProblem,
 )
@@ -43,7 +49,7 @@ def test_exact_grid_conversion():
 def test_sample_problem():
     feasible_predicate = SimplePredicate()
     infeasible_predicate = SimplePredicate(np.inf)
-    problem = TabletopIKProblem.sample(30, predicate=feasible_predicate)
+    problem = TabletopIKProblem.sample(30, predicate=feasible_predicate, max_trial_factor=1000)
     assert problem is not None
     for desc in problem.get_descriptions():
         assert len(desc) == 12
@@ -74,3 +80,19 @@ def test_solve_problem():
                 assert not colkin.is_colliding(problem.get_sdf(), res.x)
                 break
     print("sample count {}".format(sample_count))
+
+
+def test_CachedMeshFixedProblemPool():
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        n_problem = 20
+        for _ in range(n_problem):
+            mesh_problem = TabletopMeshProblem.sample(0)
+            mesh_problem.dump(td_path / (str(uuid.uuid4()) + ".pkl"))
+        pool = CachedMeshFixedProblemPool.load(
+            TabletopPlanningProblem, TabletopMeshProblem, 5, td_path
+        )
+        probs = [p for p in pool]
+        assert len(probs) == n_problem
+        for p in probs:
+            assert p.n_problem() == 5

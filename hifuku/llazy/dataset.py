@@ -143,19 +143,24 @@ class LazyDecomplessDataset(Iterable[ChunkT], Generic[ChunkT]):
         dataset_valid.compressed_path_list = path_list[-n_valid:]
         return dataset_train, dataset_valid
 
-    def __iter__(self) -> Iterator[ChunkT]:
-        return DatasetIterator(self)
+    def __iter__(self, max_size: Optional[int] = None) -> Iterator[ChunkT]:
+        return DatasetIterator(self, max_size=max_size)
 
 
 @dataclass
 class DatasetIterator(Iterator[ChunkT], Generic[ChunkT]):
     dataset: LazyDecomplessDataset
+    max_size: Optional[int] = None
     _idx: int = 0
 
     def __post_init__(self):
         assert self._idx == 0
 
     def __next__(self):
+        if self.max_size is not None:
+            if self._idx == self.max_size:
+                raise StopIteration
+
         if self._idx == len(self.dataset):
             raise StopIteration
         data = self.dataset.get_data(np.array([self._idx]))[0]
