@@ -734,7 +734,7 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT]):
         while True:
             trial_count += 1
             logger.debug("trial count increment to {}".format(trial_count))
-            iter_pool = TrivialIteratorPool(problems_in_clf.__iter__())
+            iter_pool = TrivialIteratorPool(self.problem_type, 1, problems_in_clf.__iter__())
             try:
                 solution_candidates = self._sample_solution_canidates(
                     self.config.n_solution_candidate, iter_pool

@@ -8,6 +8,7 @@ from hifuku.types import ProblemT
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class ProblemPool(Iterable[ProblemT]):
     problem_type: Type[ProblemT]
     n_problem_inner: int
@@ -30,10 +31,8 @@ class IteratorProblemPool(Iterator[ProblemT], ProblemPool[ProblemT], ABC):
 
 @dataclass
 class SimplePredicatedIteratorProblemPool(PredicatedIteratorProblemPool[ProblemT]):
-    problem_type: Type[ProblemT]
     predicate: Callable[[ProblemT], bool]
     max_trial_factor: int
-    n_problem_inner: int = 1
 
     def __next__(self) -> Optional[ProblemT]:
         return self.problem_type.sample(
@@ -43,9 +42,6 @@ class SimplePredicatedIteratorProblemPool(PredicatedIteratorProblemPool[ProblemT
 
 @dataclass
 class SimpleIteratorProblemPool(IteratorProblemPool[ProblemT]):
-    problem_type: Type[ProblemT]
-    n_problem_inner: int = 1
-
     def __next__(self) -> ProblemT:
         return self.problem_type.sample(self.n_problem_inner)
 
@@ -53,7 +49,7 @@ class SimpleIteratorProblemPool(IteratorProblemPool[ProblemT]):
         self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
     ) -> SimplePredicatedIteratorProblemPool[ProblemT]:
         return SimplePredicatedIteratorProblemPool(
-            self.problem_type, predicate, max_trial_factor, self.n_problem_inner
+            self.problem_type, self.n_problem_inner, predicate, max_trial_factor
         )
 
 
@@ -76,21 +72,19 @@ class FixedProblemPool(Sized, ProblemPool[ProblemT]):
         ...
 
     def as_iterator(self) -> TrivialIteratorPool[ProblemT]:
-        return TrivialIteratorPool(self.__iter__())
+        return TrivialIteratorPool(self.problem_type, self.n_problem_inner, self.__iter__())
 
 
 @dataclass
 class SimpleFixedProblemPool(FixedProblemPool[ProblemT]):
-    problem_type: Type[ProblemT]
     problem_list: List[ProblemT]
-    n_problem_inner: int
 
     @classmethod
     def initialize(
         cls, problem_type: Type[ProblemT], n_problem: int, n_problem_inner: int = 1
     ) -> "SimpleFixedProblemPool[ProblemT]":
         problem_list = [problem_type.sample(n_problem_inner) for _ in range(n_problem)]
-        return cls(problem_type, problem_list, n_problem_inner)
+        return cls(problem_type, n_problem_inner, problem_list)
 
     def __len__(self) -> int:
         return len(self.problem_list)
