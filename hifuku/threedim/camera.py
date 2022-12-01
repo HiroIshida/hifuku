@@ -5,6 +5,7 @@ from typing import Optional
 
 import numpy as np
 import skrobot
+import threadpoolctl
 from mohou.types import GrayImage, RGBImage
 from skrobot.coordinates.geo import orient_coords_to_axis
 from skrobot.coordinates.math import matrix2quaternion, rotation_matrix_from_axis
@@ -83,34 +84,37 @@ class Camera(Axis):
         hit_only: bool = False,
     ) -> np.ndarray:
         """Generate a point cloud wrt global coordinate"""
-        co_proj_plane = self.copy_worldcoords()
-        co_proj_plane.translate(np.array([1.0, 0.0, 0.0]))
 
-        half_width = np.tan(self.config.fovx * 0.5)
-        half_height = np.tan(self.config.fovy * 0.5)
+        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+            # limiting numpy thread seems to make stable. but not sure why..
+            co_proj_plane = self.copy_worldcoords()
+            co_proj_plane.translate(np.array([1.0, 0.0, 0.0]))
 
-        wlin = np.linspace(-half_width, half_width, self.config.resolx)
-        hlin = np.linspace(-half_height, half_height, self.config.resoly)
-        W, H = np.meshgrid(wlin, hlin)
+            half_width = np.tan(self.config.fovx * 0.5)
+            half_height = np.tan(self.config.fovy * 0.5)
 
-        # First, create a points w.r.t projection plane
-        grid_wh_local = np.array(list(zip(W.flatten(), H.flatten())))
-        grid_local = np.hstack((np.zeros((len(grid_wh_local), 1)), grid_wh_local))
-        grid_global = co_proj_plane.transform_vector(grid_local)
+            wlin = np.linspace(-half_width, half_width, self.config.resolx)
+            hlin = np.linspace(-half_height, half_height, self.config.resoly)
+            W, H = np.meshgrid(wlin, hlin)
 
-        ray_start = self.worldpos()
-        ray_starts = np.tile(np.expand_dims(ray_start, axis=0), (len(grid_global), 1))
-        ray_directions = grid_global - ray_start
+            # First, create a points w.r.t projection plane
+            grid_wh_local = np.array(list(zip(W.flatten(), H.flatten())))
+            grid_local = np.hstack((np.zeros((len(grid_wh_local), 1)), grid_wh_local))
+            grid_global = co_proj_plane.transform_vector(grid_local)
 
-        norms = np.linalg.norm(ray_directions, axis=1)
-        ray_directions_unit = ray_directions / norms[:, None]
+            ray_start = self.worldpos()
+            ray_starts = np.tile(np.expand_dims(ray_start, axis=0), (len(grid_global), 1))
+            ray_directions = grid_global - ray_start
 
-        dists = self.ray_marching(ray_starts, ray_directions_unit, sdf, rm_config)
-        clouds = ray_starts + dists[:, None] * ray_directions_unit
+            norms = np.linalg.norm(ray_directions, axis=1)
+            ray_directions_unit = ray_directions / norms[:, None]
 
-        if hit_only:
-            hit_indices = dists < rm_config.max_dist - 1e-3
-            clouds = clouds[hit_indices]
+            dists = self.ray_marching(ray_starts, ray_directions_unit, sdf, rm_config)
+            clouds = ray_starts + dists[:, None] * ray_directions_unit
+
+            if hit_only:
+                hit_indices = dists < rm_config.max_dist - 1e-3
+                clouds = clouds[hit_indices]
         return clouds
 
     @staticmethod
