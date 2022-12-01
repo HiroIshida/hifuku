@@ -22,9 +22,6 @@ from hifuku.llazy.dataset import (
 class ExampleChunk(PicklableChunkBase):
     data: np.ndarray
 
-    def __len__(self) -> int:
-        return 1
-
     def to_tensors(self) -> torch.Tensor:
         a = torch.from_numpy(self.data).float()
         return a
@@ -33,9 +30,6 @@ class ExampleChunk(PicklableChunkBase):
 @dataclass
 class ExampleChunk2(PicklableChunkBase):
     data: np.ndarray
-
-    def __len__(self) -> int:
-        return 1
 
     def to_tensors(self) -> Tuple[torch.Tensor, ...]:
         a = torch.from_numpy(self.data).float()

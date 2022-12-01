@@ -38,10 +38,6 @@ class ChunkBase(ABC):
         pass
 
     @abstractmethod
-    def __len__(self) -> int:
-        pass
-
-    @abstractmethod
     def to_tensors(self) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
         pass
 
