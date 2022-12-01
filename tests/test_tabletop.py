@@ -54,7 +54,7 @@ def test_sample_problem():
     assert problem is None
 
 
-def tset_casting():
+def test_casting():
     prob1 = VoxbloxTabletopMeshProblem.sample(0)
     prob2 = prob1.cast_to(VoxbloxTabletopPlanningProblem)
     prob2._aux_gridsdf_cache is not None
