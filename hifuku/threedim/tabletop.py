@@ -191,9 +191,9 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
     def to_tensors(self) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
         raise NotImplementedError
 
-    @classmethod
+    @staticmethod
     @abstractmethod
-    def create_gridsdf(cls, world: TableTopWorld) -> GridSDF:
+    def create_gridsdf(world: TableTopWorld) -> GridSDF:
         ...
 
     def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
@@ -510,8 +510,8 @@ class _TabletopPlanningProblem(_TabletopActualProblem):
 
 
 class ExactGridSDFCreatorMixin:
-    @classmethod
-    def create_gridsdf(cls, world: TableTopWorld) -> GridSDF:
+    @staticmethod
+    def create_gridsdf(world: TableTopWorld) -> GridSDF:
         grid = world.get_grid()
         sdf = world.get_union_sdf()
 
@@ -524,8 +524,8 @@ class ExactGridSDFCreatorMixin:
 
 
 class VoxbloxGridSDFCreatorMixin:
-    @classmethod
-    def create_gridsdf(cls, world: TableTopWorld) -> GridSDF:
+    @staticmethod
+    def create_gridsdf(world: TableTopWorld) -> GridSDF:
         grid = world.get_grid()
         sdf = world.get_union_sdf()
 
