@@ -445,23 +445,6 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
             problem_type, ae_model, config.solvable_threshold_factor
         )
 
-        # setup pools
-        if pool_single is None:
-            logger.info("problem pool is not specified. use SimpleProblemPool")
-            pool_single = TrivialProblemPool(problem_type, 1)
-        assert pool_single.n_problem_inner == 1
-
-        if pool_multiple is None:
-            logger.info("problem pool is not specified. use SimpleProblemPool")
-            # TODO: smelling! n_problem_inner should not be set here
-            pool_multiple = TrivialProblemPool(problem_type, config.n_problem_inner)
-        assert pool_multiple.parallelizable()
-
-        if problems_validation is None:
-            problems_validation = [problem_type.sample(1) for _ in range(1000)]
-        for prob in problems_validation:
-            assert prob.n_problem() == 1
-
         # setup solver and sampler
         if solver is None:
             solver = (
@@ -475,6 +458,25 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
                 if use_distributed
                 else MultiProcessBatchProblemSampler()
             )
+
+        # setup pools
+        if pool_single is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            pool_single = TrivialProblemPool(problem_type, 1)
+        assert pool_single.n_problem_inner == 1
+
+        if pool_multiple is None:
+            logger.info("problem pool is not specified. use SimpleProblemPool")
+            # TODO: smelling! n_problem_inner should not be set here
+            pool_multiple = TrivialProblemPool(problem_type, config.n_problem_inner)
+        assert pool_multiple.parallelizable()
+
+        if problems_validation is None:
+            problems_validation = sampler.sample_batch(
+                1000, TrivialProblemPool(problem_type, 1).as_predicated()
+            )
+        for prob in problems_validation:
+            assert prob.n_problem() == 1
 
         logger.info("library sampler config: {}".format(config))
         return cls(
