@@ -1,0 +1,52 @@
+name: CI
+
+on:
+    push:
+        branches:
+            - master
+    pull_request:
+        branches:
+            - master
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        strategy:
+          matrix:
+            python-version: [3.8]
+            os: [ubuntu-22.04]
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v2
+
+            - name: Set up Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v1
+              with:
+                python-version: ${{ matrix.python-version }}
+            - name: install this package
+              run: |
+                  sudo apt-get update && sudo apt-get install libgoogle-glog-dev  # voxbloxpy
+                  pip3 install -e .
+
+            - name: pip install pytest and mypy
+              run: |
+                  pip3 install pytest
+                  pip3 install mypy
+
+            - name: pip install skrobot from source (ishida-dev)
+              run: |
+                  cd /tmp
+                  git clone https://github.com/iory/scikit-robot.git
+                  cd scikit-robot
+                  git remote add h-ishida https://github.com/HiroIshida/scikit-robot.git
+                  git fetch h-ishida
+                  git checkout h-ishida/master
+                  pip3 install -e .
+
+            - name: Run Pytest
+              run: |
+                  pytest -v tests
+
+            - name: Run mypy
+              run: |
+                  echo "somehow, mypy don't ignore --exclude flags and config inside action ..."
