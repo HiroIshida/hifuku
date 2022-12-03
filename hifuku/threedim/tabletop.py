@@ -199,6 +199,11 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
     def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
         ...
 
+    @classmethod
+    @abstractmethod
+    def cache_gridsdf(cls) -> bool:
+        ...
+
     @cached_property
     def grid_sdf(self) -> GridSDF:
         # NOTE: you may think, removing cached_property and rather, put the cache
@@ -285,12 +290,16 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
             dists = vals - np.array(colkin.radius_list)
             return np.any(dists < 0.0)
 
+        problem: Optional[TableTopProblemT] = None
         while True:
             world = TableTopWorld.sample()
             if not is_collision_init_config(world):
                 if predicate is None:
                     target_pose_list = [world.sample_pose() for _ in range(n_pose)]
                     problem = cls(world, target_pose_list)
+
+                    if cls.cache_gridsdf():
+                        problem._aux_gridsdf_cache = problem.grid_sdf
                     return problem
                 else:
                     target_pose_list = []
@@ -311,8 +320,10 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
                         )
                         if seems_infeasible:
                             return None
-
-                    return cls(world, target_pose_list)
+                    problem = cls(world, target_pose_list)
+                    if cls.cache_gridsdf():
+                        problem._aux_gridsdf_cache = problem.grid_sdf
+                    return problem
 
     def visualize(self, av: np.ndarray):
         pr2 = copy.deepcopy(setup_pr2())
@@ -372,33 +383,6 @@ class _TabletopMeshProblem(_TabletopProblem):
         mesh = self.get_mesh()
         mesh_tensor = torch.from_numpy(mesh).float().unsqueeze(dim=0)
         return mesh_tensor
-
-    # fmt: off
-    @classmethod
-    @overload
-    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: Callable[[TableTopProblemT], bool], max_trial_factor: int = ...) -> Optional[TableTopProblemT]: ...  # noqa
-
-    @classmethod
-    @overload
-    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: None, max_trial_factor: int = ...) -> TableTopProblemT: ...  # noqa
-
-    @classmethod
-    @overload
-    def sample(cls: Type[TableTopProblemT], n_pose: int, predicate: None=..., max_trial_factor: int = ...) -> TableTopProblemT: ...  # noqa
-    # fmt: on
-
-    @classmethod
-    def sample(
-        cls: Type[TableTopProblemT],
-        n_pose: int,
-        predicate: Optional[Callable[[TableTopProblemT], bool]] = None,
-        max_trial_factor: int = 40,
-    ) -> Optional[TableTopProblemT]:
-
-        problem: Optional[TableTopProblemT] = super().sample(n_pose, predicate, max_trial_factor)
-        if problem is not None:
-            problem._aux_gridsdf_cache = problem.grid_sdf
-        return problem
 
     @classmethod
     def get_solver_config(cls) -> DummySolverConfig:
@@ -526,6 +510,10 @@ class ExactGridSDFCreatorMixin:
         gridsdf = gridsdf.get_quantized()
         return gridsdf
 
+    @classmethod
+    def cache_gridsdf(cls) -> bool:
+        return False
+
 
 class VoxbloxGridSDFCreatorMixin:
     def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
@@ -536,6 +524,10 @@ class VoxbloxGridSDFCreatorMixin:
         esdf = create_synthetic_esdf(sdf, camera, rm_config=rm_config, esdf=esdf)
         grid_sdf = esdf.get_grid_sdf(grid, fill_value=1.0, create_itp_lazy=True)
         return grid_sdf
+
+    @classmethod
+    def cache_gridsdf(cls) -> bool:
+        return True
 
 
 # fmt: off
