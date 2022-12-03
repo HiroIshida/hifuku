@@ -441,8 +441,6 @@ class _SolutionLibrarySampler(Generic[ProblemT], ABC):
         """
         use will be used only if either of solver and sampler is not set
         """
-        assert pool_multiple.parallelizable()
-
         library = SolutionLibrary.initialize(
             problem_type, ae_model, config.solvable_threshold_factor
         )
