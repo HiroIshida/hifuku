@@ -232,7 +232,36 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
         world = TableTopWorld.sample(standard=True)
         gridsdf = cls.create_gridsdf(world)
         pose = world.sample_pose(standard=True)
-        return cls(world, [pose], gridsdf)
+        problem = cls(world, [pose], gridsdf)
+        assert problem.grid_sdf(pose.worldpos()) > 0
+        return problem
+
+    def sample_pose(self, n_sample: int) -> bool:
+        """this method add new target pose to the problem (change internal)
+        returns if sampling was successful
+
+        NOTE: At first grance, it might be better to make this as a classmethod.
+        Also, it seems a bad idea to change the internal state here.
+        However, because sampling a new pose requires gridsdf which take times
+        to compute, we must use cached gridsdf, and thus we finally decided to
+        make this fucntion a method rather than a classmethod.
+        """
+        assert len(self.target_pose_list) == 0
+
+        trial_count = 0
+        while len(self.target_pose_list) < n_sample:
+            seems_infeasible = len(self.target_pose_list) == 0 and trial_count > 100
+            if seems_infeasible:
+                return False
+
+            pose = self.world.sample_pose()
+            position = np.expand_dims(pose.worldpos(), axis=0)
+            if self.grid_sdf(position)[0] > 1e-3:
+                self.target_pose_list.append(pose)
+                break
+            trial_count += 1
+
+        return True
 
     # fmt: off
     @classmethod
@@ -275,21 +304,14 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
 
             if not is_collision_init_config(world):
                 if predicate is None:
-                    target_pose_list = [world.sample_pose() for _ in range(n_pose)]
-                    problem = cls(world, target_pose_list, gridsdf)
-                    return problem
+                    problem = cls(world, [], gridsdf)
+                    is_sampling_successful = problem.sample_pose(n_pose)
+                    if is_sampling_successful:
+                        return problem
                 else:
-                    target_pose_list = []
+                    target_pose_list: List[Coordinates] = []
                     trial_count = 0
                     while len(target_pose_list) < n_pose:
-                        trial_count += 1
-                        pose = world.sample_pose()
-                        problem = cls(world, [pose], gridsdf)
-                        assert predicate is not None
-                        is_valid = predicate(problem)
-                        if is_valid:
-                            target_pose_list.append(pose)
-
                         # if sampling the first valid problem takes more than max_trial_factor, then
                         # consider the problem is infeasible
                         seems_infeasible = (
@@ -297,6 +319,16 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
                         )
                         if seems_infeasible:
                             return None
+
+                        problem = cls(world, [], gridsdf)
+                        successful = problem.sample_pose(1)
+                        if not successful:
+                            continue
+                        is_valid = predicate(problem)
+                        if is_valid:
+                            assert len(problem.target_pose_list) == 1
+                            target_pose_list.extend(problem.target_pose_list)
+                        trial_count += 1
 
                     problem = cls(world, target_pose_list, gridsdf)
                     return problem
@@ -548,9 +580,12 @@ class CachedProblemPool(ProblemPool[TableTopProblemT]):
         data = next(self.dataset_iter)
         problem: TableTopProblemT = data.cast_to(self.problem_type)
         assert problem.n_problem() == 0
-        for _ in range(self.n_problem_inner):
-            pose = problem.world.sample_pose()
-            problem.target_pose_list.append(pose)
+        successful = problem.sample_pose(self.n_problem_inner)
+        if not successful:
+            logger.debug(
+                "because current problem can sample no feasible poses, we call next() recursively"
+            )
+            return self.__next__()
         return problem
 
     @classmethod
