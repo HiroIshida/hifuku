@@ -27,7 +27,7 @@ from skrobot.coordinates import Coordinates
 from skrobot.model import Axis
 from skrobot.model.link import Link
 from skrobot.model.primitives import Box
-from skrobot.sdf import SignedDistanceFunction, UnionSDF
+from skrobot.sdf import UnionSDF
 from skrobot.viewers import TrimeshSceneViewer
 from voxbloxpy.core import EsdfMap, Grid, GridSDF, IntegratorType
 
@@ -193,7 +193,7 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
 
     @classmethod
     @abstractmethod
-    def create_gridsdf(cls, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+    def create_gridsdf(cls, world: TableTopWorld) -> GridSDF:
         ...
 
     def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
@@ -230,11 +230,7 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
     def create_standard(cls: Type[TableTopProblemT]) -> TableTopProblemT:
         # TODO: move to sample(standard=True) ??
         world = TableTopWorld.sample(standard=True)
-
-        grid = world.get_grid()
-        exact_obstacle_sdf = UnionSDF([obs.sdf for obs in world.obstacles])
-        gridsdf = cls.create_gridsdf(grid, exact_obstacle_sdf)
-
+        gridsdf = cls.create_gridsdf(world)
         pose = world.sample_pose(standard=True)
         return cls(world, [pose], gridsdf)
 
@@ -275,9 +271,7 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
         problem: Optional[TableTopProblemT] = None
         while True:
             world = TableTopWorld.sample()
-            grid = world.get_grid()
-            exact_obstacle_sdf = UnionSDF([obs.sdf for obs in world.obstacles])
-            gridsdf = cls.create_gridsdf(grid, exact_obstacle_sdf)
+            gridsdf = cls.create_gridsdf(world)
 
             if not is_collision_init_config(world):
                 if predicate is None:
@@ -485,7 +479,10 @@ class _TabletopPlanningProblem(_TabletopActualProblem):
 
 class ExactGridSDFCreatorMixin:
     @classmethod
-    def create_gridsdf(cls, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+    def create_gridsdf(cls, world: TableTopWorld) -> GridSDF:
+        grid = world.get_grid()
+        sdf = world.get_union_sdf()
+
         X, Y, Z = grid.get_meshgrid(indexing="ij")
         pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
         values = sdf.__call__(pts)
@@ -496,7 +493,10 @@ class ExactGridSDFCreatorMixin:
 
 class VoxbloxGridSDFCreatorMixin:
     @classmethod
-    def create_gridsdf(cls, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+    def create_gridsdf(cls, world: TableTopWorld) -> GridSDF:
+        grid = world.get_grid()
+        sdf = world.get_union_sdf()
+
         camera = get_pr2_kinect_camera()
         rm_config = RayMarchingConfig(max_dist=2.0)
 
