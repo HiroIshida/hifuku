@@ -1,4 +1,5 @@
 import copy
+import logging
 import os
 import pickle
 import random
@@ -21,6 +22,8 @@ from typing import (
 import numpy as np
 import torch
 from torch.utils.data import default_collate
+
+logger = logging.getLogger(__name__)
 
 _has_gzip = subprocess.run("which gzip > /dev/null", shell=True).returncode == 0
 _has_pigz = subprocess.run("which pigz > /dev/null", shell=True).returncode == 0
@@ -155,6 +158,7 @@ class DatasetIterator(Iterator[ChunkT], Generic[ChunkT]):
         assert self._idx == 0
 
     def __next__(self):
+        logger.debug("DatasetIterator's current idx {} of {}".format(self._idx, len(self.dataset)))
         if self.max_size is not None:
             if self._idx == self.max_size:
                 raise StopIteration
