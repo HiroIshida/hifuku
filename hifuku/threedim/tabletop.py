@@ -233,7 +233,8 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
         gridsdf = cls.create_gridsdf(world)
         pose = world.sample_pose(standard=True)
         problem = cls(world, [pose], gridsdf)
-        assert problem.grid_sdf(pose.worldpos()) > 0
+        position = np.expand_dims(pose.worldpos(), axis=0)
+        assert gridsdf(position)[0] > 0
         return problem
 
     def sample_pose(self, n_sample: int) -> bool:
@@ -249,7 +250,8 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
         assert len(self.target_pose_list) == 0
 
         trial_count = 0
-        while len(self.target_pose_list) < n_sample:
+        pose_list: List[Coordinates] = []
+        while len(pose_list) < n_sample:
             seems_infeasible = len(self.target_pose_list) == 0 and trial_count > 100
             if seems_infeasible:
                 return False
@@ -257,10 +259,10 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
             pose = self.world.sample_pose()
             position = np.expand_dims(pose.worldpos(), axis=0)
             if self.grid_sdf(position)[0] > 1e-3:
-                self.target_pose_list.append(pose)
-                break
+                pose_list.append(pose)
             trial_count += 1
-
+        assert len(pose_list) == n_sample
+        self.target_pose_list = pose_list
         return True
 
     # fmt: off
