@@ -1,3 +1,7 @@
+import argparse
+from enum import Enum
+from typing import Type
+
 import numpy as np
 import torch
 from mohou.file import get_project_path
@@ -5,7 +9,17 @@ from mohou.trainer import TrainCache
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.neuralnet import VoxelAutoEncoder
-from hifuku.threedim.tabletop import TabletopMeshProblem, TableTopWorld
+from hifuku.threedim.tabletop import (
+    TabletopMeshProblem,
+    TableTopWorld,
+    VoxbloxTabletopMeshProblem,
+    _TabletopProblem,
+)
+
+
+class ProblemType(Enum):
+    normal = TabletopMeshProblem
+    voxblox = VoxbloxTabletopMeshProblem
 
 
 def render(mesh):
@@ -14,17 +28,24 @@ def render(mesh):
     sdf.render_volume()
 
 
-pp = get_project_path("tabletop_mesh")
-best_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-type", type=str, default="normal", help="")
+    args = parser.parse_args()
+    mesh_type_name: str = args.type
 
-problem = TabletopMeshProblem.sample(0)
-world = TableTopWorld.sample()
-gridsdf = problem.grid_sdf
-mesh = gridsdf.values.reshape(*gridsdf.grid.sizes)
+    problem_type: Type[_TabletopProblem] = ProblemType[mesh_type_name].value
+    pp = get_project_path("tabletop_mesh-{}".format(problem_type.__name__))
+    best_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
 
-sample = torch.from_numpy(np.expand_dims(np.expand_dims(mesh, axis=0), axis=0)).float()
-out = best_model.decoder(best_model.encoder(sample))
-mesh_reconstruct = out.detach().numpy()[0][0]
+    problem = VoxbloxTabletopMeshProblem.sample(0)
+    world = TableTopWorld.sample()
+    gridsdf = problem.grid_sdf
+    mesh = gridsdf.values.reshape(*gridsdf.grid.sizes)
 
-render(mesh)
-render(mesh_reconstruct)
+    sample = torch.from_numpy(np.expand_dims(np.expand_dims(mesh, axis=0), axis=0)).float()
+    out = best_model.decoder(best_model.encoder(sample))
+    mesh_reconstruct = out.detach().numpy()[0][0]
+
+    render(mesh)
+    render(mesh_reconstruct)
