@@ -2,7 +2,6 @@ import copy
 import logging
 from abc import abstractmethod
 from dataclasses import dataclass
-from functools import cached_property
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Type, TypeVar, Union, overload
 
@@ -179,10 +178,7 @@ TableTopProblemT = TypeVar("TableTopProblemT", bound="_TabletopProblem")
 class _TabletopProblem(PicklableChunkBase, ProblemInterface):
     world: TableTopWorld
     target_pose_list: List[Coordinates]
-
-    # The reason for this aux cache is to enable to set cache from outside
-    # Primary usecase for this cache is in mesh generation problems.
-    _aux_gridsdf_cache: Optional[GridSDF] = None
+    grid_sdf: GridSDF
 
     def cast_to(self, problem_type: Type[TableTopProblemT]) -> TableTopProblemT:
         if not issubclass(problem_type, _TabletopProblem):
@@ -190,34 +186,15 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
         is_compatible_meshgen = type(self).create_gridsdf == problem_type.create_gridsdf
         if not is_compatible_meshgen:
             raise TypeError("incompatible mesh generation algorithm")
-        return problem_type(self.world, self.target_pose_list, self._aux_gridsdf_cache)
+        return problem_type(self.world, self.target_pose_list, self.grid_sdf)
 
     def to_tensors(self) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
         raise NotImplementedError
 
-    @abstractmethod
-    def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
-        ...
-
     @classmethod
     @abstractmethod
-    def cache_gridsdf(cls) -> bool:
+    def create_gridsdf(cls, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
         ...
-
-    @cached_property
-    def grid_sdf(self) -> GridSDF:
-        # NOTE: you may think, removing cached_property and rather, put the cache
-        # into _aux_gridsdf_caceh. However, this is problematic if we sending and
-        # back the problems through network, because the size of the instance will
-        # be huge. Cached property is free from this problem, as when pickling the
-        # problem, the internal state inside cached_property will be removed.
-        if self._aux_gridsdf_cache is not None:
-            return self._aux_gridsdf_cache
-        else:
-            grid = self.world.get_grid()
-            exact_obstacle_sdf = UnionSDF([obs.sdf for obs in self.world.obstacles])
-            gridsdf = self.create_gridsdf(grid, exact_obstacle_sdf)
-        return gridsdf
 
     def get_sdf(self) -> Callable[[np.ndarray], np.ndarray]:
         sdf = create_union_sdf((self.grid_sdf, self.world.table.sdf))  # type: ignore
@@ -253,8 +230,13 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
     def create_standard(cls: Type[TableTopProblemT]) -> TableTopProblemT:
         # TODO: move to sample(standard=True) ??
         world = TableTopWorld.sample(standard=True)
+
+        grid = world.get_grid()
+        exact_obstacle_sdf = UnionSDF([obs.sdf for obs in world.obstacles])
+        gridsdf = cls.create_gridsdf(grid, exact_obstacle_sdf)
+
         pose = world.sample_pose(standard=True)
-        return cls(world, [pose])
+        return cls(world, [pose], gridsdf)
 
     # fmt: off
     @classmethod
@@ -293,13 +275,14 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
         problem: Optional[TableTopProblemT] = None
         while True:
             world = TableTopWorld.sample()
+            grid = world.get_grid()
+            exact_obstacle_sdf = UnionSDF([obs.sdf for obs in world.obstacles])
+            gridsdf = cls.create_gridsdf(grid, exact_obstacle_sdf)
+
             if not is_collision_init_config(world):
                 if predicate is None:
                     target_pose_list = [world.sample_pose() for _ in range(n_pose)]
-                    problem = cls(world, target_pose_list)
-
-                    if cls.cache_gridsdf():
-                        problem._aux_gridsdf_cache = problem.grid_sdf
+                    problem = cls(world, target_pose_list, gridsdf)
                     return problem
                 else:
                     target_pose_list = []
@@ -307,7 +290,7 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
                     while len(target_pose_list) < n_pose:
                         trial_count += 1
                         pose = world.sample_pose()
-                        problem = cls(world, [pose])
+                        problem = cls(world, [pose], gridsdf)
                         assert predicate is not None
                         is_valid = predicate(problem)
                         if is_valid:
@@ -320,9 +303,8 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
                         )
                         if seems_infeasible:
                             return None
-                    problem = cls(world, target_pose_list)
-                    if cls.cache_gridsdf():
-                        problem._aux_gridsdf_cache = problem.grid_sdf
+
+                    problem = cls(world, target_pose_list, gridsdf)
                     return problem
 
     def visualize(self, av: np.ndarray):
@@ -502,7 +484,8 @@ class _TabletopPlanningProblem(_TabletopActualProblem):
 
 
 class ExactGridSDFCreatorMixin:
-    def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+    @classmethod
+    def create_gridsdf(cls, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
         X, Y, Z = grid.get_meshgrid(indexing="ij")
         pts = np.array(list(zip(X.flatten(), Y.flatten(), Z.flatten())))
         values = sdf.__call__(pts)
@@ -510,13 +493,10 @@ class ExactGridSDFCreatorMixin:
         gridsdf = gridsdf.get_quantized()
         return gridsdf
 
-    @classmethod
-    def cache_gridsdf(cls) -> bool:
-        return False
-
 
 class VoxbloxGridSDFCreatorMixin:
-    def create_gridsdf(self, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
+    @classmethod
+    def create_gridsdf(cls, grid: Grid, sdf: SignedDistanceFunction) -> GridSDF:
         camera = get_pr2_kinect_camera()
         rm_config = RayMarchingConfig(max_dist=2.0)
 
@@ -524,10 +504,6 @@ class VoxbloxGridSDFCreatorMixin:
         esdf = create_synthetic_esdf(sdf, camera, rm_config=rm_config, esdf=esdf)
         grid_sdf = esdf.get_grid_sdf(grid, fill_value=1.0, create_itp_lazy=True)
         return grid_sdf
-
-    @classmethod
-    def cache_gridsdf(cls) -> bool:
-        return True
 
 
 # fmt: off

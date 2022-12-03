@@ -63,8 +63,6 @@ def test_sample_problem():
 
 def test_casting():
     prob1 = VoxbloxTabletopMeshProblem.sample(0)
-    prob2 = prob1.cast_to(VoxbloxTabletopPlanningProblem)
-    prob2._aux_gridsdf_cache is not None
 
     # ok
     for problem_type in [
