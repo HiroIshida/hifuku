@@ -185,6 +185,11 @@ class _TabletopProblem(PicklableChunkBase, ProblemInterface):
     _aux_gridsdf_cache: Optional[GridSDF] = None
 
     def cast_to(self, problem_type: Type[TableTopProblemT]) -> TableTopProblemT:
+        if not issubclass(problem_type, _TabletopProblem):
+            raise TypeError
+        is_compatible_meshgen = type(self).create_gridsdf == problem_type.create_gridsdf
+        if not is_compatible_meshgen:
+            raise TypeError("incompatible mesh generation algorithm")
         return problem_type(self.world, self.target_pose_list, self._aux_gridsdf_cache)
 
     def to_tensors(self) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:

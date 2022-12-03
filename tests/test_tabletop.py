@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from hifuku.threedim.robot import setup_kinmaps
 from hifuku.threedim.tabletop import (
@@ -64,6 +65,19 @@ def test_casting():
     prob1 = VoxbloxTabletopMeshProblem.sample(0)
     prob2 = prob1.cast_to(VoxbloxTabletopPlanningProblem)
     prob2._aux_gridsdf_cache is not None
+
+    # ok
+    for problem_type in [
+        VoxbloxTabletopMeshProblem,
+        VoxbloxTabletopPlanningProblem,
+        VoxbloxTabletopPlanningProblem,
+    ]:
+        prob1.cast_to(problem_type)
+
+    # not ok
+    for problem_type in [TabletopMeshProblem, TabletopIKProblem, TabletopPlanningProblem]:
+        with pytest.raises(TypeError):
+            prob1.cast_to(problem_type)
 
 
 def test_solve_problem():
