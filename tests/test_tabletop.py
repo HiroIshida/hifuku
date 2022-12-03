@@ -70,12 +70,12 @@ def test_casting():
         VoxbloxTabletopPlanningProblem,
         VoxbloxTabletopPlanningProblem,
     ]:
-        prob1.cast_to(problem_type)
+        prob1.cast_to(problem_type)  # type: ignore[type-abstract]
 
     # not ok
     for problem_type in [TabletopMeshProblem, TabletopIKProblem, TabletopPlanningProblem]:
         with pytest.raises(TypeError):
-            prob1.cast_to(problem_type)
+            prob1.cast_to(problem_type)  # type: ignore[type-abstract]
 
 
 def test_solve_problem():
