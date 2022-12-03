@@ -1,4 +1,5 @@
 import copy
+import logging
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -15,6 +16,8 @@ from trimesh import PointCloud
 from voxbloxpy.core import CameraPose, EsdfMap
 
 from hifuku.sdf import SDFProtocol
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -177,13 +180,13 @@ def create_synthetic_esdf(
         camera_random.rotate(np.random.randn() * std_rotate, axis="z")
         ts = time.time()
         cloud_global = camera_random.generate_point_cloud(sdf, rm_config=rm_config)
-        print("elapsed time to generate cloud: {} sec".format(time.time() - ts))
+        logger.debug("elapsed time to generate cloud: {} sec".format(time.time() - ts))
 
         cloud_camera = camera_random.inverse_transform_vector(cloud_global)
 
         ts = time.time()
         esdf.update(camera_random.get_voxbloxpy_camera_pose(), cloud_camera)
-        print("elapsed time to update esdf: {} sec".format(time.time() - ts))
+        logger.debug("elapsed time to update esdf: {} sec".format(time.time() - ts))
     return esdf
 
 
