@@ -116,7 +116,7 @@ class TableTopWorld:
 
         obstacles = []
 
-        color = np.array([255, 100, 0, 200])
+        color = np.array([255, 220, 0, 150])
 
         # box
         d = 0.2 + np.random.rand() * 0.3
