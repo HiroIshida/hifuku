@@ -18,6 +18,7 @@ efkin, colkin = TabletopPlanningProblem.setup_kinmaps()
 # pose = world.sample_standard_pose()
 # pose.translate([0.0, -0.15, 0.0])
 problem = TabletopPlanningProblem.sample(1)
+problem.grid_sdf
 TabletopPlanningProblem.cache_all()
 
 # common viewer setup
@@ -31,6 +32,7 @@ p = Path("~/.mohou/tabletop_solution_library").expanduser()
 if p.exists():
     # should set device to cpu as putting on the voxel mesh on gpu is costly (takes 1sec)
     lib = SolutionLibrary.load(p, TabletopPlanningProblem, device=torch.device("cpu"))[0]
+    lib.limit_thread = False
     linestrings = []
     for pred in lib.predictors:
         assert pred.initial_solution is not None
