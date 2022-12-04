@@ -7,7 +7,7 @@ from skplan.viewer.skrobot_viewer import set_robot_config
 from skrobot.model.primitives import LineString
 
 from hifuku.library import SolutionLibrary
-from hifuku.threedim.robot import setup_kinmaps, setup_pr2
+from hifuku.threedim.robot import build_pr2_cache, setup_kinmaps, setup_pr2
 from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 # common setup
@@ -19,6 +19,7 @@ efkin, colkin = setup_kinmaps()
 # pose = world.sample_standard_pose()
 # pose.translate([0.0, -0.15, 0.0])
 problem = TabletopPlanningProblem.sample(1)
+build_pr2_cache()
 
 # common viewer setup
 viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))
@@ -31,6 +32,7 @@ p = Path("~/.mohou/tabletop_solution_library").expanduser()
 if p.exists():
     # should set device to cpu as putting on the voxel mesh on gpu is costly (takes 1sec)
     lib = SolutionLibrary.load(p, TabletopPlanningProblem, device=torch.device("cpu"))[0]
+    lib.limit_thread = False
     linestrings = []
     for pred in lib.predictors:
         assert pred.initial_solution is not None
