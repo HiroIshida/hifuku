@@ -487,12 +487,12 @@ class _TabletopPlanningProblem(_TabletopActualProblem):
                 # creat init traj
                 try:
                     samples = batch_sample_from_manifold(
-                        20,
+                        1,
                         cspace,
                         eq_const=pose_const,
                         ineq_const=obstacle_const,
                         focus_weight=1.0,
-                        max_sample_per_sample=20,
+                        max_sample_per_sample=100,
                     )
                 except ConstraintSatisfactionFail:
                     raise self.SamplingBasedInitialguessFail
