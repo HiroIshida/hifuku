@@ -54,6 +54,7 @@ class SolutionLibrary(Generic[ProblemT]):
     coverage_results: List[Optional[CoverageResult]]
     solvable_threshold_factor: float
     uuidval: str
+    limit_thread: bool = True
 
     def __post_init__(self):
         assert self.ae_model.loss_called
@@ -89,14 +90,25 @@ class SolutionLibrary(Generic[ProblemT]):
         """
         assert len(self.predictors) > 0
 
-        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
-            # limiting numpy thread seems to make stable. but not sure why..
+        if self.limit_thread:
+            with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+                # limiting numpy thread seems to make stable. but not sure why..
+                mesh_np = np.expand_dims(problem.get_mesh(), axis=(0, 1))
+                desc_np = np.array(problem.get_descriptions())
+
+            with num_torch_thread(1):
+                # float() must be run in single (cpp-layer) thread
+                # see https://github.com/pytorch/pytorch/issues/89693
+                mesh = torch.from_numpy(mesh_np)
+                mesh = mesh.float().to(self.device)
+                desc = torch.from_numpy(desc_np)
+                desc = desc.float().to(self.device)
+        else:
+            # usually, calling threadpoolctl and num_torch_thread function
+            # is constly. So if you are sure that you are running program in
+            # a single process. Then set limit_thread = False
             mesh_np = np.expand_dims(problem.get_mesh(), axis=(0, 1))
             desc_np = np.array(problem.get_descriptions())
-
-        with num_torch_thread(1):
-            # float() must be run in single (cpp-layer) thread
-            # see https://github.com/pytorch/pytorch/issues/89693
             mesh = torch.from_numpy(mesh_np)
             mesh = mesh.float().to(self.device)
             desc = torch.from_numpy(desc_np)
