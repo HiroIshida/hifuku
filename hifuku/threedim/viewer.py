@@ -2,7 +2,7 @@ import collections
 from typing import Dict
 
 import trimesh
-from skrobot.model import CascadedLink, Link
+from skrobot.model import CascadedLink, Link, RobotModel
 
 
 class SceneWrapper(trimesh.Scene):
@@ -11,6 +11,16 @@ class SceneWrapper(trimesh.Scene):
     def __init__(self):
         super(SceneWrapper, self).__init__()
         self._links = collections.OrderedDict()
+
+    def show(self):
+        pass
+
+    def redraw(self):
+        # apply latest angle-vector
+        for link_id, link in self._links.items():
+            link.update(force=True)
+            transform = link.worldcoords().T()
+            self.graph.update(link_id, matrix=transform)
 
     def update_scene_graph(self):
         # apply latest angle-vector
@@ -29,7 +39,7 @@ class SceneWrapper(trimesh.Scene):
             raise TypeError("geometry must be Link or CascadedLink")
         return links
 
-    def add_link(self, link):
+    def add(self, link):
         links = self.convert_geometry_to_links(link)
 
         for link in links:
@@ -48,3 +58,14 @@ class SceneWrapper(trimesh.Scene):
                 transform=transform,
             )
             self._links[link_id] = link
+
+
+def set_robot_alpha(robot: RobotModel, alpha: int):
+    assert alpha < 256
+    for link in robot.link_list:
+        visual_mesh = link.visual_mesh
+        if isinstance(visual_mesh, list):
+            for mesh in visual_mesh:
+                mesh.visual.face_colors[:, 3] = alpha
+        else:
+            visual_mesh.visual.face_colors[:, 3] = alpha
