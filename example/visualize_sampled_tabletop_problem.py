@@ -18,6 +18,7 @@ efkin, colkin = TabletopPlanningProblem.setup_kinmaps()
 # pose = world.sample_standard_pose()
 # pose.translate([0.0, -0.15, 0.0])
 problem = TabletopPlanningProblem.sample(1)
+TabletopPlanningProblem.cache_all()
 
 # common viewer setup
 viewer = skrobot.viewers.TrimeshSceneViewer(resolution=(640, 480))

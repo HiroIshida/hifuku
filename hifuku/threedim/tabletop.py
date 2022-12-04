@@ -22,7 +22,7 @@ from skplan.solver.constraint import (
 from skplan.solver.inverse_kinematics import IKConfig, IKResult, InverseKinematicsSolver
 from skplan.solver.optimization import OsqpSqpPlanner
 from skplan.solver.rrt import BidirectionalRRT, RRTConfig, StartConstraintRRT
-from skplan.space import ConfigurationSpace, TaskSpace
+from skplan.space import Bounds, ConfigurationSpace, TaskSpace
 from skplan.trajectory import Trajectory
 from skplan.viewer.skrobot_viewer import get_robot_config, set_robot_config
 from skrobot.coordinates import Coordinates
@@ -181,7 +181,7 @@ class TableTopWorld:
         return table
 
 
-_cache = {"kinmap": None, "pr2": None}
+_cache = {"kinmap": None, "pr2": None, "bounds": None}
 
 
 TableTopProblemT = TypeVar("TableTopProblemT", bound="TabletopProblem")
@@ -207,6 +207,13 @@ class TabletopProblem(ProblemInterface):
         return _cache["pr2"]  # type: ignore
 
     @classmethod
+    def setup_bounds(cls) -> Bounds:
+        if _cache["bounds"] is None:
+            bounds = PR2Paramter.rarm_default_bounds(with_base=True)
+            _cache["bounds"] = bounds  # type: ignore
+        return _cache["bounds"]  # type: ignore
+
+    @classmethod
     def setup_kinmaps(
         cls,
     ) -> Tuple[ArticulatedEndEffectorKinematicsMap, ArticulatedCollisionKinematicsMap]:
@@ -218,6 +225,12 @@ class TabletopProblem(ProblemInterface):
             colkin.reflect_skrobot_model(pr2)
             _cache["kinmap"] = (efkin, colkin)  # type: ignore
         return _cache["kinmap"]  # type: ignore
+
+    @classmethod
+    def cache_all(cls):
+        cls.setup_pr2()
+        cls.setup_bounds()
+        cls.setup_kinmaps()
 
     def add_elements_to_viewer(self, viewer: TrimeshSceneViewer) -> None:
         viewer.add(self.world.table)
@@ -442,10 +455,11 @@ class TabletopPlanningProblem(TabletopActualProblem):
         n_wp = 15
         pr2 = self.setup_pr2()
         efkin, colkin = self.setup_kinmaps()
+        bounds = self.setup_bounds()
         start = get_robot_config(pr2, efkin.control_joint_names, with_base=True)
 
         tspace = TaskSpace(3, sdf=self.world.get_union_sdf())  # type: ignore
-        cspace = ConfigurationSpace(tspace, colkin, PR2Paramter.rarm_default_bounds(with_base=True))
+        cspace = ConfigurationSpace(tspace, colkin, bounds)
 
         if traj_vec_init is not None:
             traj_init = Trajectory(list(traj_vec_init.reshape(n_wp, -1)))
