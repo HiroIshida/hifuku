@@ -9,7 +9,9 @@ from typing import List, Type
 import numpy as np
 import tqdm
 from mohou.file import get_project_path
+from mohou.utils import log_package_version_info
 
+import hifuku
 from hifuku.datagen import DistributeBatchProblemSampler
 from hifuku.pool import TrivialProblemPool
 from hifuku.threedim.tabletop import (
@@ -40,6 +42,7 @@ if __name__ == "__main__":
 
     pp = get_project_path("tabletop_mesh-{}".format(problem_type.__name__))
     logger = create_default_logger(pp, "mesh_generation")
+    log_package_version_info(logger, hifuku)
     cache_base_path = pp / "cache"
     cache_base_path.mkdir(exist_ok=True, parents=True)
     n_cpu: int = os.cpu_count()  # type: ignore
