@@ -4,11 +4,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Iterator, List, Optional, Type, TypeVar, cast
 
-from hifuku.types import ProblemT
+from rpbench.interface import TaskBase
 
 logger = logging.getLogger(__name__)
 
-
+ProblemT = TypeVar("ProblemT", bound=TaskBase)  # TODO: rename to TaskT
 ProblemPoolT = TypeVar("ProblemPoolT", bound="ProblemPoolLike")
 T = TypeVar("T")
 
@@ -65,8 +65,8 @@ class TrivialPredicatedProblemPool(TypicalProblemPoolMixin, PredicatedProblemPoo
     max_trial_factor: int
 
     def __next__(self) -> Optional[ProblemT]:
-        return self.problem_type.sample(
-            self.n_problem_inner, predicate=self.predicate, max_trial_factor=self.max_trial_factor
+        return self.problem_type.predicated_sample(
+            self.n_problem_inner, self.predicate, self.max_trial_factor
         )
 
 

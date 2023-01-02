@@ -1,21 +1,18 @@
-import numpy as np
+from rpbench.tabletop import TabletopBoxRightArmReachingTask
 
 from hifuku.pool import TrivialProblemPool
-from hifuku.threedim.tabletop import TabletopPlanningProblem
 
 
 def test_simple_pool():
-    pool = TrivialProblemPool(TabletopPlanningProblem, 10)
+    pool = TrivialProblemPool(TabletopBoxRightArmReachingTask, 10)
 
     for _ in range(5):
         next(pool)
 
-    pred1 = lambda p: p.get_descriptions()[0][1] > -np.inf  # noqa
-    pool_pred = pool.make_predicated(pred1, 40)
+    pool_pred = pool.make_predicated(lambda x: True, 40)
     for _ in range(5):
         assert next(pool_pred) is not None
 
-    pred2 = lambda p: p.get_descriptions()[0][1] > np.inf  # noqa
-    pool_pred = pool.make_predicated(pred2, 40)
+    pool_pred = pool.make_predicated(lambda x: False, 40)
     for _ in range(5):
         assert next(pool_pred) is None
