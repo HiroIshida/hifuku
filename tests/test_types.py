@@ -3,22 +3,22 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import numpy as np
+from rpbench.tabletop import TabletopBoxRightArmReachingTask
+from skmp.solver.ompl_solver import OMPLSolverConfig, OMPLSolverResult
 
-from hifuku.threedim.tabletop import TabletopIKProblem
 from hifuku.types import RawData
 
 
 def test_rawdata_dump_and_load():
-    problem = TabletopIKProblem.sample(n_pose=1)
-    av_init = np.zeros(10)
-    results = problem.solve(av_init)
-    data = RawData.create(problem, results, av_init)
+    n_desc = 10
+    task = TabletopBoxRightArmReachingTask.sample(n_desc)
+    results = [OMPLSolverResult(None, 1.0, 10) for _ in range(n_desc)]  # dummy
+    data = RawData(task.export_table(), tuple(results), OMPLSolverConfig())
 
     with tempfile.TemporaryDirectory() as td:
-        fp = Path(td) / "hoge.npz"
+        fp = Path(td) / "hoge.pkl"
         data.dump(fp)
-        fpgz = Path(td) / "hoge.npz.gz"
+        fpgz = Path(td) / "hoge.pkl.gz"
         assert fpgz.exists()
 
         cmd = "gunzip {}".format(fpgz)
@@ -29,21 +29,18 @@ def test_rawdata_dump_and_load():
 
 
 def test_rawdata_to_tensor():
-    n_actual_problem = 10
-    problem = TabletopIKProblem.sample(n_pose=n_actual_problem)
-    av_init = np.zeros(10)
-    results = problem.solve(av_init)
-    data = RawData.create(problem, results, av_init)
-    meshes, descriptions, nfevs, solutions = data.to_tensors()
+    n_desc = 10
+    task = TabletopBoxRightArmReachingTask.sample(n_desc)
+    results = [OMPLSolverResult(None, 1.0, 10) for _ in range(n_desc)]  # dummy
+    data = RawData(task.export_table(), tuple(results), OMPLSolverConfig())
+
+    meshes, descriptions, nits = data.to_tensors()
 
     assert meshes.ndim == 4
-    assert descriptions.ndim == 2
-    assert nfevs.ndim == 1
-
-    assert len(meshes) == 1
-    assert len(descriptions) == n_actual_problem
-    assert len(nfevs) == n_actual_problem
+    assert descriptions.shape == (n_desc, 6 + 6)
+    assert nits.shape == (n_desc,)
 
 
 if __name__ == "__main__":
-    test_rawdata_dump_and_load()
+    # test_rawdata_dump_and_load()
+    test_rawdata_to_tensor()

@@ -1,207 +1,100 @@
-import os
+import pickle
 import subprocess
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from pathlib import Path
-from typing import (
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    overload,
-)
+from typing import Optional, Tuple, TypeVar
 
 import numpy as np
 import torch
+from rpbench.interface import DescriptionTable
+from skmp.solver.interface import ConfigProtocol, ResultProtocol
 
 from hifuku.llazy.dataset import ChunkBase
 
-ProblemT = TypeVar("ProblemT", bound="ProblemInterface")
-ResultT = TypeVar("ResultT", bound="ResultProtocol")
-
-
-class ResultProtocol(Protocol):
-    nit: int
-    success: bool
-    x: np.ndarray
-
-
-class SolverConfigProtocol(Protocol):
-    maxiter: int
-
-
-class ProblemInterface(ABC):
-    class SamplingBasedInitialguessFail(Exception):
-        pass
-
-    @classmethod
-    @abstractmethod
-    @overload
-    def sample(
-        cls: Type[ProblemT],
-        n_pose: int,
-        predicate: Callable[[ProblemT], bool],
-        max_trial_factor: int = ...,
-    ) -> Optional[ProblemT]:
-        ...
-
-    @classmethod
-    @abstractmethod
-    @overload
-    def sample(
-        cls: Type[ProblemT], n_pose: int, predicate: None, max_trial_factor: int = ...
-    ) -> ProblemT:
-        ...
-
-    @classmethod
-    @abstractmethod
-    @overload
-    def sample(
-        cls: Type[ProblemT], n_pose: int, predicate: None = ..., max_trial_factor: int = ...
-    ) -> ProblemT:
-        ...
-
-    @classmethod
-    @abstractmethod
-    def sample(
-        cls: Type[ProblemT],
-        n_pose: int,
-        predicate: Optional[Callable[[ProblemT], bool]] = None,
-        max_trial_factor: int = 40,
-    ) -> Optional[ProblemT]:
-        ...
-
-    @classmethod
-    @abstractmethod
-    def get_default_init_solution(cls: Type[ProblemT]) -> np.ndarray:
-        ...
-
-    @abstractmethod
-    def solve(self, sol_init: Optional[np.ndarray] = None) -> Tuple[ResultProtocol, ...]:
-        ...
-
-    @abstractmethod
-    def get_mesh(self) -> np.ndarray:
-        ...
-
-    @abstractmethod
-    def get_descriptions(self) -> List[np.ndarray]:
-        ...
-
-    @abstractmethod
-    def n_problem(self) -> int:
-        ...
-
-    @classmethod
-    @abstractmethod
-    def get_solver_config(cls) -> SolverConfigProtocol:
-        ...
+ResultT = TypeVar("ResultT", bound=ResultProtocol)
 
 
 @dataclass
 class RawData(ChunkBase):
-    mesh: np.ndarray
-    descriptions: List[np.ndarray]
-    nits: List[int]
-    successes: List[bool]
-    solutions: List[np.ndarray]
-    init_solution: np.ndarray
-    maxiter: int
-
-    def __post_init__(self):
-        assert len(self.descriptions) == len(self.nits)
-
-    @classmethod
-    def create(
-        cls,
-        problem: ProblemInterface,
-        results: Tuple[ResultProtocol, ...],
-        init_solution: np.ndarray,
-    ):
-        mesh = problem.get_mesh()
-        descriptions = problem.get_descriptions()
-        nits = [result.nit for result in results]
-        successes = [result.success for result in results]
-        solutions = [result.x for result in results]
-        config = problem.get_solver_config()
-        maxiter = config.maxiter
-        return cls(mesh, descriptions, nits, successes, solutions, init_solution, maxiter)
+    desc: DescriptionTable
+    results: Tuple[ResultProtocol]
+    solver_config: ConfigProtocol
 
     def dump_impl(self, path: Path) -> None:
-        assert path.name.endswith(".npz")
-        # dump as npz rather than pkl for future data backward compatibility
-        table: Dict[str, Union[np.ndarray, int]] = {}
-        table["mesh"] = self.mesh
-        table["descriptions"] = np.array(self.descriptions)
-        table["nits"] = np.array(self.nits, dtype=int)
-        table["successes"] = np.array(self.successes, dtype=bool)
-        table["solutions"] = np.array(self.solutions)
-        table["init_solution"] = np.array(self.init_solution)
-        table["maxiter"] = self.maxiter
-
-        for field in fields(self):
-            assert field.name in table
-
-        np.savez(str(path), **table)
+        assert path.name.endswith(".pkl")
+        with path.open(mode="wb") as f:
+            pickle.dump(self, f)
 
     @classmethod
     def load(cls, path: Path, decompress: bool = False) -> "RawData":
-        path_original = path
         if decompress:
             assert path.name.endswith(".gz")
             subprocess.run("gunzip {} --keep --force".format(path), shell=True)
             path.name
             path = path.parent / path.stem
 
-        assert path.name.endswith(".npz")
-        loaded = np.load(path)
+        assert path.name.endswith(".pkl")
+        with path.open(mode="rb") as f:
+            loaded = pickle.load(f)
+        return loaded
 
-        if path_original.name.endswith(".gz"):
-            os.remove(path)
-        assert path_original.exists()
+    def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # currently we assume that world and world-conditioned descriptions follows
+        # the following rule.
+        # wd refere to world description and wcd refere to world-condtioned descriotion
+        # - wd must have either 2dim or 3dim array and not both
+        # - wd has only one key for 2dim or 3dim array
+        # - wd may have 1 dim array
+        # - wcd does not have 2dim or 3dim array
+        # - wcd must have 1dim array
+        # - wcd may be empty, but wd must not be empty
+        # to remove the above limitation, create a task class which inherit rpbench Task
+        # which is equipped with desc-2-tensor-tuple conversion rule
 
-        kwargs = {}
-        kwargs["mesh"] = loaded["mesh"]
-        kwargs["descriptions"] = list(loaded["descriptions"])
-        kwargs["nits"] = [int(e) for e in loaded["nits"]]
-        kwargs["successes"] = list([bool(e) for e in loaded["successes"]])
-        kwargs["solutions"] = list(loaded["solutions"])
-        kwargs["init_solution"] = loaded["init_solution"]
-        kwargs["maxiter"] = int(loaded["maxiter"].item())
+        # parse world description
+        wd_ndim_to_value = {v.ndim: v for v in self.desc.world_desc_dict.values()}
+        ndim_set = wd_ndim_to_value.keys()
 
-        for field in fields(cls):
-            assert field.name in kwargs
-
-        return cls(**kwargs)
-
-    def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        mesh = torch.from_numpy(self.mesh).float().unsqueeze(dim=0)
-
-        crop_nit = self.maxiter
-        if len(self.descriptions) == 0:
-            # if there is no descriptions...
-            description = torch.zeros(0, 0).float()
-            nits = torch.zeros(0).float()
-            solutions = torch.zeros(0, 0).float()
+        contains_either_2or3_not_both = (2 in ndim_set) ^ (3 in ndim_set)
+        assert contains_either_2or3_not_both
+        if 2 in ndim_set:
+            mesh = wd_ndim_to_value[2]
+        elif 3 in ndim_set:
+            mesh = wd_ndim_to_value[3]
         else:
-            descriptions_np = np.stack(self.descriptions)
-            description = torch.from_numpy(descriptions_np).float()
+            assert False
+        torch_mesh = torch.from_numpy(mesh).float().unsqueeze(dim=0)
 
-            nits_np = np.minimum(
-                np.array(self.nits)
-                + np.array(np.logical_not(self.successes, dtype=bool)) * crop_nit,
-                crop_nit,
-            )
-            nits = torch.from_numpy(nits_np).float()
+        one_key_per_dim = len(wd_ndim_to_value) == len(self.desc.world_desc_dict)
+        assert one_key_per_dim
+        wd_1dim_desc: Optional[np.ndarray] = None
+        if 1 in ndim_set:
+            wd_1dim_desc = wd_ndim_to_value[1]
 
-            solution_np = np.array(self.solutions)
-            solutions = torch.from_numpy(solution_np).float()
-        return mesh, description, nits, solutions
+        # parse world-conditioned description
 
-    def __len__(self) -> int:
-        return 1
+        if len(self.desc.wcond_desc_dicts) == 0:
+            # FIXME: when wcd len == 0, wd_1dim_desc_tensor is ignored ...?
+            torch_wcd_descs = torch.zeros(0, 0).float()
+            torch_nits = torch.zeros(0, 0).float()
+            return torch_mesh, torch_wcd_descs, torch_nits
+        else:
+            wcd_desc_dict = self.desc.wcond_desc_dicts[0]
+            ndims = set([v.ndim for v in wcd_desc_dict.values()])
+            assert ndims == {1}
+
+            torch_wcd_desc_list = []
+            len(self.desc.wcond_desc_dicts)
+            for wcd_desc_dict in self.desc.wcond_desc_dicts:
+                wcd_desc_vec_list = []
+                if wd_1dim_desc is not None:
+                    wcd_desc_vec_list.append(wd_1dim_desc)
+                wcd_desc_vec_list.extend(list(wcd_desc_dict.values()))
+                wcd_desc_vec_cat = np.concatenate(wcd_desc_vec_list)
+                torch_desc = torch.from_numpy(wcd_desc_vec_cat).float()
+                torch_wcd_desc_list.append(torch_desc)
+            torch_wcd_descs = torch.stack(torch_wcd_desc_list)
+
+            nits = np.array([r.n_call for r in self.results])
+            torch_nits = torch.from_numpy(nits).float()
+            return torch_mesh, torch_wcd_descs, torch_nits
