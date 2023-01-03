@@ -7,9 +7,9 @@ from http.client import HTTPConnection
 from typing import Generic, List, Optional, Tuple, TypeVar, overload
 
 import numpy as np
+from skmp.solver.interface import ResultProtocol
 
-from hifuku.pool import PredicatedProblemPool
-from hifuku.types import ProblemT, ResultProtocol
+from hifuku.pool import PredicatedProblemPool, ProblemT
 
 logger = logging.getLogger(__name__)
 
