@@ -8,11 +8,13 @@ import torch.nn as nn
 import tqdm
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from mohou.utils import detect_device
+from rpbench.interface import DescriptionTable
+from skmp.trajectory import Trajectory
 from torch import Tensor
 from torch.utils.data import Dataset
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
-from hifuku.types import ProblemInterface, RawData
+from hifuku.types import RawData
 
 
 @dataclass
@@ -20,7 +22,6 @@ class IterationPredictorDataset(Dataset):
     meshe_encodeds: torch.Tensor
     descriptions: torch.Tensor
     itervals: torch.Tensor
-    solutions: torch.Tensor
     _problem_per_sample: int
 
     def __len__(self) -> int:
@@ -34,7 +35,6 @@ class IterationPredictorDataset(Dataset):
             self.meshe_encodeds[idx // self._problem_per_sample],
             self.descriptions[idx],
             self.itervals[idx],
-            self.solutions[idx],
         )
 
     @classmethod
@@ -47,12 +47,11 @@ class IterationPredictorDataset(Dataset):
         encoded_list = []
         description_list = []
         iterval_list = []
-        solution_list = []
 
         # create minibatch list
         n_problem: int = 0
         for sample in tqdm.tqdm(loader):
-            mesh, description, iterval, solution = sample
+            mesh, description, iterval = sample
 
             mesh = mesh.to(device)  # n_batch x (*shape)
             encoded: torch.Tensor = ae_model.encoder(mesh).detach().cpu()
@@ -62,20 +61,15 @@ class IterationPredictorDataset(Dataset):
                 encoded_list.append(encoded[i].unsqueeze(dim=0))
                 description_list.append(description[i])
                 iterval_list.append(iterval[i])
-                solution_list.append(solution[i])
         assert n_problem > 0
 
         mesh_encodeds_concat = torch.cat(encoded_list, dim=0)  # n_batch x n_bottleneck
         descriptions_concat = torch.cat(description_list, dim=0)
         itervals_concat = torch.cat(iterval_list, dim=0)
-        solutions_concat = torch.cat(solution_list, dim=0)
 
         n_data = len(descriptions_concat)
         assert len(itervals_concat) == n_data
-        assert len(solutions_concat) == n_data
-        return cls(
-            mesh_encodeds_concat, descriptions_concat, itervals_concat, solutions_concat, n_problem
-        )
+        return cls(mesh_encodeds_concat, descriptions_concat, itervals_concat, n_problem)
 
 
 @dataclass
@@ -94,7 +88,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
     solution_linears: Optional[nn.Sequential]
     description_expand_lineras: nn.Sequential
     margin: Optional[float] = None
-    initial_solution: Optional[np.ndarray] = None
+    initial_solution: Optional[Trajectory] = None
 
     def _setup_from_config(self, config: IterationPredictorConfig) -> None:
 
@@ -164,8 +158,8 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         solution_pred = None
         return iter_pred, solution_pred
 
-    def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
-        mesh_encoded, descriptor, iterval, solution = sample
+    def loss(self, sample: Tuple[Tensor, Tensor, Tensor]) -> LossDict:
+        mesh_encoded, descriptor, iterval = sample
         # mesh: (n_batch, (mesh_size))
         # descriptors: (n_batch, n_pose, (descriptor_dim))
         # iterval: (n_batch, n_pose, (,))
@@ -177,16 +171,18 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         dic["iter"] = iter_loss
 
         if solution_pred is not None:
+            assert False, "this feature is deleted"
+            solution = solution_pred  # this is just a dummy line to linter pass
             solution_loss = nn.MSELoss()(solution_pred, solution) * 1000
             dic["solution"] = solution_loss
         return LossDict(dic)
 
-    def infer(self, problem: ProblemInterface) -> np.ndarray:
-        mesh_np = problem.get_mesh()
+    def infer(self, desc_table: DescriptionTable) -> np.ndarray:
+        mesh_np = desc_table.get_mesh()
         mesh = torch.from_numpy(mesh_np).float().unsqueeze(dim=0)
         mesh = mesh.unsqueeze(0).to(self.device)
 
-        descriptions_np = np.stack(problem.get_descriptions())
+        descriptions_np = np.stack(desc_table.get_vector_descs())
         description = torch.from_numpy(descriptions_np).float()
         description = description.unsqueeze(0).to(self.device)
 

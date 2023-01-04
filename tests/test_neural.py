@@ -23,10 +23,9 @@ def test_network():
     mesh = torch.zeros(n_batch, 1, 56, 56, 28)
     mesh_encoded = ae.encoder(mesh)
     descriptions = torch.zeros(n_batch, 12)
-    solutions = torch.zeros(n_batch, n_sol_dim)
     nits = torch.zeros(n_batch, 1)
 
-    sample = (mesh_encoded, descriptions, nits, solutions)
+    sample = (mesh_encoded, descriptions, nits)
 
     model.loss(sample)
 
