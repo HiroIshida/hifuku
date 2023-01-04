@@ -9,11 +9,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Generic, List, Optional, Tuple
+from typing import Generic, List, Optional, Tuple, Type
 
 import numpy as np
 import tqdm
+from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
+from skmp.trajectory import Trajectory
 
+from hifuku.config import ServerSpec
 from hifuku.http_datagen.client import ClientBase
 from hifuku.http_datagen.request import (
     SampleProblemRequest,
@@ -21,8 +24,8 @@ from hifuku.http_datagen.request import (
     http_connection,
     send_request,
 )
-from hifuku.pool import PredicatedProblemPool
-from hifuku.types import ProblemT, RawData, ResultProtocol
+from hifuku.pool import PredicatedProblemPool, ProblemT
+from hifuku.types import RawData
 from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
@@ -45,10 +48,12 @@ def split_indices(n_problem_total: int, n_problem_list: List[int]) -> List[List[
 
 
 @dataclass
-class BatchProblemSolverArg(Generic[ProblemT]):
+class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
     indices: np.ndarray
     problems: List[ProblemT]
-    init_solutions: List[np.ndarray]
+    solver_t: Type[AbstractSolver[ConfigT, ResultT]]
+    solver_config: ConfigT
+    init_solutions: List[Trajectory]
     show_process_bar: bool
 
     def __len__(self) -> int:
@@ -58,8 +63,8 @@ class BatchProblemSolverArg(Generic[ProblemT]):
         assert len(self.problems) == len(self.init_solutions)
 
 
-class BatchProblemSolverTask(Process, Generic[ProblemT]):
-    arg: BatchProblemSolverArg[ProblemT]
+class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
+    arg: BatchProblemSolverArg[ProblemT, ConfigT, ResultT]
     queue: Queue
 
     def __init__(self, arg: BatchProblemSolverArg, queue: Queue):
@@ -77,22 +82,28 @@ class BatchProblemSolverTask(Process, Generic[ProblemT]):
         disable_tqdm = not self.arg.show_process_bar
 
         with tqdm.tqdm(total=len(self.arg), disable=disable_tqdm) as pbar:
-            for idx, prob, init_solution in zip(
+            for idx, task, init_solution in zip(
                 self.arg.indices, self.arg.problems, self.arg.init_solutions
             ):
-                results = prob.solve(init_solution)
+                solver_setups = [
+                    self.arg.solver_t.setup(prob, self.arg.solver_config)
+                    for prob in task.export_problems()
+                ]
+                results: Tuple[ResultT] = tuple([ss.solve(init_solution) for ss in solver_setups])
                 logger.debug("generated single data")
-                logger.debug("success: {}".format([r.success for r in results]))
-                logger.debug("iteration: {}".format([r.nit for r in results]))
+                logger.debug("success: {}".format([r.traj is not None for r in results]))
+                logger.debug("iteration: {}".format([r.n_call for r in results]))
                 self.queue.put((idx, results))
                 pbar.update(1)
 
 
 @dataclass
-class DumpDatasetTask(Generic[ProblemT]):
+class DumpDatasetTask(Generic[ProblemT, ConfigT, ResultT]):
     problems: List[ProblemT]
-    init_solutions: List[np.ndarray]
-    results_list: List[Tuple[ResultProtocol, ...]]
+    solver_t: Type[AbstractSolver[ConfigT, ResultT]]
+    solver_config: ConfigT
+    init_solutions: List[Trajectory]
+    results_list: List[Tuple[ResultT, ...]]
     cache_path: Path
     show_progress_bar: bool
 
@@ -105,27 +116,34 @@ class DumpDatasetTask(Generic[ProblemT]):
         disable_progress_bar = not self.show_progress_bar
         for i in tqdm.tqdm(range(len(self)), disable=disable_progress_bar):
             problem = self.problems[i]
-            init_solution = self.init_solutions[i]
+            self.init_solutions[i]
             results = self.results_list[i]
-            raw_data = RawData.create(problem, results, init_solution)
-            name = str(uuid.uuid4()) + ".npz"
+            raw_data = RawData.construct(problem, results, self.solver_config)
+            name = str(uuid.uuid4()) + ".pkl"
             path = self.cache_path / name
             raw_data.dump(path)
 
 
-class BatchProblemSolver(Generic[ProblemT], ABC):
+class BatchProblemSolver(Generic[ProblemT, ConfigT, ResultT], ABC):
+    solver_t: Type[AbstractSolver[ConfigT, ResultT]]
+    config: ConfigT
+
+    def __init__(self, solver_t: Type[AbstractSolver[ConfigT, ResultT]], config: ConfigT):
+        self.solver_t = solver_t
+        self.config = config
+
     @abstractmethod
     def solve_batch(
         self,
         problems: List[ProblemT],
-        init_solutions: List[np.ndarray],
-    ) -> List[Tuple[ResultProtocol, ...]]:
+        init_solutions: List[Trajectory],
+    ) -> List[Tuple[ResultT, ...]]:
         ...
 
     def create_dataset(
         self,
         problems: List[ProblemT],
-        init_solutions: List[np.ndarray],
+        init_solutions: List[Trajectory],
         cache_dir_path: Path,
         n_process: Optional[int],
     ) -> None:
@@ -151,8 +169,10 @@ class BatchProblemSolver(Generic[ProblemT], ABC):
             init_solutions_part = [init_solutions[i] for i in indices_part]
             results_list_part = [results_list[i] for i in indices_part]
 
-            task = DumpDatasetTask(
+            task = DumpDatasetTask[ProblemT, ConfigT, ResultT](
                 problems_part,
+                self.solver_t,
+                self.config,
                 init_solutions_part,
                 results_list_part,
                 cache_dir_path,
@@ -166,10 +186,16 @@ class BatchProblemSolver(Generic[ProblemT], ABC):
             p.join()
 
 
-class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
+class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT, ConfigT, ResultT]):
     n_process: int
 
-    def __init__(self, n_process: Optional[int] = None):
+    def __init__(
+        self,
+        solver_t: Type[AbstractSolver[ConfigT, ResultT]],
+        config: ConfigT,
+        n_process: Optional[int] = None,
+    ):
+        super().__init__(solver_t, config)
         if n_process is None:
             logger.info("n_process is not set. automatically determine")
             cpu_num = os.cpu_count()
@@ -180,27 +206,30 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
 
     def solve_batch(
         self,
-        problems: List[ProblemT],
-        init_solutions: List[np.ndarray],
-    ) -> List[Tuple[ResultProtocol, ...]]:
+        tasks: List[ProblemT],
+        init_solutions: List[Trajectory],
+    ) -> List[Tuple[ResultT, ...]]:
 
-        assert len(problems) == len(init_solutions)
-        assert len(problems) > 0
+        assert len(tasks) == len(init_solutions)
+        assert len(tasks) > 0
 
-        n_process = min(self.n_process, len(problems))
+        n_process = min(self.n_process, len(tasks))
         logger.debug("*n_process: {}".format(n_process))
 
         is_single_process = n_process == 1
         if is_single_process:
-            results_list: List[Tuple[ResultProtocol, ...]] = []
-            maxiter = problems[0].get_solver_config().maxiter
-            logger.debug("*maxiter: {}".format(maxiter))
-            for problem, init_solution in zip(problems, init_solutions):
-                results = problem.solve(init_solution)
-                results_list.append(results)
+            results_list: List[Tuple[ResultT, ...]] = []
+            n_max_call = self.config.n_max_call
+            logger.debug("*n_max_call: {}".format(n_max_call))
+            for task, init_solution in zip(tasks, init_solutions):
+                solver_setups = [
+                    self.solver_t.setup(prob, self.config) for prob in task.export_problems()
+                ]
+                results: List[ResultT] = [ss.solve(init_solution) for ss in solver_setups]
+                results_list.append(tuple(results))
             return results_list
         else:
-            indices = np.array(list(range(len(problems))))
+            indices = np.array(list(range(len(tasks))))
             indices_list_per_worker = np.array_split(indices, n_process)
 
             q = multiprocessing.Queue()  # type: ignore
@@ -209,19 +238,24 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
             process_list = []
             for i, indices_part in enumerate(indices_list_per_worker):
                 enable_tqdm = i == 0
-                problems_part = [problems[idx] for idx in indices_part]
+                problems_part = [tasks[idx] for idx in indices_part]
                 init_solutions_part = [init_solutions[idx] for idx in indices_part]
                 arg = BatchProblemSolverArg(
-                    indices_part, problems_part, init_solutions_part, enable_tqdm
+                    indices_part,
+                    problems_part,
+                    self.solver_t,
+                    self.config,
+                    init_solutions_part,
+                    enable_tqdm,
                 )
-                task = BatchProblemSolverTask(arg, q)  # type: ignore
-                process_list.append(task)
-                task.start()
+                worker = BatchProblemSolverWorker(arg, q)  # type: ignore
+                process_list.append(worker)
+                worker.start()
 
-            idx_result_pairs = [q.get() for _ in range(len(problems))]
+            idx_result_pairs = [q.get() for _ in range(len(tasks))]
 
-            for task in process_list:
-                task.join()
+            for worker in process_list:
+                worker.join()
 
             idx_result_pairs_sorted = sorted(idx_result_pairs, key=lambda x: x[0])  # type: ignore
             _, results = zip(*idx_result_pairs_sorted)
@@ -231,7 +265,23 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT]):
 HostPortPair = Tuple[str, int]
 
 
-class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProblemSolver[ProblemT]):
+class DistributedBatchProblemSolver(
+    ClientBase[SolveProblemRequest], BatchProblemSolver[ProblemT, ConfigT, ResultT]
+):
+    def __init__(
+        self,
+        solver_t: Type[AbstractSolver[ConfigT, ResultT]],
+        config: ConfigT,
+        server_specs: Optional[Tuple[ServerSpec, ...]] = None,
+        use_available_host: bool = False,
+        force_continue: bool = False,
+        n_measure_sample: int = 40,
+    ):
+        BatchProblemSolver.__init__(self, solver_t, config)
+        ClientBase.__init__(
+            self, server_specs, use_available_host, force_continue, n_measure_sample
+        )
+
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
         hostport: HostPortPair, request: SolveProblemRequest, indices: np.ndarray, tmp_path: Path
@@ -249,13 +299,15 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
     def solve_batch(
         self,
         problems: List[ProblemT],
-        init_solutions: List[np.ndarray],
-    ) -> List[Tuple[ResultProtocol, ...]]:
+        init_solutions: List[Trajectory],
+    ) -> List[Tuple[ResultT, ...]]:
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         problems_measure = problems[: self.n_measure_sample]
         init_solutions_measure = init_solutions[: self.n_measure_sample]
-        request_for_measure = SolveProblemRequest(problems_measure, init_solutions_measure, -1)
+        request_for_measure = SolveProblemRequest(
+            problems_measure, self.solver_t, self.config, init_solutions_measure, -1
+        )
         n_problem = len(problems)
         n_problem_table = self.create_gen_number_table(request_for_measure, n_problem)
         indices_list = split_indices(n_problem, list(n_problem_table.values()))
@@ -268,7 +320,9 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
                 n_process = self.hostport_cpuinfo_map[hostport].n_cpu
                 problems_part = [problems[i] for i in indices]
                 init_solutions_part = [init_solutions[i] for i in indices]
-                req = SolveProblemRequest(problems_part, init_solutions_part, n_process)
+                req = SolveProblemRequest(
+                    problems_part, self.solver_t, self.config, init_solutions_part, n_process
+                )
                 if len(problems_part) > 0:
                     p = Process(
                         target=self.send_and_recive_and_write,
@@ -280,7 +334,7 @@ class DistributedBatchProblemSolver(ClientBase[SolveProblemRequest], BatchProble
             for p in process_list:
                 p.join()
 
-            results_list_all: List[List[ResultProtocol]] = []
+            results_list_all: List[List[ResultT]] = []
             indices_all: List[int] = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:

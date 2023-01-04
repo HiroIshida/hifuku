@@ -7,6 +7,8 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+from skmp.solver.interface import ConfigT, ResultT
+
 from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
@@ -22,6 +24,7 @@ from hifuku.http_datagen.request import (
     SolveProblemRequest,
     SolveProblemResponse,
 )
+from hifuku.pool import ProblemT
 from hifuku.utils import get_module_source_hash
 
 
@@ -50,11 +53,15 @@ class PostHandler(BaseHTTPRequestHandler):
         resp = GetModuleHashValueResponse(hashes)
         return resp
 
-    def process_SolveProblemRequest(self, request: SolveProblemRequest) -> SolveProblemResponse:
+    def process_SolveProblemRequest(
+        self, request: SolveProblemRequest[ProblemT, ConfigT, ResultT]
+    ) -> SolveProblemResponse[ResultT]:
         ts = time.time()
         logging.info("request: {}".format(request))
 
-        gen = MultiProcessBatchProblemSolver(request.n_process)  # type: ignore[var-annotated]
+        gen = MultiProcessBatchProblemSolver[ProblemT, ConfigT, ResultT](
+            request.solver_t, request.config, request.n_process
+        )
 
         with tempfile.TemporaryDirectory() as td:
             Path(td)
@@ -64,10 +71,12 @@ class PostHandler(BaseHTTPRequestHandler):
         resp = SolveProblemResponse(results_list, elapsed_time)
         return resp
 
-    def process_SampleProblemRequest(self, request: SampleProblemRequest) -> SampleProblemResponse:
+    def process_SampleProblemRequest(
+        self, request: SampleProblemRequest[ProblemT]
+    ) -> SampleProblemResponse[ProblemT]:
         ts = time.time()
         logging.info("request: {}".format(request))
-        sampler = MultiProcessBatchProblemSampler(request.n_process)  # type: ignore[var-annotated]
+        sampler = MultiProcessBatchProblemSampler[ProblemT](request.n_process)
         problems = sampler.sample_batch(request.n_sample, request.pool)
         assert len(problems) > 0
         elapsed_time = time.time() - ts

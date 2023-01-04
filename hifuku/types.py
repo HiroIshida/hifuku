@@ -6,7 +6,7 @@ from typing import Optional, Tuple, TypeVar
 
 import numpy as np
 import torch
-from rpbench.interface import DescriptionTable
+from rpbench.interface import DescriptionTable, TaskBase
 from skmp.solver.interface import ConfigProtocol, ResultProtocol
 
 from hifuku.llazy.dataset import ChunkBase
@@ -19,6 +19,13 @@ class RawData(ChunkBase):
     desc: DescriptionTable
     results: Tuple[ResultProtocol]
     solver_config: ConfigProtocol
+
+    @classmethod
+    def construct(
+        cls, task: TaskBase, results: Tuple[ResultProtocol], solcon: ConfigProtocol
+    ) -> "RawData":
+        desc = task.export_table()
+        return cls(desc, results, solcon)
 
     def dump_impl(self, path: Path) -> None:
         assert path.name.endswith(".pkl")

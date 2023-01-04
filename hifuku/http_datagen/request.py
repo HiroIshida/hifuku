@@ -4,10 +4,10 @@ import pickle
 import time
 from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
-from typing import Generic, List, Optional, Tuple, TypeVar, overload
+from typing import Generic, List, Optional, Tuple, Type, TypeVar, overload
 
-import numpy as np
-from skmp.solver.interface import ResultProtocol
+from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
+from skmp.trajectory import Trajectory
 
 from hifuku.pool import PredicatedProblemPool, ProblemT
 
@@ -57,9 +57,11 @@ class GetModuleHashValueResponse(Response):
 
 
 @dataclass
-class SolveProblemRequest(Generic[ProblemT], MainRequest):
+class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
     problems: List[ProblemT]
-    init_solutions: List[np.ndarray]
+    solver_t: Type[AbstractSolver[ConfigT, ResultT]]
+    config: ConfigT
+    init_solutions: List[Trajectory]
     n_process: int
 
     def __str__(self) -> str:
@@ -67,8 +69,8 @@ class SolveProblemRequest(Generic[ProblemT], MainRequest):
 
 
 @dataclass
-class SolveProblemResponse(MainResponse):
-    results_list: List[Tuple[ResultProtocol, ...]]
+class SolveProblemResponse(Generic[ResultT], MainResponse):
+    results_list: List[Tuple[ResultT, ...]]
     elapsed_time: float
 
     def __str__(self) -> str:
