@@ -3,8 +3,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import numpy as np
 from rpbench.tabletop import TabletopBoxRightArmReachingTask
-from skmp.solver.ompl_solver import OMPLSolverConfig, OMPLSolverResult
+from skmp.solver.ompl_solver import OMPLSolverConfig, OMPLSolverResult, TerminateState
+from skmp.trajectory import Trajectory
 
 from hifuku.types import RawData
 
@@ -12,8 +14,11 @@ from hifuku.types import RawData
 def test_rawdata_dump_and_load():
     n_desc = 10
     task = TabletopBoxRightArmReachingTask.sample(n_desc)
-    results = [OMPLSolverResult(None, 1.0, 10) for _ in range(n_desc)]  # dummy
-    data = RawData(task.export_table(), tuple(results), OMPLSolverConfig())
+    results = [
+        OMPLSolverResult(None, 1.0, 10, TerminateState.SUCCESS) for _ in range(n_desc)
+    ]  # dummy
+    traj_dummy = Trajectory([np.zeros(2)])
+    data = RawData(traj_dummy, task.export_table(), tuple(results), OMPLSolverConfig())
 
     with tempfile.TemporaryDirectory() as td:
         fp = Path(td) / "hoge.pkl"
@@ -31,8 +36,11 @@ def test_rawdata_dump_and_load():
 def test_rawdata_to_tensor():
     n_desc = 10
     task = TabletopBoxRightArmReachingTask.sample(n_desc)
-    results = [OMPLSolverResult(None, 1.0, 10) for _ in range(n_desc)]  # dummy
-    data = RawData(task.export_table(), tuple(results), OMPLSolverConfig())
+    traj_dummy = Trajectory([np.zeros(2)])
+    results = [
+        OMPLSolverResult(None, 1.0, 10, TerminateState.SUCCESS) for _ in range(n_desc)
+    ]  # dummy
+    data = RawData(traj_dummy, task.export_table(), tuple(results), OMPLSolverConfig())
 
     meshes, descriptions, nits = data.to_tensors()
 
