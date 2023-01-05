@@ -65,7 +65,7 @@ class TensorChunkBase(ChunkBase):
 
 
 @dataclass  # type: ignore
-class Picklable:
+class PicklableChunkBase(ChunkBase):
     @classmethod
     def load(cls: Type[PicklableChunkT], path: Path) -> PicklableChunkT:
         with path.open(mode="rb") as f:
@@ -82,11 +82,7 @@ class Picklable:
             pickle.dump(dic, f)
 
 
-class PicklableChunkBase(Picklable, ChunkBase):
-    ...
-
-
-class PicklableTensorChunkBase(Picklable, TensorChunkBase):
+class PicklableTensorChunkBase(PicklableChunkBase, TensorChunkBase):
     ...
 
 
