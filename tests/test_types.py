@@ -4,10 +4,10 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from rpbench.tabletop import TabletopBoxRightArmReachingTask
 from skmp.solver.ompl_solver import OMPLSolverConfig, OMPLSolverResult, TerminateState
 from skmp.trajectory import Trajectory
 
+from hifuku.task_wrap import TabletopBoxRightArmReachingTask
 from hifuku.types import RawData
 
 

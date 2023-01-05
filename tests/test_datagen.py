@@ -10,7 +10,6 @@ from typing import List
 import numpy as np
 import pytest
 from ompl import set_ompl_random_seed
-from rpbench.tabletop import TabletopBoxRightArmReachingTask
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig, OMPLSolverResult
 
 from hifuku.config import ServerSpec
@@ -24,6 +23,7 @@ from hifuku.datagen import (
 )
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
+from hifuku.task_wrap import TabletopBoxRightArmReachingTask
 from hifuku.testing_asset import SimplePredicate
 from hifuku.types import RawData
 from hifuku.utils import create_default_logger

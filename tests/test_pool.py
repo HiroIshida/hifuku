@@ -1,6 +1,5 @@
-from rpbench.tabletop import TabletopBoxRightArmReachingTask
-
 from hifuku.pool import TrivialProblemPool
+from hifuku.task_wrap import TabletopBoxRightArmReachingTask
 
 
 def test_simple_pool():

@@ -5,7 +5,6 @@ from typing import Optional
 import numpy as np
 import torch
 from mohou.trainer import TrainConfig
-from rpbench.tabletop import TabletopBoxRightArmReachingTask
 from skmp.solver.nlp_solver import (
     SQPBasedSolver,
     SQPBasedSolverConfig,
@@ -24,6 +23,7 @@ from hifuku.library import (
     SolutionLibrary,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
+from hifuku.task_wrap import TabletopBoxRightArmReachingTask
 from hifuku.utils import create_default_logger
 
 
