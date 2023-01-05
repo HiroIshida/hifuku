@@ -5,8 +5,8 @@ import tqdm
 from skrobot.model.primitives import Sphere
 from voxbloxpy.core import EsdfMap, IntegratorType
 
+from hifuku.camera import Camera, CameraConfig, RayMarchingConfig
 from hifuku.sdf import SDFProtocol
-from hifuku.threedim.camera import Camera, CameraConfig, RayMarchingConfig
 
 
 def genrate_camera_pcloud_pairs(
