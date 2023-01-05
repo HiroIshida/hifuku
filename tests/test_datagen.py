@@ -71,7 +71,9 @@ def test_consistency_of_all_batch_sovler(server):
                 TabletopBoxRightArmReachingTask.sample(n_problem_inner) for _ in range(n_problem)
             ]
             batch_solver_list: List[BatchProblemSolver] = []
-            mp_batch_solver = MultiProcessBatchProblemSolver(OMPLSolver, solcon, 2)
+            mp_batch_solver = MultiProcessBatchProblemSolver[
+                TabletopBoxRightArmReachingTask, OMPLSolverConfig, OMPLSolverResult
+            ](OMPLSolver, solcon, 2)
             assert mp_batch_solver.n_process == 2
             batch_solver_list.append(mp_batch_solver)
 

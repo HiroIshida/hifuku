@@ -89,7 +89,9 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                     self.arg.solver_t.setup(prob, self.arg.solver_config)
                     for prob in task.export_problems()
                 ]
-                results: Tuple[ResultT] = tuple([ss.solve(init_solution) for ss in solver_setups])
+                results: Tuple[ResultT, ...] = tuple(
+                    [ss.solve(init_solution) for ss in solver_setups]
+                )
                 logger.debug("generated single data")
                 logger.debug("success: {}".format([r.traj is not None for r in results]))
                 logger.debug("iteration: {}".format([r.n_call for r in results]))
@@ -116,9 +118,9 @@ class DumpDatasetTask(Generic[ProblemT, ConfigT, ResultT]):
         disable_progress_bar = not self.show_progress_bar
         for i in tqdm.tqdm(range(len(self)), disable=disable_progress_bar):
             problem = self.problems[i]
-            self.init_solutions[i]
+            init_solution = self.init_solutions[i]
             results = self.results_list[i]
-            raw_data = RawData.construct(problem, results, self.solver_config)
+            raw_data = RawData(init_solution, problem.export_table(), results, self.solver_config)
             name = str(uuid.uuid4()) + ".pkl"
             path = self.cache_path / name
             raw_data.dump(path)
