@@ -19,7 +19,7 @@ ResultT = TypeVar("ResultT", bound=ResultProtocol)
 class RawData(ChunkBase):
     init_solution: Trajectory
     desc: DescriptionTable
-    results: Tuple[ResultProtocol]
+    results: Tuple[ResultProtocol, ...]
     solver_config: ConfigProtocol
 
     def dump_impl(self, path: Path) -> None:
