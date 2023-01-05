@@ -14,12 +14,12 @@ import torch
 from hifuku.llazy.dataset import (
     LazyDecomplessDataLoader,
     LazyDecomplessDataset,
-    PicklableChunkBase,
+    PicklableTensorChunkBase,
 )
 
 
 @dataclass
-class ExampleChunk(PicklableChunkBase):
+class ExampleChunk(PicklableTensorChunkBase):
     data: np.ndarray
 
     def to_tensors(self) -> torch.Tensor:
@@ -28,7 +28,7 @@ class ExampleChunk(PicklableChunkBase):
 
 
 @dataclass
-class ExampleChunk2(PicklableChunkBase):
+class ExampleChunk2(PicklableTensorChunkBase):
     data: np.ndarray
 
     def to_tensors(self) -> Tuple[torch.Tensor, ...]:

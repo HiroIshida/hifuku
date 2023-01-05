@@ -37,6 +37,7 @@ else:
     _unzip_command = "gunzip"
 
 ChunkT = TypeVar("ChunkT", bound="ChunkBase")
+TensorChunkT = TypeVar("TensorChunkT", bound="TensorChunkBase")
 PicklableChunkT = TypeVar("PicklableChunkT", bound="PicklableChunkBase")
 
 
@@ -50,10 +51,6 @@ class ChunkBase(ABC):
     def dump_impl(self, path: Path) -> None:
         pass
 
-    @abstractmethod
-    def to_tensors(self) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
-        pass
-
     def dump(self, path: Path) -> Path:
         self.dump_impl(path)
         command = "{0} -1 {1}".format(_zip_command, path)
@@ -61,8 +58,14 @@ class ChunkBase(ABC):
         return path.parent / (path.name + ".gz")
 
 
+class TensorChunkBase(ChunkBase):
+    @abstractmethod
+    def to_tensors(self) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
+        pass
+
+
 @dataclass  # type: ignore
-class PicklableChunkBase(ChunkBase):
+class Picklable:
     @classmethod
     def load(cls: Type[PicklableChunkT], path: Path) -> PicklableChunkT:
         with path.open(mode="rb") as f:
@@ -77,6 +80,14 @@ class PicklableChunkBase(ChunkBase):
             dic[key] = self.__dict__[key]
         with path.open(mode="wb") as f:
             pickle.dump(dic, f)
+
+
+class PicklableChunkBase(Picklable, ChunkBase):
+    ...
+
+
+class PicklableTensorChunkBase(Picklable, TensorChunkBase):
+    ...
 
 
 @dataclass
@@ -171,12 +182,12 @@ class DatasetIterator(Iterator[ChunkT], Generic[ChunkT]):
 
 
 @dataclass
-class LazyDecomplessDataLoader(Generic[ChunkT]):
+class LazyDecomplessDataLoader(Generic[TensorChunkT]):
     r"""
     A dataloader class that has the similar inteface as
     pytorch DataLoader
     """
-    dataset: LazyDecomplessDataset[ChunkT]
+    dataset: LazyDecomplessDataset[TensorChunkT]
     batch_size: int = 1
     shuffle: bool = True
     max_data_num: Optional[int] = None
@@ -186,7 +197,7 @@ class LazyDecomplessDataLoader(Generic[ChunkT]):
         n_dataset = len(self.dataset)
         return n_dataset // self.batch_size + int(n_dataset % self.batch_size > 0)
 
-    def __iter__(self) -> "LazyDecomplessDataLoader[ChunkT]":
+    def __iter__(self) -> "LazyDecomplessDataLoader[TensorChunkT]":
         n_dataset = len(self.dataset)
         if self.max_data_num is not None:
             n_dataset = min(n_dataset, self.max_data_num)

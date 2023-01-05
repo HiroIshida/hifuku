@@ -10,13 +10,13 @@ from rpbench.interface import DescriptionTable
 from skmp.solver.interface import ConfigProtocol, ResultProtocol
 from skmp.trajectory import Trajectory
 
-from hifuku.llazy.dataset import ChunkBase
+from hifuku.llazy.dataset import TensorChunkBase
 
 ResultT = TypeVar("ResultT", bound=ResultProtocol)
 
 
 @dataclass
-class RawData(ChunkBase):
+class RawData(TensorChunkBase):
     init_solution: Trajectory
     desc: DescriptionTable
     results: Tuple[ResultProtocol, ...]
