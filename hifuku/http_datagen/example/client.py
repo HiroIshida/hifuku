@@ -1,4 +1,6 @@
 import numpy as np
+from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
+from skmp.trajectory import Trajectory
 
 from hifuku.http_datagen.request import http_connection, send_request
 from hifuku.http_datagen.server import (
@@ -27,7 +29,10 @@ with http_connection("localhost", 8080) as conn:
     resp2 = send_request(conn, req2)
 
     problems = [TabletopPlanningProblem.sample(2) for _ in range(3)]
-    init_solution = [np.zeros(10 * 15)] * 3
-    req3 = SolveProblemRequest(problems, init_solution, resp2.n_cpu)
+    init_solution = Trajectory(list(np.zeros((10, 15))))
+    init_solutions = [init_solution] * 3
+    req3 = SolveProblemRequest(
+        problems, OMPLSolver, OMPLSolverConfig(), init_solutions, resp2.n_cpu
+    )
     resp3 = send_request(conn, req3)
     print(resp3.elapsed_time)
