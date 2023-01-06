@@ -8,7 +8,7 @@ from hifuku.http_datagen.server import (
     GetModuleHashValueRequest,
     SolveProblemRequest,
 )
-from hifuku.threedim.tabletop import TabletopPlanningProblem
+from hifuku.task_wrap import TabletopBoxRightArmReachingTask
 
 with http_connection("localhost", 8081) as conn:
     req1 = GetModuleHashValueRequest(["skrobot", "tinyfk", "skplan"])
@@ -28,7 +28,7 @@ with http_connection("localhost", 8080) as conn:
     req2 = GetCPUInfoRequest()
     resp2 = send_request(conn, req2)
 
-    problems = [TabletopPlanningProblem.sample(2) for _ in range(3)]
+    problems = [TabletopBoxRightArmReachingTask.sample(2) for _ in range(3)]
     init_solution = Trajectory(list(np.zeros((10, 15))))
     init_solutions = [init_solution] * 3
     req3 = SolveProblemRequest(
