@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Generic, List, Optional, Tuple, Type
 
 import numpy as np
+import threadpoolctl
 import tqdm
 from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
@@ -394,14 +395,19 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 
         logger.debug("start sampling using clf")
         problems: List[ProblemT] = []
-        with num_torch_thread(n_thread):
-            disable = not show_progress_bar
-            with tqdm.tqdm(total=n_sample, smoothing=0.0, disable=disable) as pbar:
-                while len(problems) < n_sample:
-                    problem = next(pool)
-                    if problem is not None:
-                        problems.append(problem)
-                        pbar.update(1)
+
+        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+            # NOTE: numpy internal thread parallelization greatly slow down
+            # the processing time when multuprocessing case, though the speed gain
+            # by the thread parallelization is actually poor
+            with num_torch_thread(n_thread):
+                disable = not show_progress_bar
+                with tqdm.tqdm(total=n_sample, smoothing=0.0, disable=disable) as pbar:
+                    while len(problems) < n_sample:
+                        problem = next(pool)
+                        if problem is not None:
+                            problems.append(problem)
+                            pbar.update(1)
         ts = time.time()
         file_path = cache_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
