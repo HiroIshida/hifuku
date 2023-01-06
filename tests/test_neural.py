@@ -1,5 +1,6 @@
 import torch
 
+from hifuku.domain import TBRR_SQP_DomainProvider
 from hifuku.neuralnet import (
     IterationPredictor,
     IterationPredictorConfig,
@@ -9,14 +10,17 @@ from hifuku.neuralnet import (
 
 
 def test_network():
+    device = torch.device("cpu")
+    # test autoencoder
     ae_config = VoxelAutoEncoderConfig()
-    ae = VoxelAutoEncoder(ae_config)
+    ae = VoxelAutoEncoder(ae_config, device=device)
 
+    # test iteration predictor
     n_sol_dim = 10
     model_conf = IterationPredictorConfig(
         12, ae_config.dim_bottleneck, n_sol_dim, use_solution_pred=False
     )
-    model = IterationPredictor(model_conf)
+    model = IterationPredictor(model_conf, device=device)
 
     n_batch = 10
 
@@ -26,8 +30,11 @@ def test_network():
     nits = torch.zeros(n_batch, 1)
 
     sample = (mesh_encoded, descriptions, nits)
-
     model.loss(sample)
+
+    task_type = TBRR_SQP_DomainProvider.get_task_type()
+    task = task_type.sample(1)
+    model.infer(task.export_table(), ae_model=ae)
 
 
 if __name__ == "__main__":

@@ -177,17 +177,21 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             dic["solution"] = solution_loss
         return LossDict(dic)
 
-    def infer(self, desc_table: DescriptionTable) -> np.ndarray:
-        mesh_np = desc_table.get_mesh()
-        mesh = torch.from_numpy(mesh_np).float().unsqueeze(dim=0)
-        mesh = mesh.unsqueeze(0).to(self.device)
+    def infer(self, desc_table: DescriptionTable, ae_model: "VoxelAutoEncoder") -> np.ndarray:
+        assert self.device == torch.device("cpu")
+        mesh_np = np.expand_dims(desc_table.get_mesh(), axis=(0, 1))
+        desc_np = np.array(desc_table.get_vector_descs())
+        mesh = torch.from_numpy(mesh_np)
+        mesh = mesh.float().to(self.device)
+        desc = torch.from_numpy(desc_np)
+        desc = desc.float().to(self.device)
 
-        descriptions_np = np.stack(desc_table.get_vector_descs())
-        description = torch.from_numpy(descriptions_np).float()
-        description = description.unsqueeze(0).to(self.device)
+        n_batch, _ = desc_np.shape
 
-        out, _ = self.forward((mesh, description))
-        out_np = out.cpu().detach().numpy().flatten()
+        encoded: torch.Tensor = ae_model.encoder(mesh)
+        encoded_repeated = encoded.repeat(n_batch, 1)
+        itervals, _ = self.forward((encoded_repeated, desc))
+        out_np = itervals.cpu().detach().numpy().flatten()
         return out_np
 
 
