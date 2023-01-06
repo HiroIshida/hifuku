@@ -4,9 +4,9 @@ from mohou.trainer import TrainCache, TrainConfig, train_lower
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
-from hifuku.threedim.tabletop import VoxbloxTabletopMeshProblem
+from hifuku.task_wrap import TabletopBoxWorldWrap
 
-problem_type = VoxbloxTabletopMeshProblem
+problem_type = TabletopBoxWorldWrap
 
 pp = get_project_path("tabletop_mesh-{}".format(problem_type.__name__))
 cache_base_path = pp / "cache"

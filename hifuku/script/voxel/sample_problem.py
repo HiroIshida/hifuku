@@ -4,7 +4,6 @@ import os
 import uuid
 import warnings
 from enum import Enum
-from typing import List, Type
 
 import numpy as np
 import tqdm
@@ -12,13 +11,9 @@ from mohou.file import get_project_path
 from mohou.utils import log_package_version_info
 
 import hifuku
-from hifuku.datagen import DistributeBatchProblemSampler
+from hifuku.datagen import MultiProcessBatchProblemSampler
 from hifuku.pool import TrivialProblemPool
-from hifuku.threedim.tabletop import (
-    TabletopMeshProblem,
-    VoxbloxTabletopMeshProblem,
-    _TabletopProblem,
-)
+from hifuku.task_wrap import TabletopBoxWorldWrap, TabletopVoxbloxBoxWorldWrap
 from hifuku.utils import create_default_logger
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
@@ -28,8 +23,8 @@ np.random.seed(0)
 
 
 class ProblemType(Enum):
-    normal = TabletopMeshProblem
-    voxblox = VoxbloxTabletopMeshProblem
+    normal = TabletopBoxWorldWrap
+    voxblox = TabletopVoxbloxBoxWorldWrap
 
 
 if __name__ == "__main__":
@@ -38,7 +33,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     mesh_type_name: str = args.type
 
-    problem_type: Type[_TabletopProblem] = ProblemType[mesh_type_name].value
+    problem_type = ProblemType[mesh_type_name].value  # type: ignore
 
     pp = get_project_path("tabletop_mesh-{}".format(problem_type.__name__))
     logger = create_default_logger(pp, "mesh_generation")
@@ -47,11 +42,12 @@ if __name__ == "__main__":
     cache_base_path.mkdir(exist_ok=True, parents=True)
     n_cpu: int = os.cpu_count()  # type: ignore
     n_process = int(0.5 * n_cpu)
-    n_problem = 10000
-    for _ in range(30):
-        sampler = DistributeBatchProblemSampler()  # type: ignore
+    n_problem = 100
+    for _ in range(1):
+        # sampler = DistributeBatchProblemSampler()  # type: ignore
+        sampler = MultiProcessBatchProblemSampler()  # type: ignore
         pool = TrivialProblemPool(problem_type, n_problem_inner=0)
-        problems: List[_TabletopProblem] = sampler.sample_batch(n_problem, pool.as_predicated())
+        problems = sampler.sample_batch(n_problem, pool.as_predicated())
 
         def f(args):
             problems, base_path, disable_tqdm = args
