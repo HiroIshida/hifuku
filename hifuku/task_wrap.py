@@ -1,10 +1,17 @@
 import torch
 from rpbench.interface import SamplableBase, TaskBase
+
+# fmt: off
 from rpbench.tabletop import (
     TabletopBoxRightArmReachingTask as _TabletopBoxRightArmReachingTask,
 )
+from rpbench.tabletop import (
+    TabletopBoxVoxbloxRightArmReachingTask as _TabletopBoxVoxbloxRightArmReachingTask,
+)
 from rpbench.tabletop import TabletopBoxWorldWrap as _TabletopBoxWorldWrap
+from rpbench.tabletop import TabletopVoxbloxBoxWorldWrap as _TabletopVoxbloxBoxWorldWrap
 
+# fmt: on
 from hifuku.llazy.dataset import PicklableChunkBase, PicklableTensorChunkBase
 
 
@@ -37,9 +44,9 @@ class PicklableTensorExportSamplableBase(PicklableTensorChunkBase, PicklableSamp
         return mesh_tensor
 
 
-class TabletopBoxRightArmReachingTask(_TabletopBoxRightArmReachingTask, PicklableTaskBase):
-    ...
-
-
-class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplableBase):
-    ...
+# fmt: off
+class TabletopBoxRightArmReachingTask(_TabletopBoxRightArmReachingTask, PicklableTaskBase): ...  # noqa
+class TabletopBoxVoxbloxRightArmReachingTask(_TabletopBoxVoxbloxRightArmReachingTask, PicklableTaskBase): ...  # noqa
+class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
+class TabletopVoxbloxBoxWorldWrap(_TabletopVoxbloxBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
+# fmt: on
