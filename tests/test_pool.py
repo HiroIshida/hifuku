@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from skrobot.coordinates import Coordinates
 
 from hifuku.pool import CachedProblemPool, TrivialProblemPool
-from hifuku.task_wrap import TabletopBoxRightArmReachingTask, TabletopBoxWorldWrap
+from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask, TabletopBoxWorldWrap
 
 
 def test_simple_pool():

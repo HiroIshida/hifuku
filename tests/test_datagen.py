@@ -23,7 +23,7 @@ from hifuku.datagen import (
 )
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
-from hifuku.task_wrap import TabletopBoxRightArmReachingTask
+from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
 from hifuku.testing_asset import SimplePredicate
 from hifuku.types import RawData
 from hifuku.utils import create_default_logger

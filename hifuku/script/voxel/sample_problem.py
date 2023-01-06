@@ -13,7 +13,7 @@ from mohou.utils import log_package_version_info
 import hifuku
 from hifuku.datagen import MultiProcessBatchProblemSampler
 from hifuku.pool import TrivialProblemPool
-from hifuku.task_wrap import TabletopBoxWorldWrap, TabletopVoxbloxBoxWorldWrap
+from hifuku.rpbench_wrap import TabletopBoxWorldWrap, TabletopVoxbloxBoxWorldWrap
 from hifuku.utils import create_default_logger
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")

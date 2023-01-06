@@ -8,7 +8,7 @@ from mohou.trainer import TrainCache
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.neuralnet import VoxelAutoEncoder
-from hifuku.task_wrap import TabletopBoxWorldWrap, TabletopVoxbloxBoxWorldWrap
+from hifuku.rpbench_wrap import TabletopBoxWorldWrap, TabletopVoxbloxBoxWorldWrap
 
 
 class ProblemType(Enum):

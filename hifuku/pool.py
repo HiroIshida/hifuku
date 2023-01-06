@@ -8,7 +8,7 @@ from typing import Callable, Generic, Iterator, List, Optional, Type, TypeVar, c
 import numpy as np
 
 from hifuku.llazy.dataset import DatasetIterator, LazyDecomplessDataset
-from hifuku.task_wrap import PicklableSamplableBase, PicklableTaskBase
+from hifuku.rpbench_wrap import PicklableSamplableBase, PicklableTaskBase
 
 logger = logging.getLogger(__name__)
 

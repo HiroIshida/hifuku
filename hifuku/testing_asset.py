@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from hifuku.task_wrap import TabletopBoxRightArmReachingTask
+from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
 
 
 @dataclass

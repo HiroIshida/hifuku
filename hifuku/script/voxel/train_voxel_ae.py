@@ -4,7 +4,7 @@ from mohou.trainer import TrainCache, TrainConfig, train_lower
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
-from hifuku.task_wrap import TabletopBoxWorldWrap
+from hifuku.rpbench_wrap import TabletopBoxWorldWrap
 
 problem_type = TabletopBoxWorldWrap
 

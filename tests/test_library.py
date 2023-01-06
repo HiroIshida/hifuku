@@ -23,7 +23,7 @@ from hifuku.library import (
     SolutionLibrary,
 )
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
-from hifuku.task_wrap import TabletopBoxRightArmReachingTask
+from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
 from hifuku.utils import create_default_logger
 
 
