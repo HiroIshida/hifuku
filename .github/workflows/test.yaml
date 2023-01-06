@@ -18,15 +18,20 @@ jobs:
         steps:
             - name: Checkout Code
               uses: actions/checkout@v2
-
+            - uses: webfactory/ssh-agent@v0.7.0
+              with:
+                  ssh-private-key: ${{ secrets.SCOPED_SSH_KEY }}
             - name: Set up Python ${{ matrix.python-version }}
               uses: actions/setup-python@v1
               with:
                 python-version: ${{ matrix.python-version }}
-            - name: install this package
+            - name: install dep package
               run: |
                   sudo apt-get update && sudo apt install libunwind-dev && sudo apt-get install libgoogle-glog-dev  # voxbloxpy
-                  pip3 install git+https://github.com/HiroIshida/scikit-plan.git
+                  cd /tmp && git clone git@github.com:HiroIshida/scikit-motionplan.git && cd scikit-motionplan && pip3 install .
+                  cd /tmp && git clone git@github.com:HiroIshida/rpbench.git && cd rpbench && pip3 install .
+            - name: install this package
+              run: |
                   pip3 install -e .
 
             - name: pip install pytest and mypy
