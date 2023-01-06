@@ -29,7 +29,7 @@ if __name__ == "__main__":
     samplable_type_name: str = args.type
 
     samplable_type = ProblemType[samplable_type_name].value
-    pp = get_project_path("tabletop_mesh-{}".format(samplable_type.__name__))
+    pp = get_project_path("hifuku-{}".format(samplable_type.__name__))
     best_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
 
     problem = samplable_type.sample(0)

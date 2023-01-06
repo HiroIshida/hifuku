@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     problem_type = ProblemType[mesh_type_name].value  # type: ignore
 
-    pp = get_project_path("tabletop_mesh-{}".format(problem_type.__name__))
+    pp = get_project_path("hifuku-{}".format(problem_type.__name__))
     logger = create_default_logger(pp, "mesh_generation")
     log_package_version_info(logger, hifuku)
     cache_base_path = pp / "cache"

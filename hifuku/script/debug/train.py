@@ -3,6 +3,7 @@ from mohou.file import get_project_path
 from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train
 
+from hifuku.domain import TBRR_SQP_DomainProvider
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.neuralnet import (
     IterationPredictor,
@@ -12,10 +13,13 @@ from hifuku.neuralnet import (
 )
 from hifuku.types import RawData
 
-pp = get_project_path("tabletop_ik")
+mesh_sampler_type = TBRR_SQP_DomainProvider.get_compat_mesh_sampler_type()
+ae_pp = get_project_path("hifuku-{}".format(mesh_sampler_type.__name__))
+ae_model = TrainCache.load(ae_pp, VoxelAutoEncoder).best_model
+
+pp = get_project_path("TBRR_SQP")
 chunk_dir_path = pp / "cache"
 
-ae_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
 dataset = IterationPredictorDataset.load(chunk_dir_path, ae_model)
 raw_dataset = LazyDecomplessDataset.load(chunk_dir_path, RawData, n_worker=-1)
 rawdata = raw_dataset.get_data(np.array([0]))[0]

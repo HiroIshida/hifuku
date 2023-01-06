@@ -8,7 +8,7 @@ from hifuku.rpbench_wrap import TabletopBoxWorldWrap
 
 problem_type = TabletopBoxWorldWrap
 
-pp = get_project_path("tabletop_mesh-{}".format(problem_type.__name__))
+pp = get_project_path("hifuku-{}".format(problem_type.__name__))
 cache_base_path = pp / "cache"
 cache_base_path.mkdir(exist_ok=True, parents=True)
 
