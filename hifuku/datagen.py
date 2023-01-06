@@ -127,7 +127,7 @@ class DumpDatasetTask(Generic[ProblemT, ConfigT, ResultT]):
             raw_data.dump(path)
 
 
-class BatchProblemSolver(Generic[ProblemT, ConfigT, ResultT], ABC):
+class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
     solver_t: Type[AbstractSolver[ConfigT, ResultT]]
     config: ConfigT
 
@@ -189,7 +189,7 @@ class BatchProblemSolver(Generic[ProblemT, ConfigT, ResultT], ABC):
             p.join()
 
 
-class MultiProcessBatchProblemSolver(BatchProblemSolver[ProblemT, ConfigT, ResultT]):
+class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
     n_process: int
 
     def __init__(
@@ -269,7 +269,7 @@ HostPortPair = Tuple[str, int]
 
 
 class DistributedBatchProblemSolver(
-    ClientBase[SolveProblemRequest], BatchProblemSolver[ProblemT, ConfigT, ResultT]
+    ClientBase[SolveProblemRequest], BatchProblemSolver[ConfigT, ResultT]
 ):
     def __init__(
         self,

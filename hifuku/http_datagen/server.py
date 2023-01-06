@@ -59,7 +59,7 @@ class PostHandler(BaseHTTPRequestHandler):
         ts = time.time()
         logging.info("request: {}".format(request))
 
-        gen = MultiProcessBatchProblemSolver[ProblemT, ConfigT, ResultT](
+        gen = MultiProcessBatchProblemSolver[ConfigT, ResultT](
             request.solver_t, request.config, request.n_process
         )
 

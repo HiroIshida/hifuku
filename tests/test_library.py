@@ -45,12 +45,12 @@ def _test_compute_real_itervals():
     init_solutions = [init_solution] * n_problem
 
     nlp_solcon = SQPBasedSolverConfig(n_wp=15, n_max_call=10)
-    solver_mp = MultiProcessBatchProblemSolver[
-        TabletopBoxRightArmReachingTask, SQPBasedSolverConfig, SQPBasedSolverResult
-    ](SQPBasedSolver, nlp_solcon, n_process=4)
-    solver_sp = MultiProcessBatchProblemSolver[
-        TabletopBoxRightArmReachingTask, SQPBasedSolverConfig, SQPBasedSolverResult
-    ](SQPBasedSolver, nlp_solcon, n_process=1)
+    solver_mp = MultiProcessBatchProblemSolver[SQPBasedSolverConfig, SQPBasedSolverResult](
+        SQPBasedSolver, nlp_solcon, n_process=4
+    )
+    solver_sp = MultiProcessBatchProblemSolver[SQPBasedSolverConfig, SQPBasedSolverResult](
+        SQPBasedSolver, nlp_solcon, n_process=1
+    )
     results_mp = solver_mp.solve_batch(problems, init_solutions)
     results_sp = solver_sp.solve_batch(problems, init_solutions)
     assert len(results_mp) == n_problem
@@ -72,9 +72,9 @@ def _test_compute_real_itervals():
 def test_SolutionLibrarySampler():
     problem_type = TabletopBoxRightArmReachingTask
     nlp_solcon = SQPBasedSolverConfig(n_wp=15, n_max_call=10)
-    solver = MultiProcessBatchProblemSolver[
-        TabletopBoxRightArmReachingTask, SQPBasedSolverConfig, SQPBasedSolverResult
-    ](SQPBasedSolver, nlp_solcon, n_process=2)
+    solver = MultiProcessBatchProblemSolver[SQPBasedSolverConfig, SQPBasedSolverResult](
+        SQPBasedSolver, nlp_solcon, n_process=2
+    )
     sampler = MultiProcessBatchProblemSampler[TabletopBoxRightArmReachingTask](n_process=2)
     tconfig = TrainConfig(n_epoch=1)
     lconfig = LibrarySamplerConfig(

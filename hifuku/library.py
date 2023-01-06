@@ -474,7 +474,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         pool_single: Optional[ProblemPool[ProblemT]] = None,
         pool_multiple: Optional[ProblemPool[ProblemT]] = None,
         problems_validation: Optional[List[ProblemT]] = None,
-        solver: Optional[BatchProblemSolver[ProblemT, ConfigT, ResultT]] = None,
+        solver: Optional[BatchProblemSolver[ConfigT, ResultT]] = None,
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
         use_distributed: bool = False,
     ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
@@ -701,7 +701,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             solution_guesses = [candidate] * len(problems)
             # results = self.solver.solve_batch(problems, solution_guesses)
             # TODO: make flatten problem and use distributed
-            solver = MultiProcessBatchProblemSolver[ProblemT, ConfigT, ResultT](
+            solver = MultiProcessBatchProblemSolver[ConfigT, ResultT](
                 self.solver_type, self.solver_config
             )  # distribute here is really slow
             results = solver.solve_batch(problems, solution_guesses)

@@ -71,16 +71,16 @@ def test_consistency_of_all_batch_sovler(server):
                 TabletopBoxRightArmReachingTask.sample(n_problem_inner) for _ in range(n_problem)
             ]
             batch_solver_list: List[BatchProblemSolver] = []
-            mp_batch_solver = MultiProcessBatchProblemSolver[
-                TabletopBoxRightArmReachingTask, OMPLSolverConfig, OMPLSolverResult
-            ](OMPLSolver, solcon, 2)
+            mp_batch_solver = MultiProcessBatchProblemSolver[OMPLSolverConfig, OMPLSolverResult](
+                OMPLSolver, solcon, 2
+            )
             assert mp_batch_solver.n_process == 2
             batch_solver_list.append(mp_batch_solver)
 
             specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
-            batch_solver = DistributedBatchProblemSolver[
-                TabletopBoxRightArmReachingTask, OMPLSolverConfig, OMPLSolverResult
-            ](OMPLSolver, solcon, specs, n_measure_sample=1)
+            batch_solver = DistributedBatchProblemSolver[OMPLSolverConfig, OMPLSolverResult](
+                OMPLSolver, solcon, specs, n_measure_sample=1
+            )
             batch_solver_list.append(batch_solver)
 
             # compare generated nit and success
@@ -145,9 +145,9 @@ def test_create_dataset():
 
     problems = [TabletopBoxRightArmReachingTask.sample(n_problem_inner) for _ in range(n_task)]
 
-    batch_solver = MultiProcessBatchProblemSolver[
-        TabletopBoxRightArmReachingTask, OMPLSolverConfig, OMPLSolverResult
-    ](OMPLSolver, solcon, 2)
+    batch_solver = MultiProcessBatchProblemSolver[OMPLSolverConfig, OMPLSolverResult](
+        OMPLSolver, solcon, 2
+    )
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         batch_solver.create_dataset(problems, init_solutions, td_path, n_process=None)
