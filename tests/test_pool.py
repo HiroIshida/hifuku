@@ -4,12 +4,12 @@ from tempfile import TemporaryDirectory
 
 from skrobot.coordinates import Coordinates
 
-from hifuku.pool import CachedProblemPool, TrivialProblemPool
+from hifuku.pool import CachedPool, TrivialPool
 from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask, TabletopBoxWorldWrap
 
 
 def test_simple_pool():
-    pool = TrivialProblemPool(TabletopBoxRightArmReachingTask, 10)
+    pool = TrivialPool(TabletopBoxRightArmReachingTask, 10)
 
     for _ in range(5):
         next(pool)
@@ -32,7 +32,7 @@ def test_cached_pool():
             ww.dump(file_path)
 
         n_inner = 10
-        pool = CachedProblemPool.load(
+        pool = CachedPool.load(
             TabletopBoxWorldWrap, TabletopBoxRightArmReachingTask, n_inner, cache_path
         )
         pool.reset()

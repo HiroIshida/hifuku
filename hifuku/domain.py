@@ -15,18 +15,18 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
-from hifuku.pool import ProblemT
+from hifuku.pool import TaskT
 from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask, TabletopBoxWorldWrap
 
 
-class DomainProvider(ABC, Generic[ProblemT, ConfigT, ResultT]):
+class DomainProvider(ABC, Generic[TaskT, ConfigT, ResultT]):
     """*stateless* Domain informatino Provider
     where domain is composed of task_type, solver, solver_config
     """
 
     @classmethod
     @abstractmethod
-    def get_task_type(cls) -> Type[ProblemT]:
+    def get_task_type(cls) -> Type[TaskT]:
         ...
 
     @classmethod
@@ -57,8 +57,8 @@ class DomainProvider(ABC, Generic[ProblemT, ConfigT, ResultT]):
     @classmethod
     def get_multiprocess_batch_sampler(
         cls, n_process: Optional[int] = None
-    ) -> MultiProcessBatchProblemSampler[ProblemT]:
-        return MultiProcessBatchProblemSampler[ProblemT](n_process=n_process)
+    ) -> MultiProcessBatchProblemSampler[TaskT]:
+        return MultiProcessBatchProblemSampler[TaskT](n_process=n_process)
 
     @classmethod
     def get_distributed_batch_solver(
@@ -69,10 +69,8 @@ class DomainProvider(ABC, Generic[ProblemT, ConfigT, ResultT]):
         )
 
     @classmethod
-    def get_distributed_batch_sampler(
-        cls, *args, **kwargs
-    ) -> DistributeBatchProblemSampler[ProblemT]:
-        return DistributeBatchProblemSampler[ProblemT](*args, **kwargs)
+    def get_distributed_batch_sampler(cls, *args, **kwargs) -> DistributeBatchProblemSampler[TaskT]:
+        return DistributeBatchProblemSampler[TaskT](*args, **kwargs)
 
     @classmethod
     def get_domain_name(cls) -> str:

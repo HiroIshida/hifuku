@@ -12,7 +12,7 @@ from mohou.utils import log_package_version_info
 
 import hifuku
 from hifuku.datagen import MultiProcessBatchProblemSampler
-from hifuku.pool import TrivialProblemPool
+from hifuku.pool import TrivialPool
 from hifuku.rpbench_wrap import TabletopBoxWorldWrap, TabletopVoxbloxBoxWorldWrap
 from hifuku.utils import create_default_logger
 
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     for _ in range(1):
         # sampler = DistributeBatchProblemSampler()  # type: ignore
         sampler = MultiProcessBatchProblemSampler()  # type: ignore
-        pool = TrivialProblemPool(problem_type, n_problem_inner=0)
+        pool = TrivialPool(problem_type, n_desc_inner=0)
         problems = sampler.sample_batch(n_problem, pool.as_predicated())
 
         def f(args):
