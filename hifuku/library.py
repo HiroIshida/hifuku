@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
-    problem_type: Type[ProblemT]
+    task_type: Type[ProblemT]
     solver_type: Type[AbstractSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     ae_model: VoxelAutoEncoder
@@ -72,7 +72,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     @classmethod
     def initialize(
         cls,
-        problem_type: Type[ProblemT],
+        task_type: Type[ProblemT],
         solver_type: Type[AbstractSolver[ConfigT, ResultT]],
         config,
         ae_model: VoxelAutoEncoder,
@@ -80,7 +80,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
         uuidval = str(uuid.uuid4())[-8:]
         return cls(
-            problem_type,
+            task_type,
             solver_type,
             config,
             ae_model,
@@ -100,16 +100,16 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     def device(self) -> torch.device:
         return self.ae_model.device
 
-    def _infer_iteration_num(self, problem: ProblemT) -> np.ndarray:
+    def _infer_iteration_num(self, task: ProblemT) -> np.ndarray:
         """
-        itervals_arr: R^{n_solution, n_problem_inner}
+        itervals_arr: R^{n_solution, n_desc_inner}
         """
         assert len(self.predictors) > 0
 
         if self.limit_thread:
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
                 # limiting numpy thread seems to make stable. but not sure why..
-                desc_table = problem.export_table()
+                desc_table = task.export_table()
                 mesh_np = np.expand_dims(desc_table.get_mesh(), axis=(0, 1))
                 desc_np = np.array(desc_table.get_vector_descs())
 
@@ -124,7 +124,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             # usually, calling threadpoolctl and num_torch_thread function
             # is constly. So if you are sure that you are running program in
             # a single process. Then set limit_thread = False
-            desc_table = problem.export_table()
+            desc_table = task.export_table()
             mesh_np = np.expand_dims(desc_table.get_mesh(), axis=(0, 1))
             desc_np = np.array(desc_table.get_vector_descs())
             mesh = torch.from_numpy(mesh_np)
@@ -147,14 +147,14 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         itervals_arr = np.array(itervals_list)
         return itervals_arr
 
-    def infer(self, problem: ProblemT) -> List[InferenceResult]:
-        # itervals_aar: R^{n_problem_inner, n_elem_in_lib}
-        itervals_arr = self._infer_iteration_num(problem)
+    def infer(self, task: ProblemT) -> List[InferenceResult]:
+        # itervals_aar: R^{n_task_inner, n_elem_in_lib}
+        itervals_arr = self._infer_iteration_num(task)
 
-        # nits_min: R^{n_problem_inner}
+        # nits_min: R^{n_desc_inner}
         nits_min = np.min(itervals_arr, axis=0)
 
-        # indices_min: R^{n_problem_inner}
+        # indices_min: R^{n_desc_inner}
         indices_min = np.argmin(itervals_arr, axis=0)
 
         result_list = []
@@ -170,19 +170,19 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         return threshold
 
     def measure_full_coverage(
-        self, problems: List[ProblemT], solver: BatchProblemSolver
+        self, tasks: List[ProblemT], solver: BatchProblemSolver
     ) -> CoverageResult:
         logger.info("**compute est values")
         iterval_est_list = []
         init_solution_est_list = []
-        for problem in tqdm.tqdm(problems):
-            assert problem.n_inner_task == 1
-            infer_res = self.infer(problem)[0]
+        for task in tqdm.tqdm(tasks):
+            assert task.n_inner_task == 1
+            infer_res = self.infer(task)[0]
             iterval_est_list.append(infer_res.nit)
             init_solution_est_list.append(infer_res.init_solution)
 
         logger.info("**compute real values")
-        results = solver.solve_batch(problems, init_solution_est_list)
+        results = solver.solve_batch(tasks, init_solution_est_list)
 
         maxiter = self.solver_config.n_max_call
         iterval_real_list = [(maxiter if r[0].traj is not None else r[0].n_call) for r in results]
@@ -194,15 +194,15 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(coverage_result)
         return coverage_result
 
-    def measure_coverage(self, problems: List[ProblemT]) -> float:
+    def measure_coverage(self, tasks: List[ProblemT]) -> float:
         threshold = self.success_iter_threshold()
         count = 0
-        for problem in problems:
-            assert problem.n_inner_task == 1
-            infer_res = self.infer(problem)[0]
+        for task in tasks:
+            assert task.n_inner_task == 1
+            infer_res = self.infer(task)[0]
             if infer_res.nit < threshold:
                 count += 1
-        return count / float(len(problems))
+        return count / float(len(tasks))
 
     def add(
         self,
@@ -222,7 +222,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         for pred in copied.predictors:
             pred.put_on_device(cpu_device)
 
-        name = "Library-{}-{}.pkl".format(self.problem_type.__name__, self.uuidval)
+        name = "Library-{}-{}.pkl".format(self.task_type.__name__, self.uuidval)
         file_path = base_path / name
         with file_path.open(mode="wb") as f:
             pickle.dump(copied, f)
@@ -232,7 +232,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     def load(
         cls,
         base_path: Path,
-        problem_type: Type[ProblemT],
+        task_type: Type[ProblemT],
         solver_type: Type[AbstractSolver[ConfigT, ResultT]],
         device: Optional[torch.device] = None,
     ) -> List["SolutionLibrary[ProblemT, ConfigT, ResultT]"]:
@@ -244,7 +244,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         libraries = []
         for path in base_path.iterdir():
             m = re.match(r"Library-(\w+)-(\w+).pkl", path.name)
-            if m is not None and m[1] == problem_type.__name__:
+            if m is not None and m[1] == task_type.__name__:
                 logger.info("library found at {}".format(path))
                 with path.open(mode="rb") as f:
                     lib: "SolutionLibrary[ProblemT, ConfigT, ResultT]" = pickle.load(f)
@@ -571,7 +571,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
-            problem_type=self.problem_type,
+            task_type=self.problem_type,
             solver_type=self.solver_type,
             solver_config=self.solver_config,
             ae_model=self.library.ae_model,
