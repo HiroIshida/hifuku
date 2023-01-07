@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import warnings
 from hashlib import md5
 from logging import Logger
 from pathlib import Path
@@ -80,6 +81,22 @@ def create_default_logger(project_path: Path, prefix: str) -> Logger:
     log_sym_path.symlink_to(log_file_path)
 
     return logger
+
+
+def filter_warnings():
+    warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
+    warnings.filterwarnings("ignore", message="texture specified in URDF is not supported")
+    warnings.filterwarnings("ignore", message="Converting sparse A to a CSC")
+    warnings.filterwarnings("ignore", message="urllib3")
+    warnings.filterwarnings(
+        "ignore",
+        message="undefined symbol: _ZNK3c1010TensorImpl36is_contiguous_nondefault_policy_implENS_12MemoryFormatE",
+    )
+
+
+warnings.filterwarnings(
+    "ignore", message="`np.float` is a deprecated alias for the builtin `float`"
+)
 
 
 if __name__ == "__main__":

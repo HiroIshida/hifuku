@@ -27,7 +27,7 @@ from hifuku.http_datagen.request import (
 )
 from hifuku.pool import PredicatedProblemPool, ProblemT
 from hifuku.types import RawData
-from hifuku.utils import num_torch_thread
+from hifuku.utils import filter_warnings, num_torch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +212,8 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         tasks: List[ProblemT],
         init_solutions: List[Trajectory],
     ) -> List[Tuple[ResultT, ...]]:
+
+        filter_warnings()
 
         assert len(tasks) == len(init_solutions)
         assert len(tasks) > 0

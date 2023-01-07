@@ -1,8 +1,9 @@
 import argparse
-import warnings
 from enum import Enum
 
-import skplan
+import rpbench
+import selcol
+import skmp
 from mohou.file import get_project_path
 from mohou.trainer import TrainCache, TrainConfig
 from mohou.utils import log_package_version_info
@@ -11,19 +12,7 @@ import hifuku
 from hifuku.domain import DomainProvider, TBRR_SQP_DomainProvider
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.neuralnet import VoxelAutoEncoder
-from hifuku.utils import create_default_logger
-
-warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
-warnings.filterwarnings("ignore", message="texture specified in URDF is not supported")
-warnings.filterwarnings("ignore", message="Converting sparse A to a CSC")
-warnings.filterwarnings("ignore", message="urllib3")
-warnings.filterwarnings(
-    "ignore",
-    message="undefined symbol: _ZNK3c1010TensorImpl36is_contiguous_nondefault_policy_implENS_12MemoryFormatE",
-)
-warnings.filterwarnings(
-    "ignore", message="`np.float` is a deprecated alias for the builtin `float`"
-)
+from hifuku.utils import create_default_logger, filter_warnings
 
 
 class DomainType(Enum):
@@ -36,6 +25,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     mesh_type_name: str = args.type
 
+    filter_warnings()
+
     domain: DomainProvider = DomainType[mesh_type_name].value
     mesh_sampler_type = TBRR_SQP_DomainProvider.get_compat_mesh_sampler_type()
     domain_name = TBRR_SQP_DomainProvider.get_domain_name()
@@ -46,7 +37,9 @@ if __name__ == "__main__":
 
     logger = create_default_logger(pp, "library_gen")
     log_package_version_info(logger, hifuku)
-    log_package_version_info(logger, skplan)
+    log_package_version_info(logger, rpbench)
+    log_package_version_info(logger, skmp)
+    log_package_version_info(logger, selcol)
 
     ae_model = TrainCache.load_latest(pp_mesh, VoxelAutoEncoder).best_model
     lconfig = LibrarySamplerConfig(
