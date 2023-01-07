@@ -40,7 +40,7 @@ from hifuku.neuralnet import (
     IterationPredictorDataset,
     VoxelAutoEncoder,
 )
-from hifuku.pool import ProblemPool, ProblemT, PseudoIteratorPool, TrivialProblemPool
+from hifuku.pool import Pool, PseudoIteratorPool, TaskT, TrivialPool
 from hifuku.types import RawData
 from hifuku.utils import num_torch_thread
 
@@ -48,8 +48,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
-    problem_type: Type[ProblemT]
+class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
+    problem_type: Type[TaskT]
     solver_type: Type[AbstractSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     ae_model: VoxelAutoEncoder
@@ -72,12 +72,12 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     @classmethod
     def initialize(
         cls,
-        problem_type: Type[ProblemT],
+        problem_type: Type[TaskT],
         solver_type: Type[AbstractSolver[ConfigT, ResultT]],
         config,
         ae_model: VoxelAutoEncoder,
         solvable_threshold_factor: float,
-    ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
+    ) -> "SolutionLibrary[TaskT, ConfigT, ResultT]":
         uuidval = str(uuid.uuid4())[-8:]
         return cls(
             problem_type,
@@ -100,7 +100,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     def device(self) -> torch.device:
         return self.ae_model.device
 
-    def _infer_iteration_num(self, problem: ProblemT) -> np.ndarray:
+    def _infer_iteration_num(self, problem: TaskT) -> np.ndarray:
         """
         itervals_arr: R^{n_solution, n_problem_inner}
         """
@@ -147,7 +147,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         itervals_arr = np.array(itervals_list)
         return itervals_arr
 
-    def infer(self, problem: ProblemT) -> List[InferenceResult]:
+    def infer(self, problem: TaskT) -> List[InferenceResult]:
         # itervals_aar: R^{n_problem_inner, n_elem_in_lib}
         itervals_arr = self._infer_iteration_num(problem)
 
@@ -170,7 +170,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         return threshold
 
     def measure_full_coverage(
-        self, problems: List[ProblemT], solver: BatchProblemSolver
+        self, problems: List[TaskT], solver: BatchProblemSolver
     ) -> CoverageResult:
         logger.info("**compute est values")
         iterval_est_list = []
@@ -194,7 +194,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(coverage_result)
         return coverage_result
 
-    def measure_coverage(self, problems: List[ProblemT]) -> float:
+    def measure_coverage(self, problems: List[TaskT]) -> float:
         threshold = self.success_iter_threshold()
         count = 0
         for problem in problems:
@@ -232,10 +232,10 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     def load(
         cls,
         base_path: Path,
-        problem_type: Type[ProblemT],
+        problem_type: Type[TaskT],
         solver_type: Type[AbstractSolver[ConfigT, ResultT]],
         device: Optional[torch.device] = None,
-    ) -> List["SolutionLibrary[ProblemT, ConfigT, ResultT]"]:
+    ) -> List["SolutionLibrary[TaskT, ConfigT, ResultT]"]:
         if device is None:
             if torch.cuda.is_available():
                 device = torch.device("cuda")
@@ -247,7 +247,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             if m is not None and m[1] == problem_type.__name__:
                 logger.info("library found at {}".format(path))
                 with path.open(mode="rb") as f:
-                    lib: "SolutionLibrary[ProblemT, ConfigT, ResultT]" = pickle.load(f)
+                    lib: "SolutionLibrary[TaskT, ConfigT, ResultT]" = pickle.load(f)
                     assert lib.device == torch.device("cpu")
                     lib._put_on_device(device)
                     libraries.append(lib)
@@ -255,8 +255,8 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
 
 @dataclass
-class LargestDifficultClusterPredicate(Generic[ProblemT, ConfigT, ResultT]):
-    library: SolutionLibrary[ProblemT, ConfigT, ResultT]
+class LargestDifficultClusterPredicate(Generic[TaskT, ConfigT, ResultT]):
+    library: SolutionLibrary[TaskT, ConfigT, ResultT]
     svm: SVM
     accept_proba_threshold: float
 
@@ -266,11 +266,11 @@ class LargestDifficultClusterPredicate(Generic[ProblemT, ConfigT, ResultT]):
     @classmethod
     def create(
         cls,
-        library: SolutionLibrary[ProblemT, ConfigT, ResultT],
-        difficult_problems: List[ProblemT],
-        ambient_problems: List[ProblemT],
+        library: SolutionLibrary[TaskT, ConfigT, ResultT],
+        difficult_problems: List[TaskT],
+        ambient_problems: List[TaskT],
         accept_proba_threshold: float = 0.4,
-    ) -> "LargestDifficultClusterPredicate[ProblemT, ConfigT, ResultT]":
+    ) -> "LargestDifficultClusterPredicate[TaskT, ConfigT, ResultT]":
         """
         difficult problems for detect the largest cluster
         ambient_problems + difficult_problems for fit the clf
@@ -311,7 +311,7 @@ class LargestDifficultClusterPredicate(Generic[ProblemT, ConfigT, ResultT]):
         svm = SVM.from_dataset(dataset)
         return cls(library, svm, accept_proba_threshold)
 
-    def __call__(self, problem: ProblemT) -> bool:
+    def __call__(self, problem: TaskT) -> bool:
         assert problem.n_inner_task == 1
         iters = self.library._infer_iteration_num(problem).flatten()
         proba = self.svm.predict_proba(iters)
@@ -319,17 +319,17 @@ class LargestDifficultClusterPredicate(Generic[ProblemT, ConfigT, ResultT]):
 
     @staticmethod
     def task(
-        library: SolutionLibrary[ProblemT, ConfigT, ResultT],
+        library: SolutionLibrary[TaskT, ConfigT, ResultT],
         svm: SVM,
         n_sample: int,
-        pool: ProblemPool[ProblemT],
+        pool: Pool[TaskT],
         accept_threshold: float,
         ambient_rate: float,
         show_progress_bar: bool,
         n_thread: int,
         cache_path: Path,
     ) -> None:
-        def predicate(problem: ProblemT) -> bool:
+        def predicate(problem: TaskT) -> bool:
             assert problem.n_inner_task == 1
             iters = library._infer_iteration_num(problem).flatten()
             proba = svm.predict_proba(iters)
@@ -343,7 +343,7 @@ class LargestDifficultClusterPredicate(Generic[ProblemT, ConfigT, ResultT]):
         logger.debug("random seed set to {}".format(unique_id))
 
         logger.debug("start sampling using clf")
-        problems: List[ProblemT] = []
+        problems: List[TaskT] = []
         n_ambient = int(n_sample * ambient_rate)
         n_sample_focus = n_sample - n_ambient
 
@@ -372,11 +372,11 @@ class LargestDifficultClusterPredicate(Generic[ProblemT, ConfigT, ResultT]):
     def sample(
         self,
         n_sample: int,
-        pool: ProblemPool[ProblemT],
+        pool: Pool[TaskT],
         accept_threshold: float = 0.4,
         ambient_rate: float = 0.2,
         n_process: Optional[int] = None,
-    ) -> List[ProblemT]:
+    ) -> List[TaskT]:
 
         cpu_count = os.cpu_count()
         assert cpu_count is not None
@@ -437,13 +437,13 @@ class LibrarySamplerConfig:
 
 
 @dataclass
-class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
-    problem_type: Type[ProblemT]
-    library: SolutionLibrary[ProblemT, ConfigT, ResultT]
+class _SolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT], ABC):
+    problem_type: Type[TaskT]
+    library: SolutionLibrary[TaskT, ConfigT, ResultT]
     config: LibrarySamplerConfig
-    pool_single: ProblemPool[ProblemT]
-    pool_multiple: ProblemPool[ProblemT]
-    problems_validation: List[ProblemT]
+    pool_single: Pool[TaskT]
+    pool_multiple: Pool[TaskT]
+    problems_validation: List[TaskT]
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
 
@@ -466,18 +466,18 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     @classmethod
     def initialize(
         cls,
-        problem_type: Type[ProblemT],
+        problem_type: Type[TaskT],
         solver_t: Type[AbstractSolver[ConfigT, ResultT]],
         solver_config: ConfigT,
         ae_model: VoxelAutoEncoder,
         config: LibrarySamplerConfig,
-        pool_single: Optional[ProblemPool[ProblemT]] = None,
-        pool_multiple: Optional[ProblemPool[ProblemT]] = None,
-        problems_validation: Optional[List[ProblemT]] = None,
+        pool_single: Optional[Pool[TaskT]] = None,
+        pool_multiple: Optional[Pool[TaskT]] = None,
+        problems_validation: Optional[List[TaskT]] = None,
         solver: Optional[BatchProblemSolver[ConfigT, ResultT]] = None,
-        sampler: Optional[BatchProblemSampler[ProblemT]] = None,
+        sampler: Optional[BatchProblemSampler[TaskT]] = None,
         use_distributed: bool = False,
-    ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
+    ) -> "_SolutionLibrarySampler[TaskT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
         """
@@ -504,18 +504,18 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         # setup pools
         if pool_single is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
-            pool_single = TrivialProblemPool(problem_type, 1)
-        assert pool_single.n_problem_inner == 1
+            pool_single = TrivialPool(problem_type, 1)
+        assert pool_single.n_desc_inner == 1
 
         if pool_multiple is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
             # TODO: smelling! n_problem_inner should not be set here
-            pool_multiple = TrivialProblemPool(problem_type, config.n_problem_inner)
+            pool_multiple = TrivialPool(problem_type, config.n_problem_inner)
         assert pool_multiple.parallelizable()
 
         if problems_validation is None:
             problems_validation = sampler.sample_batch(
-                1000, TrivialProblemPool(problem_type, 1).as_predicated()
+                1000, TrivialPool(problem_type, 1).as_predicated()
             )
         for prob in problems_validation:
             assert prob.n_inner_task == 1
@@ -540,7 +540,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         assert res.traj is not None
         return res.traj
 
-    def _generate_problem_samples_init(self) -> List[ProblemT]:
+    def _generate_problem_samples_init(self) -> List[TaskT]:
         predicated_pool = self.pool_multiple.as_predicated()
         problems = self.sampler.sample_batch(self.config.n_problem, predicated_pool)
         return problems
@@ -550,7 +550,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         ...
 
     @abstractmethod
-    def _generate_problem_samples(self) -> List[ProblemT]:
+    def _generate_problem_samples(self) -> List[TaskT]:
         ...
 
     def step_active_sampling(
@@ -605,7 +605,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         self,
         init_solution: Trajectory,
         project_path: Path,
-        problems: List[ProblemT],
+        problems: List[TaskT],
     ) -> IterationPredictor:
         pp = project_path
         cache_dir_base = pp / "dataset_cache"
@@ -639,7 +639,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     def _sample_solution_canidates(
         self,
         n_sample: int,
-        problem_pool: ProblemPool[ProblemT],
+        problem_pool: Pool[TaskT],
     ) -> List[Trajectory]:
         difficult_iter_threshold = self.difficult_iter_threshold
 
@@ -670,11 +670,11 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     def _sample_difficult_problems(
         self,
         n_sample: int,
-        problem_pool: ProblemPool[ProblemT],
-    ) -> Tuple[List[ProblemT], List[ProblemT]]:
+        problem_pool: Pool[TaskT],
+    ) -> Tuple[List[TaskT], List[TaskT]]:
 
-        difficult_problems: List[ProblemT] = []
-        easy_problems: List[ProblemT] = []
+        difficult_problems: List[TaskT] = []
+        easy_problems: List[TaskT] = []
         with tqdm.tqdm(total=n_sample) as pbar:
             while len(difficult_problems) < n_sample:
                 logger.debug("try sampling difficutl problem...")
@@ -692,7 +692,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         return difficult_problems, easy_problems
 
     def _select_solution_candidates(
-        self, candidates: List[Trajectory], problems: List[ProblemT]
+        self, candidates: List[Trajectory], problems: List[TaskT]
     ) -> Trajectory:
         logger.info("compute scores")
         score_list = []
@@ -719,8 +719,8 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         return best_solution
 
 
-class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]):
-    def _generate_problem_samples(self) -> List[ProblemT]:
+class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[TaskT, ConfigT, ResultT]):
+    def _generate_problem_samples(self) -> List[TaskT]:
         return self._generate_problem_samples_init()
 
     def _determine_init_solution(self) -> Trajectory:
@@ -738,10 +738,10 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT, ConfigT, Re
         return best_solution
 
 
-class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]):
+class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[TaskT, ConfigT, ResultT]):
     predicate_cache: Optional[LargestDifficultClusterPredicate] = None
 
-    def _generate_problem_samples(self) -> List[ProblemT]:
+    def _generate_problem_samples(self) -> List[TaskT]:
         assert self.predicate_cache is not None
         n_problem_half = int(self.config.n_problem * 0.5)
         predicated_pool = self.pool_multiple.make_predicated(

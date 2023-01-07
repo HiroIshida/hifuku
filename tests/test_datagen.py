@@ -23,7 +23,7 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSolver,
 )
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
-from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
+from hifuku.pool import PredicatedPool, TrivialPool
 from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
 from hifuku.testing_asset import SimplePredicate
 from hifuku.types import RawData
@@ -125,8 +125,8 @@ def test_consistency_of_all_batch_sampler(server):
     sampler_list.append(DistributeBatchProblemSampler[TabletopBoxRightArmReachingTask](specs))
 
     n_problem_inner = 5
-    pool_list: List[PredicatedProblemPool] = []
-    pool_base = TrivialProblemPool(TabletopBoxRightArmReachingTask, n_problem_inner)
+    pool_list: List[PredicatedPool] = []
+    pool_base = TrivialPool(TabletopBoxRightArmReachingTask, n_problem_inner)
     pool_list.append(pool_base.as_predicated())
     pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
 

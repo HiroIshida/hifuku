@@ -9,7 +9,7 @@ from typing import Generic, List, Optional, Tuple, Type, TypeVar, overload
 from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
-from hifuku.pool import PredicatedProblemPool, ProblemT
+from hifuku.pool import PredicatedPool, TaskT
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +57,8 @@ class GetModuleHashValueResponse(Response):
 
 
 @dataclass
-class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
-    problems: List[ProblemT]
+class SolveProblemRequest(Generic[TaskT, ConfigT, ResultT], MainRequest):
+    problems: List[TaskT]
     solver_t: Type[AbstractSolver[ConfigT, ResultT]]
     config: ConfigT
     init_solutions: List[Trajectory]
@@ -78,15 +78,15 @@ class SolveProblemResponse(Generic[ResultT], MainResponse):
 
 
 @dataclass
-class SampleProblemRequest(Generic[ProblemT], MainRequest):
+class SampleProblemRequest(Generic[TaskT], MainRequest):
     n_sample: int
-    pool: PredicatedProblemPool[ProblemT]
+    pool: PredicatedPool[TaskT]
     n_process: int
 
 
 @dataclass
-class SampleProblemResponse(Generic[ProblemT], MainResponse):
-    problems: List[ProblemT]
+class SampleProblemResponse(Generic[TaskT], MainResponse):
+    problems: List[TaskT]
     elapsed_time: float
 
     def __str__(self) -> str:

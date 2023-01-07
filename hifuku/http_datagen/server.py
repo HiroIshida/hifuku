@@ -24,7 +24,7 @@ from hifuku.http_datagen.request import (
     SolveProblemRequest,
     SolveProblemResponse,
 )
-from hifuku.pool import ProblemT
+from hifuku.pool import TaskT
 from hifuku.utils import get_module_source_hash
 
 
@@ -54,7 +54,7 @@ class PostHandler(BaseHTTPRequestHandler):
         return resp
 
     def process_SolveProblemRequest(
-        self, request: SolveProblemRequest[ProblemT, ConfigT, ResultT]
+        self, request: SolveProblemRequest[TaskT, ConfigT, ResultT]
     ) -> SolveProblemResponse[ResultT]:
         ts = time.time()
         logging.info("request: {}".format(request))
@@ -72,11 +72,11 @@ class PostHandler(BaseHTTPRequestHandler):
         return resp
 
     def process_SampleProblemRequest(
-        self, request: SampleProblemRequest[ProblemT]
-    ) -> SampleProblemResponse[ProblemT]:
+        self, request: SampleProblemRequest[TaskT]
+    ) -> SampleProblemResponse[TaskT]:
         ts = time.time()
         logging.info("request: {}".format(request))
-        sampler = MultiProcessBatchProblemSampler[ProblemT](request.n_process)
+        sampler = MultiProcessBatchProblemSampler[TaskT](request.n_process)
         problems = sampler.sample_batch(request.n_sample, request.pool)
         assert len(problems) > 0
         elapsed_time = time.time() - ts

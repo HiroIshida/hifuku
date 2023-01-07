@@ -25,7 +25,7 @@ from hifuku.http_datagen.request import (
     http_connection,
     send_request,
 )
-from hifuku.pool import PredicatedProblemPool, ProblemT
+from hifuku.pool import PredicatedPool, TaskT
 from hifuku.types import RawData
 from hifuku.utils import filter_warnings, num_torch_thread
 
@@ -49,9 +49,9 @@ def split_indices(n_problem_total: int, n_problem_list: List[int]) -> List[List[
 
 
 @dataclass
-class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
+class BatchProblemSolverArg(Generic[TaskT, ConfigT, ResultT]):
     indices: np.ndarray
-    problems: List[ProblemT]
+    problems: List[TaskT]
     solver_t: Type[AbstractSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     init_solutions: List[Trajectory]
@@ -64,8 +64,8 @@ class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
         assert len(self.problems) == len(self.init_solutions)
 
 
-class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
-    arg: BatchProblemSolverArg[ProblemT, ConfigT, ResultT]
+class BatchProblemSolverWorker(Process, Generic[TaskT, ConfigT, ResultT]):
+    arg: BatchProblemSolverArg[TaskT, ConfigT, ResultT]
     queue: Queue
 
     def __init__(self, arg: BatchProblemSolverArg, queue: Queue):
@@ -105,8 +105,8 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
 
 
 @dataclass
-class DumpDatasetTask(Generic[ProblemT, ConfigT, ResultT]):
-    problems: List[ProblemT]
+class DumpDatasetTask(Generic[TaskT, ConfigT, ResultT]):
+    problems: List[TaskT]
     solver_t: Type[AbstractSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     init_solutions: List[Trajectory]
@@ -142,14 +142,14 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
     @abstractmethod
     def solve_batch(
         self,
-        problems: List[ProblemT],
+        problems: List[TaskT],
         init_solutions: List[Trajectory],
     ) -> List[Tuple[ResultT, ...]]:
         ...
 
     def create_dataset(
         self,
-        problems: List[ProblemT],
+        problems: List[TaskT],
         init_solutions: List[Trajectory],
         cache_dir_path: Path,
         n_process: Optional[int],
@@ -176,7 +176,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
             init_solutions_part = [init_solutions[i] for i in indices_part]
             results_list_part = [results_list[i] for i in indices_part]
 
-            task = DumpDatasetTask[ProblemT, ConfigT, ResultT](
+            task = DumpDatasetTask[TaskT, ConfigT, ResultT](
                 problems_part,
                 self.solver_t,
                 self.config,
@@ -213,7 +213,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
 
     def solve_batch(
         self,
-        tasks: List[ProblemT],
+        tasks: List[TaskT],
         init_solutions: List[Trajectory],
     ) -> List[Tuple[ResultT, ...]]:
 
@@ -307,7 +307,7 @@ class DistributedBatchProblemSolver(
 
     def solve_batch(
         self,
-        problems: List[ProblemT],
+        problems: List[TaskT],
         init_solutions: List[Trajectory],
     ) -> List[Tuple[ResultT, ...]]:
 
@@ -357,17 +357,17 @@ class DistributedBatchProblemSolver(
         return list(results)  # type: ignore
 
 
-class BatchProblemSampler(Generic[ProblemT], ABC):
+class BatchProblemSampler(Generic[TaskT], ABC):
     @abstractmethod
     def sample_batch(
         self,
         n_sample: int,
-        pool: PredicatedProblemPool[ProblemT],
-    ) -> List[ProblemT]:
+        pool: PredicatedPool[TaskT],
+    ) -> List[TaskT]:
         ...
 
 
-class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
+class MultiProcessBatchProblemSampler(BatchProblemSampler[TaskT]):
     n_process: int
     n_thread: int
 
@@ -398,7 +398,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
     @staticmethod
     def task(
         n_sample: int,
-        pool: PredicatedProblemPool[ProblemT],
+        pool: PredicatedPool[TaskT],
         show_progress_bar: bool,
         n_thread: int,
         cache_path: Path,
@@ -410,7 +410,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         logger.debug("random seed set to {}".format(unique_id))
 
         logger.debug("start sampling using clf")
-        problems: List[ProblemT] = []
+        problems: List[TaskT] = []
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             # NOTE: numpy internal thread parallelization greatly slow down
@@ -433,8 +433,8 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
     def sample_batch(
         self,
         n_sample: int,
-        pool: PredicatedProblemPool[ProblemT],
-    ) -> List[ProblemT]:
+        pool: PredicatedPool[TaskT],
+    ) -> List[TaskT]:
         assert pool.parallelizable()
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
@@ -466,9 +466,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         return problems_sampled
 
 
-class DistributeBatchProblemSampler(
-    ClientBase[SampleProblemRequest], BatchProblemSampler[ProblemT]
-):
+class DistributeBatchProblemSampler(ClientBase[SampleProblemRequest], BatchProblemSampler[TaskT]):
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
         hostport: HostPortPair, request: SampleProblemRequest, tmp_path: Path
@@ -486,8 +484,8 @@ class DistributeBatchProblemSampler(
     def sample_batch(
         self,
         n_sample: int,
-        pool: PredicatedProblemPool[ProblemT],
-    ) -> List[ProblemT]:
+        pool: PredicatedPool[TaskT],
+    ) -> List[TaskT]:
         assert n_sample > 0
         assert pool.parallelizable()
 
