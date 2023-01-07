@@ -90,13 +90,17 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                     self.arg.solver_t.setup(prob, self.arg.solver_config)
                     for prob in task.export_problems()
                 ]
-                results: Tuple[ResultT, ...] = tuple(
-                    [ss.solve(init_solution) for ss in solver_setups]
-                )
+
+                results = []
+                for ss in tqdm.tqdm(solver_setups, disable=disable_tqdm, leave=False):
+                    result = ss.solve(init_solution)
+                    results.append(result)
+                tupled_results = tuple(results)
+
                 logger.debug("generated single data")
                 logger.debug("success: {}".format([r.traj is not None for r in results]))
                 logger.debug("iteration: {}".format([r.n_call for r in results]))
-                self.queue.put((idx, results))
+                self.queue.put((idx, tupled_results))
                 pbar.update(1)
 
 
