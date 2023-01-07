@@ -23,24 +23,15 @@ USER h-ishida
 # copy ssh
 COPY --chown=h-ishida .ssh /home/h-ishida/.ssh
 
-# must be build for arm
-RUN git clone https://github.com/HiroIshida/tinyfk.git
-RUN \
-    cd tinyfk && \
-    sudo apt-get install libeigen3-dev -y && \
-    git clone https://github.com/HiroIshida/tinyfk.git && \
-    cd tinyfk && \
-    git submodule update --init && \
-    pip install .
-
 RUN sudo apt-get update && sudo apt install ffmpeg -y
 
 # skrobot stuff (must build some deps)
 RUN sudo apt update && sudo apt install cmake -y
 RUN sudo apt install liblapack-dev libopenblas-dev libsuitesparse-dev -y
-RUN export CPPFLAGS="-I/usr/include/suitesparse" && pip3 install cvxopt
-RUN sudo apt-get install libfcl-dev liboctomap-dev -y
-RUN pip3 install python-fcl
+RUN export CPPFLAGS="-I/usr/include/suitesparse" && pip3 install cvxopt -v
+RUN sudo apt-get install libfcl-dev liboctomap-dev python3-numpy -y
+RUN pip3 install python-fcl -v
+RUN sudo apt remove python3-numpy -y  # this cause skbuild error somehow
 
 RUN \
     git clone git@github.com:iory/pySDFGen.git && \
@@ -52,8 +43,20 @@ RUN \
     cd scikit-robot && \
     pip3 install -e .
 
-# hifuku
-RUN git clone git@github.com:HiroIshida/scikit-plan.git && pip3 install -e scikit-plan
-RUN sudo apt-get install libgoogle-glog-dev -y
+# tinyfk
+RUN sudo apt-get install libeigen3-dev -y  # tinyfk
+RUN pip3 install tinyfk -v
+
+# voxbloxpy
+RUN sudo apt-get install libgoogle-glog-dev -y  # voxbloxpy
+RUN pip3 install voxbloxpy
+
+# ompl-python-thin
+RUN sudo apt-get install libboost-all-dev -y  # ompl
+RUN pip3 install ompl-thin
+
+RUN git clone git@github.com:HiroIshida/selcol.git && pip3 install -e selcol
+RUN git clone git@github.com:HiroIshida/scikit-motionplan.git && pip3 install -e scikit-motionplan
+RUN git clone git@github.com:HiroIshida/rpbench.git && pip3 install -e rpbench
 RUN git clone git@github.com:HiroIshida/hifuku.git && cd hifuku && pip3 install -e .
 RUN pip3 install pyglet==1.5.27
