@@ -74,6 +74,10 @@ class DomainProvider(ABC, Generic[ProblemT, ConfigT, ResultT]):
     ) -> DistributeBatchProblemSampler[ProblemT]:
         return DistributeBatchProblemSampler[ProblemT](*args, **kwargs)
 
+    @classmethod
+    def get_domain_name(cls) -> str:
+        return cls.__name__.split("_DomainProvider")[0]
+
 
 class TBRR_SQP_DomainProvider(
     DomainProvider[TabletopBoxRightArmReachingTask, SQPBasedSolverConfig, SQPBasedSolverResult]
