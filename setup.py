@@ -2,7 +2,14 @@ from setuptools import find_packages, setup
 
 setup_requires = []
 
-install_requires = ["voxbloxpy", "skplan", "mohou", "pyclustering", "threadpoolctl"]
+install_requires = [
+    "voxbloxpy",
+    "scikit-motionplan",
+    "rpbench",
+    "mohou",
+    "pyclustering",
+    "threadpoolctl",
+]
 
 setup(
     name="hifuku",
