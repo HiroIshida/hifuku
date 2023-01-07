@@ -74,7 +74,7 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
         super().__init__()
 
     def run(self) -> None:
-        logger.debug("DataGenerationTask.run with pid {}".format(os.getpid()))
+        logger.debug("batch solver worker run with pid {}".format(os.getpid()))
 
         unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
         logger.debug("random seed set to {}".format(unique_id))
@@ -107,7 +107,7 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
 
 
 @dataclass
-class DumpDatasetTask(Generic[ProblemT, ConfigT, ResultT]):
+class DumpDatasetWorker(Generic[ProblemT, ConfigT, ResultT]):
     problems: List[ProblemT]
     solver_t: Type[AbstractSolver[ConfigT, ResultT]]
     solver_config: ConfigT
@@ -178,7 +178,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
             init_solutions_part = [init_solutions[i] for i in indices_part]
             results_list_part = [results_list[i] for i in indices_part]
 
-            task = DumpDatasetTask[ProblemT, ConfigT, ResultT](
+            worker = DumpDatasetWorker[ProblemT, ConfigT, ResultT](
                 problems_part,
                 self.solver_t,
                 self.config,
@@ -187,7 +187,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
                 cache_dir_path,
                 show_progress_bar,
             )
-            p = Process(target=task.run, args=())
+            p = Process(target=worker.run, args=())
             p.start()
             process_list.append(p)
 
@@ -398,7 +398,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         self.n_thread = n_thread
 
     @staticmethod
-    def task(
+    def work(
         n_sample: int,
         pool: PredicatedProblemPool[ProblemT],
         show_progress_bar: bool,
@@ -451,7 +451,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
             for idx_process, n_sample_part in enumerate(n_sample_list):
                 show_progress = idx_process == 0
                 args = (n_sample_part, pool, show_progress, self.n_thread, td_path)
-                p = ctx.Process(target=self.task, args=args)  # type: ignore
+                p = ctx.Process(target=self.work, args=args)  # type: ignore
                 p.start()
                 process_list.append(p)
 
