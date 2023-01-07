@@ -49,9 +49,9 @@ jobs:
                   git checkout h-ishida/master
                   pip3 install -e .
 
-            - name: Run Pytest
+            - name: Run Pytest with timeout
               run: |
-                  pytest -v tests
+                  timeout 1200 pytest -v tests
 
             - name: Run mypy
               run: |
