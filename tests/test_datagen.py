@@ -10,6 +10,7 @@ from typing import List
 import numpy as np
 import pytest
 from ompl import set_ompl_random_seed
+from skmp.solver.nlp_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig, OMPLSolverResult
 
 from hifuku.config import ServerSpec
@@ -59,27 +60,33 @@ def test_consistency_of_all_batch_sovler(server):
         for n_problem in [1, 8]:  # to test edge case
             n_problem_inner = 2
 
+            # obtain initial solution using sampling based method
             task = TabletopBoxRightArmReachingTask.sample(1, standard=True)
-            solcon = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
-            solver = OMPLSolver.setup(task.export_problems()[0], solcon)
-            result = solver.solve()
-            assert result.traj is not None
+            solcon_init = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
+            solver_init = OMPLSolver.setup(task.export_problems()[0], solcon_init)
+            result_init = solver_init.solve()
+            assert result_init.traj is not None
 
-            init_solutions = [result.traj] * n_problem
+            init_solutions = [result_init.traj] * n_problem
             # set standard = True for testing purpose
             tasks = [
                 TabletopBoxRightArmReachingTask.sample(n_problem_inner) for _ in range(n_problem)
             ]
             batch_solver_list: List[BatchProblemSolver] = []
-            mp_batch_solver = MultiProcessBatchProblemSolver[OMPLSolverConfig, OMPLSolverResult](
-                OMPLSolver, solcon, 2
+
+            solcon = SQPBasedSolverConfig(
+                n_wp=20,
+                n_max_call=10,
+                motion_step_satisfaction="debug_ignore",
+                force_deterministic=True,
             )
+            mp_batch_solver = MultiProcessBatchProblemSolver(SQPBasedSolver, solcon, 2)
             assert mp_batch_solver.n_process == 2
             batch_solver_list.append(mp_batch_solver)
 
             specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
-            batch_solver = DistributedBatchProblemSolver[OMPLSolverConfig, OMPLSolverResult](
-                OMPLSolver, solcon, specs, n_measure_sample=1
+            batch_solver = DistributedBatchProblemSolver(
+                SQPBasedSolver, solcon, specs, n_measure_sample=1
             )
             batch_solver_list.append(batch_solver)
 
