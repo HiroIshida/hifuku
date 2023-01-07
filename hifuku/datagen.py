@@ -82,26 +82,28 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
         np.random.seed(unique_id)
         disable_tqdm = not self.arg.show_process_bar
 
-        with tqdm.tqdm(total=len(self.arg), disable=disable_tqdm) as pbar:
-            for idx, task, init_solution in zip(
-                self.arg.indices, self.arg.problems, self.arg.init_solutions
-            ):
-                solver_setups = [
-                    self.arg.solver_t.setup(prob, self.arg.solver_config)
-                    for prob in task.export_problems()
-                ]
+        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+            # NOTE: because NLP solver and collision detection algrithm may use multithreading
+            with tqdm.tqdm(total=len(self.arg), disable=disable_tqdm) as pbar:
+                for idx, task, init_solution in zip(
+                    self.arg.indices, self.arg.problems, self.arg.init_solutions
+                ):
+                    solver_setups = [
+                        self.arg.solver_t.setup(prob, self.arg.solver_config)
+                        for prob in task.export_problems()
+                    ]
 
-                results = []
-                for ss in tqdm.tqdm(solver_setups, disable=disable_tqdm, leave=False):
-                    result = ss.solve(init_solution)
-                    results.append(result)
-                tupled_results = tuple(results)
+                    results = []
+                    for ss in tqdm.tqdm(solver_setups, disable=disable_tqdm, leave=False):
+                        result = ss.solve(init_solution)
+                        results.append(result)
+                    tupled_results = tuple(results)
 
-                logger.debug("generated single data")
-                logger.debug("success: {}".format([r.traj is not None for r in results]))
-                logger.debug("iteration: {}".format([r.n_call for r in results]))
-                self.queue.put((idx, tupled_results))
-                pbar.update(1)
+                    logger.debug("generated single data")
+                    logger.debug("success: {}".format([r.traj is not None for r in results]))
+                    logger.debug("iteration: {}".format([r.n_call for r in results]))
+                    self.queue.put((idx, tupled_results))
+                    pbar.update(1)
 
 
 @dataclass
