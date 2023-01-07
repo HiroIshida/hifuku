@@ -372,10 +372,20 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 
         if n_process is None:
             n_process = n_physical_cpu
+
+        # if n_process is larger than physical core num
+        # performance gain by parallelization is limited. so...
+        n_process = min(n_process, n_physical_cpu)
+
         n_thread = n_physical_cpu // n_process
+
         logger.info("n_process is set to {}".format(n_process))
         logger.info("n_thread is set to {}".format(n_thread))
-        assert n_process * n_thread == n_physical_cpu  # hmm, too strict
+        assert (
+            n_process * n_thread == n_physical_cpu
+        ), "n_process: {}, n_thread: {}, n_physical_cpu {}".format(
+            n_process, n_thread, n_physical_cpu
+        )
         self.n_process = n_process
         self.n_thread = n_thread
 
