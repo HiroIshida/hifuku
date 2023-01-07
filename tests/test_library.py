@@ -71,7 +71,9 @@ def _test_compute_real_itervals():
 
 def test_SolutionLibrarySampler():
     problem_type = TabletopBoxRightArmReachingTask
-    nlp_solcon = SQPBasedSolverConfig(n_wp=15, n_max_call=10)
+    nlp_solcon = SQPBasedSolverConfig(
+        n_wp=15, n_max_call=10, motion_step_satisfaction="debug_ignore"
+    )
     solver = MultiProcessBatchProblemSolver[SQPBasedSolverConfig, SQPBasedSolverResult](
         SQPBasedSolver, nlp_solcon, n_process=2
     )
