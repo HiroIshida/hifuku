@@ -14,7 +14,7 @@ from typing import Generic, List, Optional, Tuple, Type
 import numpy as np
 import threadpoolctl
 import tqdm
-from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
+from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
 from hifuku.config import ServerSpec
@@ -52,7 +52,7 @@ def split_indices(n_problem_total: int, n_problem_list: List[int]) -> List[List[
 class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
     indices: np.ndarray
     problems: List[ProblemT]
-    solver_t: Type[AbstractSolver[ConfigT, ResultT]]
+    solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     init_solutions: List[Trajectory]
     show_process_bar: bool
@@ -108,7 +108,7 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
 @dataclass
 class DumpDatasetWorker(Generic[ProblemT, ConfigT, ResultT]):
     problems: List[ProblemT]
-    solver_t: Type[AbstractSolver[ConfigT, ResultT]]
+    solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     init_solutions: List[Trajectory]
     results_list: List[Tuple[ResultT, ...]]
@@ -133,10 +133,10 @@ class DumpDatasetWorker(Generic[ProblemT, ConfigT, ResultT]):
 
 
 class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
-    solver_t: Type[AbstractSolver[ConfigT, ResultT]]
+    solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
 
-    def __init__(self, solver_t: Type[AbstractSolver[ConfigT, ResultT]], config: ConfigT):
+    def __init__(self, solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]], config: ConfigT):
         self.solver_t = solver_t
         self.config = config
 
@@ -199,7 +199,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
 
     def __init__(
         self,
-        solver_t: Type[AbstractSolver[ConfigT, ResultT]],
+        solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config: ConfigT,
         n_process: Optional[int] = None,
     ):
@@ -283,7 +283,7 @@ class DistributedBatchProblemSolver(
 ):
     def __init__(
         self,
-        solver_t: Type[AbstractSolver[ConfigT, ResultT]],
+        solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config: ConfigT,
         server_specs: Optional[Tuple[ServerSpec, ...]] = None,
         use_available_host: bool = False,

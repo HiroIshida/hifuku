@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
 from typing import Generic, List, Optional, Tuple, Type, TypeVar, overload
 
-from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
+from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
 from hifuku.pool import PredicatedProblemPool, ProblemT
@@ -59,7 +59,7 @@ class GetModuleHashValueResponse(Response):
 @dataclass
 class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
     problems: List[ProblemT]
-    solver_t: Type[AbstractSolver[ConfigT, ResultT]]
+    solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
     init_solutions: List[Trajectory]
     n_process: int

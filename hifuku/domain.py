@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Generic, Optional, Type
 
 from rpbench.interface import SamplableBase
-from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
+from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.solver.nlp_solver import (
     SQPBasedSolver,
     SQPBasedSolverConfig,
@@ -31,7 +31,7 @@ class DomainProvider(ABC, Generic[ProblemT, ConfigT, ResultT]):
 
     @classmethod
     @abstractmethod
-    def get_solver_type(cls) -> Type[AbstractSolver[ConfigT, ResultT]]:
+    def get_solver_type(cls) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
         ...
 
     @classmethod
@@ -87,7 +87,9 @@ class TBRR_SQP_DomainProvider(
         return TabletopBoxRightArmReachingTask
 
     @classmethod
-    def get_solver_type(cls) -> Type[AbstractSolver[SQPBasedSolverConfig, SQPBasedSolverResult]]:
+    def get_solver_type(
+        cls,
+    ) -> Type[AbstractScratchSolver[SQPBasedSolverConfig, SQPBasedSolverResult]]:
         return SQPBasedSolver
 
     @classmethod

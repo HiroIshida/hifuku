@@ -19,7 +19,7 @@ import threadpoolctl
 import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
-from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
+from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
 from hifuku.classifier import SVM, SVMDataset
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     task_type: Type[ProblemT]
-    solver_type: Type[AbstractSolver[ConfigT, ResultT]]
+    solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     ae_model: VoxelAutoEncoder
     predictors: List[IterationPredictor]
@@ -73,7 +73,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     def initialize(
         cls,
         task_type: Type[ProblemT],
-        solver_type: Type[AbstractSolver[ConfigT, ResultT]],
+        solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config,
         ae_model: VoxelAutoEncoder,
         solvable_threshold_factor: float,
@@ -233,7 +233,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         cls,
         base_path: Path,
         task_type: Type[ProblemT],
-        solver_type: Type[AbstractSolver[ConfigT, ResultT]],
+        solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         device: Optional[torch.device] = None,
     ) -> List["SolutionLibrary[ProblemT, ConfigT, ResultT]"]:
         if device is None:
@@ -257,7 +257,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 @dataclass
 class LibraryBasedSolver(Generic[ProblemT, ConfigT, ResultT]):
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
-    solver: AbstractSolver[ConfigT, ResultT]
+    solver: AbstractScratchSolver[ConfigT, ResultT]
     task: ProblemT
 
     @classmethod
@@ -475,7 +475,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     sampler: BatchProblemSampler
 
     @property
-    def solver_type(self) -> Type[AbstractSolver[ConfigT, ResultT]]:
+    def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
         return self.library.solver_type
 
     @property
@@ -494,7 +494,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     def initialize(
         cls,
         problem_type: Type[ProblemT],
-        solver_t: Type[AbstractSolver[ConfigT, ResultT]],
+        solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         solver_config: ConfigT,
         ae_model: VoxelAutoEncoder,
         config: LibrarySamplerConfig,
