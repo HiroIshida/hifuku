@@ -49,6 +49,23 @@ def test_rawdata_to_tensor():
     assert nits.shape == (n_desc,)
 
 
+def test_rawdata_to_tensor_iternum_clamp():
+    task = TabletopBoxRightArmReachingTask.sample(4)
+    traj_dummy = Trajectory([np.zeros(2)])
+    n_max_call = 5
+    results = [
+        OMPLSolverResult(traj_dummy, 1.0, 1, TerminateState.FAIL_PLANNING),
+        OMPLSolverResult(traj_dummy, 1.0, 5, TerminateState.FAIL_PLANNING),
+        OMPLSolverResult(None, 1.0, 1, TerminateState.SUCCESS),
+        OMPLSolverResult(None, 1.0, 5, TerminateState.SUCCESS),
+    ]  # dummy
+    data = RawData(
+        traj_dummy, task.export_table(), tuple(results), OMPLSolverConfig(n_max_call=n_max_call)
+    )
+    _, _, torch_nits = data.to_tensors()
+    assert list(torch_nits.numpy()) == [1, 5, n_max_call + 1, n_max_call + 1]
+
+
 if __name__ == "__main__":
     # test_rawdata_dump_and_load()
     test_rawdata_to_tensor()

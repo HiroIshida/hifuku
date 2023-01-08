@@ -55,6 +55,11 @@ class RawData(TensorChunkBase):
             torch_vector_descs = [torch.from_numpy(desc).float() for desc in np_vector_descs]
             torch_wcd_descs = torch.stack(torch_vector_descs)
 
-            nits = np.array([r.n_call for r in self.results])
+            def get_clamped_iter(result: ResultProtocol) -> int:
+                if result.traj is None:
+                    return self.solver_config.n_max_call + 1
+                return result.n_call
+
+            nits = np.array([get_clamped_iter(r) for r in self.results])
             torch_nits = torch.from_numpy(nits).float()
             return torch_mesh, torch_wcd_descs, torch_nits
