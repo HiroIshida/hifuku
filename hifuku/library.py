@@ -255,6 +255,32 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
 
 @dataclass
+class LibraryBasedSolver(Generic[ProblemT, ConfigT, ResultT]):
+    library: SolutionLibrary[ProblemT, ConfigT, ResultT]
+    solver: AbstractSolver[ConfigT, ResultT]
+    task: ProblemT
+
+    @classmethod
+    def setup(
+        cls, task: ProblemT, lib: SolutionLibrary[ProblemT, ConfigT, ResultT]
+    ) -> "LibraryBasedSolver[ProblemT, ConfigT, ResultT]":
+        assert task.n_inner_task == 1
+        solver = lib.solver_type.setup(task.export_problems()[0], lib.solver_config)
+        return cls(lib, solver, task)
+
+    def solve(self) -> Optional[ResultT]:
+        inference_results = self.library.infer(self.task)
+        assert len(inference_results) == 1
+        inference_result = inference_results[0]
+        print(inference_result.idx)
+
+        seems_infeasible = inference_result.nit > self.library.solver_config.n_max_call
+        if seems_infeasible:
+            return None
+        return self.solver.solve(inference_result.init_solution)
+
+
+@dataclass
 class LargestDifficultClusterPredicate(Generic[ProblemT, ConfigT, ResultT]):
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     svm: SVM
