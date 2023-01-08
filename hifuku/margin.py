@@ -22,7 +22,7 @@ class CoverageResult:
     @cached_property
     def true_positive_bools(self) -> np.ndarray:
         return np.logical_and(
-            self.values_ground_truth < self.threshold, self.values_estimation < self.threshold
+            self.values_ground_truth <= self.threshold, self.values_estimation <= self.threshold
         )
 
     @cached_property
@@ -34,13 +34,13 @@ class CoverageResult:
     @cached_property
     def false_postive_bools(self) -> np.ndarray:
         return np.logical_and(
-            self.values_ground_truth > self.threshold, self.values_estimation < self.threshold
+            self.values_ground_truth > self.threshold, self.values_estimation <= self.threshold
         )
 
     @cached_property
     def false_negative_bools(self) -> np.ndarray:
         return np.logical_and(
-            self.values_ground_truth < self.threshold, self.values_estimation > self.threshold
+            self.values_ground_truth <= self.threshold, self.values_estimation > self.threshold
         )
 
     def determine_margin(self, acceptable_fales_positive_rate: float) -> float:
