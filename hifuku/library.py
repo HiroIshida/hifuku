@@ -185,7 +185,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         results = solver.solve_batch(tasks, init_solution_est_list)
 
         maxiter = self.solver_config.n_max_call
-        iterval_real_list = [(maxiter if r[0].traj is not None else r[0].n_call) for r in results]
+        iterval_real_list = [(maxiter + 1 if r[0].traj is None else r[0].n_call) for r in results]
 
         success_iter = self.success_iter_threshold()
         coverage_result = CoverageResult(
@@ -733,7 +733,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             results = solver.solve_batch(problems, solution_guesses)
             # consider all problems has n_inner_problem = 1
             iterval_real_list = [
-                (maxiter if r[0].traj is not None else r[0].n_call) for r in results
+                (maxiter + 1 if r[0].traj is None else r[0].n_call) for r in results
             ]
             score = -sum(iterval_real_list)  # must be nagative
             logger.debug("*score of solution cand: {}".format(score))
