@@ -88,14 +88,13 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                 for idx, task, init_solution in zip(
                     self.arg.indices, self.arg.problems, self.arg.init_solutions
                 ):
-                    solver_setups = [
-                        self.arg.solver_t.setup(prob, self.arg.solver_config)
-                        for prob in task.export_problems()
-                    ]
+                    solver = self.arg.solver_t.init(self.arg.solver_config)
 
                     results = []
-                    for ss in tqdm.tqdm(solver_setups, disable=disable_tqdm, leave=False):
-                        result = ss.solve(init_solution)
+                    problems = task.export_problems()
+                    for problem in tqdm.tqdm(problems, disable=disable_tqdm, leave=False):
+                        solver.setup(problem)
+                        result = solver.solve(init_solution)
                         results.append(result)
                     tupled_results = tuple(results)
 
@@ -232,11 +231,14 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
             results_list: List[Tuple[ResultT, ...]] = []
             n_max_call = self.config.n_max_call
             logger.debug("*n_max_call: {}".format(n_max_call))
+
+            solver = self.solver_t.init(self.config)
             for task, init_solution in zip(tasks, init_solutions):
-                solver_setups = [
-                    self.solver_t.setup(prob, self.config) for prob in task.export_problems()
-                ]
-                results: List[ResultT] = [ss.solve(init_solution) for ss in solver_setups]
+                results: List[ResultT] = []
+                for problem in task.export_problems():
+                    solver.setup(problem)
+                    result = solver.solve(init_solution)
+                    results.append(result)
                 results_list.append(tuple(results))
             return results_list
         else:

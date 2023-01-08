@@ -27,8 +27,10 @@ task = task_type.sample(5)
 assert pred.initial_solution is not None
 
 results = []
+solver = solver_type.init(solver_config)
 for problem in task.export_problems():
-    result = solver_type.setup(problem, solver_config)
+    solver.setup(problem)
+    result = solver.solve(pred.initial_solution)
     results.append(result)
 
 desc_table = task.export_table()

@@ -31,9 +31,10 @@ def _test_compute_real_itervals():
     # compute default solution
     standard_problem = TabletopBoxRightArmReachingTask.sample(1, True).export_problems()[0]
     init_solution: Optional[Trajectory] = None
+    solcon = OMPLSolverConfig(n_max_call=3000, n_max_satisfaction_trial=100)
+    solver = OMPLSolver.init(solcon)
     for _ in range(10):
-        solcon = OMPLSolverConfig(n_max_call=3000, n_max_satisfaction_trial=100)
-        solver = OMPLSolver.setup(standard_problem, solcon)
+        solver.setup(standard_problem)
         res = solver.solve()
         if res.traj is not None:
             init_solution = res.traj

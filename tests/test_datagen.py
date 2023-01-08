@@ -63,7 +63,8 @@ def test_consistency_of_all_batch_sovler(server):
             # obtain initial solution using sampling based method
             task = TabletopBoxRightArmReachingTask.sample(1, standard=True)
             solcon_init = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
-            solver_init = OMPLSolver.setup(task.export_problems()[0], solcon_init)
+            solver_init = OMPLSolver.init(solcon_init)
+            solver_init.setup(task.export_problems()[0])
             result_init = solver_init.solve()
             assert result_init.traj is not None
 
@@ -144,7 +145,8 @@ def test_create_dataset():
 
     task = TabletopBoxRightArmReachingTask.sample(1, standard=True)
     solcon = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
-    solver = OMPLSolver.setup(task.export_problems()[0], solcon)
+    solver = OMPLSolver.init(solcon)
+    solver.setup(task.export_problems()[0])
     result = solver.solve()
     assert result.traj is not None
 

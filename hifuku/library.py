@@ -265,7 +265,8 @@ class LibraryBasedSolver(Generic[ProblemT, ConfigT, ResultT]):
         cls, task: ProblemT, lib: SolutionLibrary[ProblemT, ConfigT, ResultT]
     ) -> "LibraryBasedSolver[ProblemT, ConfigT, ResultT]":
         assert task.n_inner_task == 1
-        solver = lib.solver_type.setup(task.export_problems()[0], lib.solver_config)
+        solver = lib.solver_type.init(lib.solver_config)
+        solver.setup(task.export_problems()[0])
         return cls(lib, solver, task)
 
     def solve(self) -> Optional[ResultT]:
