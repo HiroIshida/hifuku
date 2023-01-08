@@ -23,6 +23,7 @@ from skmp.solver.interface import AbstractSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
 from hifuku.classifier import SVM, SVMDataset
+from hifuku.coverage import CoverageResult
 from hifuku.datagen import (
     BatchProblemSampler,
     BatchProblemSolver,
@@ -33,7 +34,6 @@ from hifuku.datagen import (
     split_number,
 )
 from hifuku.llazy.dataset import LazyDecomplessDataset
-from hifuku.margin import CoverageResult
 from hifuku.neuralnet import (
     IterationPredictor,
     IterationPredictorConfig,
