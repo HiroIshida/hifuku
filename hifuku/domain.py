@@ -94,7 +94,7 @@ class TBRR_SQP_DomainProvider(
 
     @classmethod
     def get_solver_config(cls) -> SQPBasedSolverConfig:
-        return SQPBasedSolverConfig(n_wp=60, n_max_call=5, motion_step_satisfaction="explicit")
+        return SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
 
     @classmethod
     @abstractmethod
