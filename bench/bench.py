@@ -40,7 +40,7 @@ names = ["rrt_connect", "lightning", "hifuku"]
 solvers = [rrt_connect, lightning, hifuku]
 resultss = [[], [], []]
 
-n_test = 30
+n_test = 300
 results: List[Result] = []
 for _ in tqdm.tqdm(range(n_test)):
     task = task_type.sample(1)
@@ -57,9 +57,14 @@ with Path("/tmp/bench.pkl").open(mode="wb") as f:
 with Path("/tmp/bench.pkl").open(mode="rb") as f:
     resultss = pickle.load(f)
 
+success_indices = []
+for i, result in enumerate(resultss[0]):
+    if result.success:
+        success_indices.append(i)
+
 fig, ax = plt.subplots()
 for name, results in zip(names, resultss):
-    times = [r.time for r in results]
+    times = [results[i].time for i in success_indices]
     ax.plot(times, label=name)
 ax.legend()
 plt.show()

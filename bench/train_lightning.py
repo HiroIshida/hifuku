@@ -8,10 +8,6 @@ from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 from hifuku.datagen import split_number
 
 
-def split_number(num, div):
-    return [num // div + (1 if x < num % div else 0) for x in range(div)]
-
-
 def worker(idx_process: int, n_sample: int, solver_config: OMPLSolverConfig, out_queue: Queue):
     solver = OMPLSolver.init(solver_config)
     count = 0
