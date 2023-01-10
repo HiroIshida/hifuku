@@ -19,6 +19,7 @@ import threadpoolctl
 import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
+from rpbench.interface import AbstractTaskSolver
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
@@ -255,30 +256,40 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
 
 @dataclass
-class LibraryBasedSolver(Generic[ProblemT, ConfigT, ResultT]):
+class LibraryBasedSolver(
+    AbstractTaskSolver[ProblemT, ResultT], Generic[ProblemT, ConfigT, ResultT]
+):
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     solver: AbstractScratchSolver[ConfigT, ResultT]
-    task: ProblemT
+    task: Optional[ProblemT]
 
     @classmethod
-    def setup(
-        cls, task: ProblemT, lib: SolutionLibrary[ProblemT, ConfigT, ResultT]
+    def init(
+        cls, library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     ) -> "LibraryBasedSolver[ProblemT, ConfigT, ResultT]":
-        assert task.n_inner_task == 1
-        solver = lib.solver_type.init(lib.solver_config)
-        solver.setup(task.export_problems()[0])
-        return cls(lib, solver, task)
+        solver = library.solver_type.init(library.solver_config)
+        return cls(library, solver, None)
 
-    def solve(self) -> Optional[ResultT]:
+    def setup(self, task: ProblemT) -> None:
+        assert task.n_inner_task == 1
+        p = task.export_problems()[0]
+        self.solver.setup(p)
+        self.task = task
+
+    def solve(self) -> ResultT:
+        ts = time.time()
+        assert self.task is not None
         inference_results = self.library.infer(self.task)
         assert len(inference_results) == 1
         inference_result = inference_results[0]
-        print(inference_result.idx)
 
         seems_infeasible = inference_result.nit > self.library.solver_config.n_max_call
         if seems_infeasible:
-            return None
-        return self.solver.solve(inference_result.init_solution)
+            result_type = self.solver.get_result_type()
+            return result_type.abnormal(time.time() - ts)
+        solver_result = self.solver.solve(inference_result.init_solution)
+        solver_result.time_elapsed = time.time() - ts
+        return solver_result
 
 
 @dataclass
