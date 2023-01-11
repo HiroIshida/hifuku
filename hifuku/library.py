@@ -667,7 +667,18 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         init_solution = rawdata.init_solution
 
         logger.info("start training model")
-        model_conf = IterationPredictorConfig(12, self.library.ae_model.config.dim_bottleneck, 10)
+
+        # determine 1dim tensor dimension by temp creation of a problem
+        # TODO: should I implement this as a method?
+        problem = self.problem_type.sample(1, standard=True)
+        table = problem.export_table()
+        vector_desc = table.get_vector_descs()[0]
+        n_dim_vector_description = vector_desc.shape[0]
+
+        # train
+        model_conf = IterationPredictorConfig(
+            n_dim_vector_description, self.library.ae_model.config.dim_bottleneck, 10
+        )
         model = IterationPredictor(model_conf)
         model.initial_solution = init_solution
         tcache = TrainCache.from_model(model)
