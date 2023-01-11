@@ -50,6 +50,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
+    """Solution Library
+
+    limitting threadnumber takes nonnegligible time. So please set
+    limit_thread = false in performance evaluation time. However,
+    when in attempt to run in muliple process, one must set it True.
+    """
+
     task_type: Type[ProblemT]
     solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
@@ -59,7 +66,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     coverage_results: List[Optional[CoverageResult]]
     solvable_threshold_factor: float
     uuidval: str
-    limit_thread: bool = True
+    limit_thread: bool = False
 
     def __post_init__(self):
         assert self.ae_model.loss_called
@@ -90,6 +97,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             [],
             solvable_threshold_factor,
             uuidval,
+            True,  # assume that we are gonna build library and not in eval time.
         )
 
     def _put_on_device(self, device: torch.device):
@@ -251,6 +259,9 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                     lib: "SolutionLibrary[ProblemT, ConfigT, ResultT]" = pickle.load(f)
                     assert lib.device == torch.device("cpu")
                     lib._put_on_device(device)
+                    # In most case, user will use the library in a single process
+                    # thus we dont need to care about thread stuff.
+                    lib.limit_thread = False  # faster
                     libraries.append(lib)
         return libraries  # type: ignore
 

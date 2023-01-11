@@ -48,8 +48,8 @@ if __name__ == "__main__":
 
     ae_model = TrainCache.load_latest(pp_mesh, VoxelAutoEncoder).best_model
     lconfig = LibrarySamplerConfig(
-        n_problem=3000,
-        n_problem_inner=200,
+        n_problem=1000,
+        n_problem_inner=100,
         train_config=TrainConfig(n_epoch=40),
         n_solution_candidate=10,
         n_difficult_problem=100,
