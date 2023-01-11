@@ -9,27 +9,32 @@ from mohou.trainer import TrainCache, TrainConfig
 from mohou.utils import log_package_version_info
 
 import hifuku
-from hifuku.domain import DomainProvider, TBRR_SQP_DomainProvider
+from hifuku.domain import (
+    DomainProvider,
+    TBDR_SQP_DomainProvider,
+    TBRR_SQP_DomainProvider,
+)
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.neuralnet import VoxelAutoEncoder
 from hifuku.utils import create_default_logger, filter_warnings
 
 
 class DomainType(Enum):
-    normal = TBRR_SQP_DomainProvider
+    tbrr_sqp = TBRR_SQP_DomainProvider
+    tbdr_sqp = TBDR_SQP_DomainProvider
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-type", type=str, default="normal", help="")
+    parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
     args = parser.parse_args()
     mesh_type_name: str = args.type
 
     filter_warnings()
 
     domain: DomainProvider = DomainType[mesh_type_name].value
-    mesh_sampler_type = TBRR_SQP_DomainProvider.get_compat_mesh_sampler_type()
-    domain_name = TBRR_SQP_DomainProvider.get_domain_name()
+    mesh_sampler_type = domain.get_compat_mesh_sampler_type()
+    domain_name = domain.get_domain_name()
 
     pp_mesh = get_project_path("hifuku-{}".format(mesh_sampler_type.__name__))
     pp = get_project_path("tabletop_solution_library-{}".format(domain_name))
@@ -52,9 +57,9 @@ if __name__ == "__main__":
         acceptable_false_positive_rate=0.01,
     )  # all pass
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
-        TBRR_SQP_DomainProvider.get_task_type(),
-        TBRR_SQP_DomainProvider.get_solver_type(),
-        TBRR_SQP_DomainProvider.get_solver_config(),
+        domain.get_task_type(),
+        domain.get_solver_type(),
+        domain.get_solver_config(),
         ae_model,
         lconfig,
         pool_single=None,

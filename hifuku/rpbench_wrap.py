@@ -3,6 +3,9 @@ from rpbench.interface import SamplableBase, TaskBase
 
 # fmt: off
 from rpbench.tabletop import (
+    TabletopBoxDualArmReachingTask as _TabletopBoxDualArmReachingTask,
+)
+from rpbench.tabletop import (
     TabletopBoxRightArmReachingTask as _TabletopBoxRightArmReachingTask,
 )
 from rpbench.tabletop import (
@@ -46,6 +49,7 @@ class PicklableTensorExportSamplableBase(PicklableTensorChunkBase, PicklableSamp
 
 # fmt: off
 class TabletopBoxRightArmReachingTask(_TabletopBoxRightArmReachingTask, PicklableTaskBase): ...  # noqa
+class TabletopBoxDualArmReachingTask(_TabletopBoxDualArmReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxVoxbloxRightArmReachingTask(_TabletopBoxVoxbloxRightArmReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class TabletopVoxbloxBoxWorldWrap(_TabletopVoxbloxBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa

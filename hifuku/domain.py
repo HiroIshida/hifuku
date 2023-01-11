@@ -16,7 +16,11 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSolver,
 )
 from hifuku.pool import ProblemT
-from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask, TabletopBoxWorldWrap
+from hifuku.rpbench_wrap import (
+    TabletopBoxDualArmReachingTask,
+    TabletopBoxRightArmReachingTask,
+    TabletopBoxWorldWrap,
+)
 
 
 class DomainProvider(ABC, Generic[ProblemT, ConfigT, ResultT]):
@@ -85,6 +89,29 @@ class TBRR_SQP_DomainProvider(
     @classmethod
     def get_task_type(cls) -> Type[TabletopBoxRightArmReachingTask]:
         return TabletopBoxRightArmReachingTask
+
+    @classmethod
+    def get_solver_type(
+        cls,
+    ) -> Type[AbstractScratchSolver[SQPBasedSolverConfig, SQPBasedSolverResult]]:
+        return SQPBasedSolver
+
+    @classmethod
+    def get_solver_config(cls) -> SQPBasedSolverConfig:
+        return SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
+
+    @classmethod
+    @abstractmethod
+    def get_compat_mesh_sampler_type(cls) -> Type[SamplableBase]:
+        return TabletopBoxWorldWrap
+
+
+class TBDR_SQP_DomainProvider(
+    DomainProvider[TabletopBoxDualArmReachingTask, SQPBasedSolverConfig, SQPBasedSolverResult]
+):
+    @classmethod
+    def get_task_type(cls) -> Type[TabletopBoxDualArmReachingTask]:
+        return TabletopBoxDualArmReachingTask
 
     @classmethod
     def get_solver_type(
