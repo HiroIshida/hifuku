@@ -4,6 +4,7 @@ from enum import Enum
 import rpbench
 import selcol
 import skmp
+import torch
 from mohou.file import get_project_path
 from mohou.trainer import TrainCache, TrainConfig
 from mohou.utils import log_package_version_info
@@ -14,7 +15,11 @@ from hifuku.domain import (
     TBDR_SQP_DomainProvider,
     TBRR_SQP_DomainProvider,
 )
-from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
+from hifuku.library import (
+    LibrarySamplerConfig,
+    SimpleSolutionLibrarySampler,
+    SolutionLibrary,
+)
 from hifuku.neuralnet import VoxelAutoEncoder
 from hifuku.utils import create_default_logger, filter_warnings
 
@@ -27,8 +32,11 @@ class DomainType(Enum):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
+    parser.add_argument("--warm", action="store_true", help="warm start")
+
     args = parser.parse_args()
     mesh_type_name: str = args.type
+    warm_start: bool = args.warm
 
     filter_warnings()
 
@@ -65,6 +73,13 @@ if __name__ == "__main__":
         pool_single=None,
         use_distributed=True,
     )
+
+    if warm_start:
+        lib = SolutionLibrary.load(
+            pp, domain.get_task_type(), domain.get_solver_type(), torch.device("cuda")
+        )[0]
+        lib.limit_thread = True
+        lib_sampler.library = lib
 
     for i in range(50):
         print(i)
