@@ -56,14 +56,15 @@ if __name__ == "__main__":
 
     ae_model = TrainCache.load_latest(pp_mesh, VoxelAutoEncoder).best_model
     lconfig = LibrarySamplerConfig(
-        n_problem=1000,
-        n_problem_inner=100,
+        n_problem=2000,
+        n_problem_inner=200,
         train_config=TrainConfig(n_epoch=40),
         n_solution_candidate=10,
         n_difficult_problem=100,
         solvable_threshold_factor=0.6,
         acceptable_false_positive_rate=0.01,
     )  # all pass
+
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
         domain.get_task_type(),
         domain.get_solver_type(),

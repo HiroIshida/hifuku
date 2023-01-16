@@ -482,7 +482,7 @@ class LibrarySamplerConfig:
     n_difficult_problem: int = 100
     solvable_threshold_factor: float = 0.8
     difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
-    acceptable_false_positive_rate: float = 0.05
+    acceptable_false_positive_rate: float = 0.005
 
 
 @dataclass
