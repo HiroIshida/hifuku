@@ -13,7 +13,7 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
-from hifuku.http_datagen.request import (
+from hifuku.datagen.http_datagen.request import (
     GetCPUInfoRequest,
     GetCPUInfoResponse,
     GetModuleHashValueRequest,

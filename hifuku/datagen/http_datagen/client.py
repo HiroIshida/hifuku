@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import ClassVar, Dict, Generic, List, Optional, Tuple
 
 from hifuku.config import ServerSpec, global_config
-from hifuku.http_datagen.request import (
+from hifuku.datagen.http_datagen.request import (
     GetCPUInfoRequest,
     GetCPUInfoResponse,
     GetModuleHashValueRequest,

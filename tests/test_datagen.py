@@ -38,10 +38,10 @@ set_ompl_random_seed(0)
 @pytest.fixture(autouse=True)
 def server():
     p1 = subprocess.Popen(
-        "python3 -m hifuku.http_datagen.server -port 8081", shell=True, preexec_fn=os.setsid
+        "python3 -m hifuku.datagen.http_datagen.server -port 8081", shell=True, preexec_fn=os.setsid
     )
     p2 = subprocess.Popen(
-        "python3 -m hifuku.http_datagen.server -port 8082", shell=True, preexec_fn=os.setsid
+        "python3 -m hifuku.datagen.http_datagen.server -port 8082", shell=True, preexec_fn=os.setsid
     )
     time.sleep(5)
     yield

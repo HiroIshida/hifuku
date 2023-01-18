@@ -18,8 +18,8 @@ from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
 from hifuku.config import ServerSpec
-from hifuku.http_datagen.client import ClientBase
-from hifuku.http_datagen.request import (
+from hifuku.datagen.http_datagen.client import ClientBase
+from hifuku.datagen.http_datagen.request import (
     SampleProblemRequest,
     SolveProblemRequest,
     http_connection,

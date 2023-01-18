@@ -2,8 +2,8 @@ import numpy as np
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 from skmp.trajectory import Trajectory
 
-from hifuku.http_datagen.request import http_connection, send_request
-from hifuku.http_datagen.server import (
+from hifuku.datagen.http_datagen.request import http_connection, send_request
+from hifuku.datagen.http_datagen.server import (
     GetCPUInfoRequest,
     GetModuleHashValueRequest,
     SolveProblemRequest,
