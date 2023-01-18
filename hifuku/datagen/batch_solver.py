@@ -154,6 +154,10 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         logger.debug("dump results")
         process_list = []
         for i, indices_part in enumerate(indices_list):
+
+            if len(indices_part) == 0:
+                continue
+
             show_progress_bar = i == 0
 
             problems_part = [problems[i] for i in indices_part]

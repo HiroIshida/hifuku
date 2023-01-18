@@ -61,6 +61,8 @@ def sample_feasible_problem_with_solution(
     queue: "Queue[WorkerOutput[ProblemT, ResultProtocol]]" = Queue()
     processes = []
     for i, n_sample_partial in enumerate(n_sample_list):
+        if n_sample_partial == 0:
+            continue
         show_progress_bar = i == 0
         arg = WorkerArg(n_sample_partial, pool, show_progress_bar, queue)
         p = Process(target=work, args=(arg,))

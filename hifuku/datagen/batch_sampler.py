@@ -121,6 +121,8 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 
             td_path = Path(td)
             for idx_process, n_sample_part in enumerate(n_sample_list):
+                if n_sample_part == 0:
+                    continue
                 show_progress = idx_process == 0
                 args = (n_sample_part, pool, show_progress, self.n_thread, td_path)
                 p = ctx.Process(target=self.work, args=args)  # type: ignore
