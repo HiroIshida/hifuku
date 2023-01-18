@@ -58,7 +58,7 @@ class LargestDifficultClusterPredicate(Generic[ProblemT, ConfigT, ResultT]):
         if library.device != cpu_device:
             logger.debug("library is on gpu. copy and put the library on cpu")
             library = copy.deepcopy(library)
-            library._put_on_device(cpu_device)
+            library.put_on_device(cpu_device)
 
         difficult_iters_list = [
             library._infer_iteration_num(p).flatten() for p in tqdm.tqdm(difficult_problems)

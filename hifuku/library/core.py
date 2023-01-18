@@ -26,6 +26,7 @@ from hifuku.datagen import (
     DistributedBatchProblemSolver,
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
+    sample_feasible_problem_with_solution,
 )
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.neuralnet import (
@@ -93,7 +94,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             True,  # assume that we are gonna build library and not in eval time.
         )
 
-    def _put_on_device(self, device: torch.device):
+    def put_on_device(self, device: torch.device):
         self.ae_model.put_on_device(device)
         for pred in self.predictors:
             pred.put_on_device(device)
@@ -251,7 +252,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 with path.open(mode="rb") as f:
                     lib: "SolutionLibrary[ProblemT, ConfigT, ResultT]" = pickle.load(f)
                     assert lib.device == torch.device("cpu")
-                    lib._put_on_device(device)
+                    lib.put_on_device(device)
                     # In most case, user will use the library in a single process
                     # thus we dont need to care about thread stuff.
                     lib.limit_thread = False  # faster
@@ -297,10 +298,30 @@ class LibraryBasedSolver(
 
 
 @dataclass
+class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
+    task_type: Type[ProblemT]
+    library: SolutionLibrary[ProblemT, ConfigT, ResultT]
+    difficult_iter_threshold: float
+
+    def __post_init__(self):
+        # note: library must be put on cpu
+        # to copy into forked processes
+        self.library = copy.deepcopy(self.library)
+        self.library.put_on_device(torch.device("cpu"))
+
+    def __call__(self, task: ProblemT) -> bool:
+        assert task.n_inner_task == 1
+        infer_res = self.library.infer(task)[0]
+        iterval = infer_res.nit
+        return iterval > self.difficult_iter_threshold
+
+
+@dataclass
 class LibrarySamplerConfig:
     n_problem: int
     n_problem_inner: int
     train_config: TrainConfig
+    n_process_solcan_sample: int = 4
     n_solution_candidate: int = 10
     n_difficult_problem: int = 100
     solvable_threshold_factor: float = 0.8
@@ -524,30 +545,19 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         n_sample: int,
         problem_pool: ProblemPool[ProblemT],
     ) -> List[Trajectory]:
-        difficult_iter_threshold = self.difficult_iter_threshold
 
-        solution_candidates: List[Trajectory] = []
-        with tqdm.tqdm(total=n_sample) as pbar:
-            while len(solution_candidates) < n_sample:
-                task = next(problem_pool)
-                assert task.n_inner_task == 1
-                infer_res = self.library.infer(task)[0]
-                iterval = infer_res.nit
+        assert problem_pool.n_problem_inner == 1
 
-                is_difficult = iterval > difficult_iter_threshold
-                if is_difficult:
-                    logger.debug("try solving a difficult task")
-                    assert task.n_inner_task == 1
+        pred = DifficultProblemPredicate(
+            problem_pool.problem_type, self.library, self.difficult_iter_threshold
+        )
+        predicated_pool = problem_pool.make_predicated(pred, 40)
+        outputs = sample_feasible_problem_with_solution(
+            n_sample, predicated_pool, self.config.n_process_solcan_sample
+        )
 
-                    res = task.solve_default()[0]
-                    if res.traj is not None:
-                        solution_candidates.append(res.traj)
-                        logger.debug(
-                            "solved difficult problem. current num => {}".format(
-                                len(solution_candidates)
-                            )
-                        )
-                        pbar.update(1)
+        # because n_problem_inner == 1, take [0]
+        solution_candidates = [o.results[0].traj for o in outputs]
         return solution_candidates
 
     def _sample_difficult_problems(
