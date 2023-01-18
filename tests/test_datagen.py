@@ -21,6 +21,7 @@ from hifuku.datagen import (
     DistributedBatchProblemSolver,
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
+    sample_feasible_problem_with_solution,
 )
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
@@ -169,3 +170,19 @@ def test_create_dataset():
         loader = LazyDecomplessDataLoader(dataset, batch_size=1)
         for sample in loader:
             pass
+
+
+def test_batch_pipelined():
+    n_sample = 3
+    n_inner = 2
+    n_process = 2
+
+    pool = TrivialProblemPool(TabletopBoxRightArmReachingTask, n_inner)
+    out = sample_feasible_problem_with_solution(n_sample, pool.as_predicated(), n_process)
+    assert len(out) == n_sample
+    for res in out:
+        assert len(res.results) == n_inner
+
+
+if __name__ == "__main__":
+    test_batch_pipelined()

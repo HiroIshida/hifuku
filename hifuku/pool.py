@@ -1,3 +1,11 @@
+"""
+This module implements the multiprocess data generation that does not
+fit into batch_solver and batch_sampler.
+
+Because I don't have time, the interface is much different from batch_sampler
+and batch_solvers. will be fixed someday.
+"""
+
 import copy
 import logging
 from abc import ABC, abstractmethod
