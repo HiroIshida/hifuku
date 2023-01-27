@@ -8,6 +8,7 @@ from skmp.solver.nlp_solver import (
     SQPBasedSolverConfig,
     SQPBasedSolverResult,
 )
+from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig, OMPLSolverResult
 
 from hifuku.datagen import (
     DistributeBatchProblemSampler,
@@ -81,6 +82,29 @@ class DomainProvider(ABC, Generic[ProblemT, ConfigT, ResultT]):
     @classmethod
     def get_domain_name(cls) -> str:
         return cls.__name__.split("_DomainProvider")[0]
+
+
+class TBRR_RRT_DomainProvider(
+    DomainProvider[TabletopBoxRightArmReachingTask, OMPLSolverConfig, OMPLSolverResult]
+):
+    @classmethod
+    def get_task_type(cls) -> Type[TabletopBoxRightArmReachingTask]:
+        return TabletopBoxRightArmReachingTask
+
+    @classmethod
+    def get_solver_type(
+        cls,
+    ) -> Type[AbstractScratchSolver[OMPLSolverConfig, OMPLSolverResult]]:
+        return OMPLSolver
+
+    @classmethod
+    def get_solver_config(cls) -> OMPLSolverConfig:
+        return OMPLSolverConfig(n_max_call=5000, n_max_satisfaction_trial=1)
+
+    @classmethod
+    @abstractmethod
+    def get_compat_mesh_sampler_type(cls) -> Type[SamplableBase]:
+        return TabletopBoxWorldWrap
 
 
 class TBRR_SQP_DomainProvider(
