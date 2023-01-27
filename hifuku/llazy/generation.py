@@ -12,6 +12,7 @@ import numpy as np
 import tqdm
 
 from hifuku.llazy.dataset import ChunkT
+from hifuku.utils import get_random_seed
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +54,9 @@ class DataGenerationTask(ABC, Process, Generic[ChunkT]):
             logger.debug("command => {}".format(command))
             os.system(command)
 
-        unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
-        logger.debug("random seed set to {}".format(unique_id))
-
-        np.random.seed(unique_id)
+        random_seed = get_random_seed()
+        logger.debug("random seed set to {}".format(random_seed))
+        np.random.seed(random_seed)
         disable_tqdm = not self.arg.show_process_bar
 
         with tqdm.tqdm(total=self.arg.number, disable=disable_tqdm) as pbar:

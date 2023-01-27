@@ -23,7 +23,7 @@ from hifuku.datagen.http_datagen.request import (
 )
 from hifuku.datagen.utils import split_number
 from hifuku.pool import PredicatedProblemPool, ProblemT
-from hifuku.utils import num_torch_thread
+from hifuku.utils import get_random_seed, num_torch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,9 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
     ) -> None:
 
         # set random seed
-        unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
-        np.random.seed(unique_id)
-        logger.debug("random seed set to {}".format(unique_id))
+        unique_seed = get_random_seed()
+        np.random.seed(unique_seed)
+        logger.debug("random seed set to {}".format(unique_seed))
 
         logger.debug("start sampling using clf")
         problems: List[ProblemT] = []

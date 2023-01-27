@@ -26,7 +26,7 @@ from hifuku.datagen.http_datagen.request import (
 from hifuku.datagen.utils import split_indices
 from hifuku.pool import ProblemT
 from hifuku.types import RawData
-from hifuku.utils import filter_warnings
+from hifuku.utils import filter_warnings, get_random_seed
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +59,9 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
     def run(self) -> None:
         logger.debug("batch solver worker run with pid {}".format(os.getpid()))
 
-        unique_id = (uuid.getnode() + os.getpid()) % (2**32 - 1)
-        logger.debug("random seed set to {}".format(unique_id))
-
-        np.random.seed(unique_id)
+        random_seed = get_random_seed()
+        logger.debug("random seed set to {}".format(random_seed))
+        np.random.seed(random_seed)
         disable_tqdm = not self.arg.show_process_bar
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):

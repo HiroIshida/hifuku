@@ -2,18 +2,25 @@ import ast
 import contextlib
 import inspect
 import logging
+import os
 import pickle
 import shutil
 import subprocess
 import tempfile
 import time
 import warnings
+from datetime import datetime
 from hashlib import md5
 from logging import Logger
 from pathlib import Path
 from typing import Any, Optional
 
 import torch
+
+
+def get_random_seed() -> int:
+    unique_seed = datetime.now().microsecond + os.getpid()
+    return unique_seed
 
 
 @contextlib.contextmanager
