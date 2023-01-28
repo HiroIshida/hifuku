@@ -1,12 +1,11 @@
 import logging
-import multiprocessing
 import os
 import pickle
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 from pathlib import Path
 from typing import Generic, List, Optional, Tuple, Type
 
@@ -39,6 +38,7 @@ class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
     solver_config: ConfigT
     init_solutions: List[Trajectory]
     show_process_bar: bool
+    cache_path: Path
 
     def __len__(self) -> int:
         return len(self.problems)
@@ -49,11 +49,9 @@ class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
 
 class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
     arg: BatchProblemSolverArg[ProblemT, ConfigT, ResultT]
-    queue: Queue
 
-    def __init__(self, arg: BatchProblemSolverArg, queue: Queue):
+    def __init__(self, arg: BatchProblemSolverArg):
         self.arg = arg
-        self.queue = queue
         super().__init__()
 
     def run(self) -> None:
@@ -69,6 +67,7 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
         np.random.seed(random_seed)
         disable_tqdm = not self.arg.show_process_bar
 
+        idx_resulsts_pairs = []
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             # NOTE: because NLP solver and collision detection algrithm may use multithreading
             with tqdm.tqdm(total=len(self.arg), disable=disable_tqdm) as pbar:
@@ -88,9 +87,15 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                     log_with_prefix("solve single task")
                     log_with_prefix("success: {}".format([r.traj is not None for r in results]))
                     log_with_prefix("iteration: {}".format([r.n_call for r in results]))
-                    self.queue.put((idx, tupled_results))
+
+                    idx_resulsts_pairs.append((idx, tupled_results))
+
                     pbar.update(1)
         log_with_prefix("finish solving all tasks")
+
+        save_path = self.arg.cache_path / str(uuid.uuid4())
+        with save_path.open(mode="wb") as f:
+            pickle.dump(idx_resulsts_pairs, f)
 
 
 @dataclass
@@ -237,33 +242,42 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
             indices = np.array(list(range(len(tasks))))
             indices_list_per_worker = np.array_split(indices, n_process)
 
-            q = multiprocessing.Queue()  # type: ignore
             indices_list_per_worker = np.array_split(indices, n_process)
 
             process_list = []
-            for i, indices_part in enumerate(indices_list_per_worker):
-                enable_tqdm = i == 0
-                problems_part = [tasks[idx] for idx in indices_part]
-                init_solutions_part = [init_solutions[idx] for idx in indices_part]
-                arg = BatchProblemSolverArg(
-                    indices_part,
-                    problems_part,
-                    self.solver_t,
-                    self.config,
-                    init_solutions_part,
-                    enable_tqdm,
-                )
-                worker = BatchProblemSolverWorker(arg, q)  # type: ignore
-                process_list.append(worker)
-                worker.start()
 
-            idx_result_pairs = [q.get() for _ in range(len(tasks))]
+            # NOTE: multiprocessing with shared queue is straightfowrad but
+            # sometimes hangs when handling larger data.
+            # Thus, we use temporarly directory to store the results and load again
+            with tempfile.TemporaryDirectory() as td:
+                td_path = Path(td)
+                for i, indices_part in enumerate(indices_list_per_worker):
+                    enable_tqdm = i == 0
+                    problems_part = [tasks[idx] for idx in indices_part]
+                    init_solutions_part = [init_solutions[idx] for idx in indices_part]
+                    arg = BatchProblemSolverArg(
+                        indices_part,
+                        problems_part,
+                        self.solver_t,
+                        self.config,
+                        init_solutions_part,
+                        enable_tqdm,
+                        td_path,
+                    )
+                    worker = BatchProblemSolverWorker(arg)  # type: ignore
+                    process_list.append(worker)
+                    worker.start()
 
-            for worker in process_list:
-                worker.join()
+                for worker in process_list:
+                    worker.join()
 
-            idx_result_pairs_sorted = sorted(idx_result_pairs, key=lambda x: x[0])  # type: ignore
-            _, results = zip(*idx_result_pairs_sorted)
+                idx_results_pairs = []
+                for file_path in td_path.iterdir():
+                    with file_path.open(mode="rb") as f:
+                        idx_results_pairs.extend(pickle.load(f))
+
+            idx_results_pairs_sorted = sorted(idx_results_pairs, key=lambda x: x[0])  # type: ignore
+            _, results = zip(*idx_results_pairs_sorted)
             return list(results)  # type: ignore
 
 
