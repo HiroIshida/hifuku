@@ -57,10 +57,15 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
         super().__init__()
 
     def run(self) -> None:
-        logger.debug("batch solver worker run with pid {}".format(os.getpid()))
+        prefix = "pid-{}: ".format(os.getpid())
+
+        def log_with_prefix(message):
+            logger.debug("{} {}".format(prefix, message))
+
+        log_with_prefix("batch solver worker run")
 
         random_seed = get_random_seed()
-        logger.debug("random seed set to {}".format(random_seed))
+        log_with_prefix("random seed set to {}".format(random_seed))
         np.random.seed(random_seed)
         disable_tqdm = not self.arg.show_process_bar
 
@@ -80,11 +85,12 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                         results.append(result)
                     tupled_results = tuple(results)
 
-                    logger.debug("generated single data")
-                    logger.debug("success: {}".format([r.traj is not None for r in results]))
-                    logger.debug("iteration: {}".format([r.n_call for r in results]))
+                    log_with_prefix("solve single task")
+                    log_with_prefix("success: {}".format([r.traj is not None for r in results]))
+                    log_with_prefix("iteration: {}".format([r.n_call for r in results]))
                     self.queue.put((idx, tupled_results))
                     pbar.update(1)
+        log_with_prefix("finish solving all tasks")
 
 
 @dataclass

@@ -587,10 +587,12 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     def _select_solution_candidates(
         self, candidates: List[Trajectory], problems: List[ProblemT]
     ) -> Trajectory:
-        logger.info("compute scores")
+        logger.info("select single solution out of {} candidates".format(len(candidates)))
+
         score_list = []
         maxiter = self.solver_config.n_max_call
-        for candidate in candidates:
+
+        for i_cand, candidate in enumerate(candidates):
             solution_guesses = [candidate] * len(problems)
             # results = self.solver.solve_batch(problems, solution_guesses)
             # TODO: make flatten problem and use distributed
@@ -603,7 +605,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 (maxiter + 1 if r[0].traj is None else r[0].n_call) for r in results
             ]
             score = -sum(iterval_real_list)  # must be nagative
-            logger.debug("*score of solution cand: {}".format(score))
+            logger.debug("*score of solution candidate {}: {}".format(i_cand, score))
             score_list.append(score)
 
         best_idx = np.argmax(score_list)
