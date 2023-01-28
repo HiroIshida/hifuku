@@ -15,6 +15,15 @@ from hifuku.llazy.dataset import TensorChunkBase
 ResultT = TypeVar("ResultT", bound=ResultProtocol)
 
 
+def get_clamped_iter(result: ResultProtocol, config: ConfigProtocol) -> int:
+    # set n_call to larget value if result.traj is not None
+    # (failure case)
+
+    if result.traj is None:
+        return config.n_max_call + 1
+    return result.n_call
+
+
 @dataclass
 class RawData(TensorChunkBase):
     init_solution: Trajectory
@@ -55,11 +64,6 @@ class RawData(TensorChunkBase):
             torch_vector_descs = [torch.from_numpy(desc).float() for desc in np_vector_descs]
             torch_wcd_descs = torch.stack(torch_vector_descs)
 
-            def get_clamped_iter(result: ResultProtocol) -> int:
-                if result.traj is None:
-                    return self.solver_config.n_max_call + 1
-                return result.n_call
-
-            nits = np.array([get_clamped_iter(r) for r in self.results])
+            nits = np.array([get_clamped_iter(r, self.solver_config) for r in self.results])
             torch_nits = torch.from_numpy(nits).float()
             return torch_mesh, torch_wcd_descs, torch_nits
