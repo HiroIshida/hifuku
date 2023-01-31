@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
+from typing import Optional
 
 import numpy as np
 
@@ -52,23 +53,37 @@ class CoverageResult:
         assert np.all(diffs > 0.0)
 
         positive_gt = self.values_ground_truth <= self.threshold
+        eps = 1e-4
 
-        def fp_rate(margin: float) -> float:
-            positive_est = self.values_estimation + margin <= self.threshold
-            tp_rate = np.sum(np.logical_and(positive_gt, positive_est)) / np.sum(positive_est)
+        def fp_rate(margin: float) -> Optional[float]:
+            positive_est = self.values_estimation + margin + eps <= self.threshold
+            n_positive = np.sum(positive_est)
+            no_positive = n_positive == 0
+            if no_positive:
+                return None
+
+            tp_rate = np.sum(np.logical_and(positive_gt, positive_est)) / n_positive
             fp_rate = 1.0 - tp_rate
             return fp_rate
 
-        if fp_rate(0.0) < acceptable_false_positive_rate:
+        rate = fp_rate(0.0)
+        if rate is None:
+            # make no sense to set margin because no positive est
+            return np.inf
+
+        if rate < acceptable_false_positive_rate:
+            # no need to set margin
             return 0.0
 
         sorted_diffs = np.sort(diffs)
         for i in range(len(diffs)):
             margin_cand = sorted_diffs[i]
             rate = fp_rate(margin_cand)
+            if rate is None:
+                return np.inf
             if rate < acceptable_false_positive_rate:
-                return margin_cand + 1e-5
-        assert False
+                return margin_cand + eps
+        assert False, "final rate {}".format(rate)
 
     def __str__(self) -> str:
         string = "coverage result => "

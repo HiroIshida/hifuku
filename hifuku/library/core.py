@@ -329,6 +329,7 @@ class LibrarySamplerConfig:
     solvable_threshold_factor: float = 0.8
     difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
     acceptable_false_positive_rate: float = 0.005
+    ignore_useless_traj: bool = True
 
 
 @dataclass
@@ -484,21 +485,21 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         logger.info("margin is set to {}".format(margin))
 
-        non_empty_feasible_region = margin < self.solver_config.n_max_call
-        if non_empty_feasible_region:
-            self.library.add(predictor, margin, coverage_result)
-
-            coverage = self.library.measure_coverage(self.problems_validation)
-            logger.info("current library's coverage estimate: {}".format(coverage))
-
-            self.library.dump(project_path)
-        else:
+        ignore = margin > self.solver_config.n_max_call and self.config.ignore_useless_traj
+        if ignore:
             message = (
                 "margin {} is smaller than n_max_call {}. Thus, library is not updated".format(
                     margin, self.solver_config.n_max_call
                 )
             )
             logger.info(message)
+        else:
+            self.library.add(predictor, margin, coverage_result)
+
+            coverage = self.library.measure_coverage(self.problems_validation)
+            logger.info("current library's coverage estimate: {}".format(coverage))
+
+            self.library.dump(project_path)
 
     @property
     def difficult_iter_threshold(self) -> float:
