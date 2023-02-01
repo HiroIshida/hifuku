@@ -246,6 +246,13 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
 
             process_list = []
 
+            # python's known bug when forking process while using logging module
+            # https://stackoverflow.com/questions/65080123/python-multiprocessing-pool-some-process-in-deadlock-when-forked-but-runs-when-s
+            # https://stackoverflow.com/questions/24509650/deadlock-with-logging-multiprocess-multithread-python-script
+            # https://bugs.python.org/issue6721
+            for hn in logger.handlers:
+                assert not hn.lock.locked()
+
             # NOTE: multiprocessing with shared queue is straightfowrad but
             # sometimes hangs when handling larger data.
             # Thus, we use temporarly directory to store the results and load again
