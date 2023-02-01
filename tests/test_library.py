@@ -89,6 +89,7 @@ def test_SolutionLibrarySampler():
         solvable_threshold_factor=0.0,
         difficult_threshold_factor=-np.inf,  # all pass
         acceptable_false_positive_rate=1.0,
+        ignore_useless_traj=False,
     )  # all pass
 
     test_devices = [torch.device("cpu")]

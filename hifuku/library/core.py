@@ -36,7 +36,7 @@ from hifuku.neuralnet import (
     VoxelAutoEncoder,
 )
 from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
-from hifuku.types import RawData
+from hifuku.types import RawData, get_clamped_iter
 from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         nit: float
         idx: int  # index of selected solution in the library
         init_solution: Trajectory
+        margin: float
 
     @classmethod
     def initialize(
@@ -164,7 +165,8 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         for nit, idx in zip(nits_min, indices_min):
             init_solution = self.predictors[idx].initial_solution
             assert init_solution is not None
-            res = self.InferenceResult(nit, idx, init_solution)
+            margin = self.margins[idx]
+            res = self.InferenceResult(nit, idx, init_solution, margin)
             result_list.append(res)
         return result_list
 
@@ -187,8 +189,8 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("**compute real values")
         results = solver.solve_batch(tasks, init_solution_est_list)
 
-        maxiter = self.solver_config.n_max_call
-        iterval_real_list = [(maxiter + 1 if r[0].traj is None else r[0].n_call) for r in results]
+        self.solver_config.n_max_call
+        iterval_real_list = [get_clamped_iter(r[0], self.solver_config) for r in results]
 
         success_iter = self.success_iter_threshold()
         coverage_result = CoverageResult(
@@ -327,6 +329,7 @@ class LibrarySamplerConfig:
     solvable_threshold_factor: float = 0.8
     difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
     acceptable_false_positive_rate: float = 0.005
+    ignore_useless_traj: bool = True
 
 
 @dataclass
@@ -481,12 +484,22 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
         logger.info("margin is set to {}".format(margin))
-        self.library.add(predictor, margin, coverage_result)
 
-        coverage = self.library.measure_coverage(self.problems_validation)
-        logger.info("current library's coverage estimate: {}".format(coverage))
+        ignore = margin > self.solver_config.n_max_call and self.config.ignore_useless_traj
+        if ignore:
+            message = (
+                "margin {} is smaller than n_max_call {}. Thus, library is not updated".format(
+                    margin, self.solver_config.n_max_call
+                )
+            )
+            logger.info(message)
+        else:
+            self.library.add(predictor, margin, coverage_result)
 
-        self.library.dump(project_path)
+            coverage = self.library.measure_coverage(self.problems_validation)
+            logger.info("current library's coverage estimate: {}".format(coverage))
+
+            self.library.dump(project_path)
 
     @property
     def difficult_iter_threshold(self) -> float:
@@ -590,7 +603,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         logger.info("select single solution out of {} candidates".format(len(candidates)))
 
         score_list = []
-        maxiter = self.solver_config.n_max_call
 
         for i_cand, candidate in enumerate(candidates):
             solution_guesses = [candidate] * len(problems)
@@ -601,9 +613,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             )  # distribute here is really slow
             results = solver.solve_batch(problems, solution_guesses)
             # consider all problems has n_inner_problem = 1
-            iterval_real_list = [
-                (maxiter + 1 if r[0].traj is None else r[0].n_call) for r in results
-            ]
+            iterval_real_list = [get_clamped_iter(r[0], self.solver_config) for r in results]
             score = -sum(iterval_real_list)  # must be nagative
             logger.debug("*score of solution candidate {}: {}".format(i_cand, score))
             score_list.append(score)
