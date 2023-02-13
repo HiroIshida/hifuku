@@ -111,17 +111,28 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         assert len(self.predictors) > 0
 
         if self.limit_thread:
+            # FIXME: maybe threadpool_limits and num_torch_thread scope can be
+            # integrated into one? In that case, if-else conditioning due to 
+            # mesh_np_tmp can be simplar
+
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
                 # limiting numpy thread seems to make stable. but not sure why..
                 desc_table = task.export_table()
-                mesh_np = np.expand_dims(desc_table.get_mesh(), axis=(0, 1))
+                mesh_np_tmp = desc_table.get_mesh()
+                if mesh_np_tmp is None:
+                    mesh_np = None
+                else:
+                    mesh_np = np.expand_dims(mesh_np_tmp, axis=(0, 1))
                 desc_np = np.array(desc_table.get_vector_descs())
 
             with num_torch_thread(1):
                 # float() must be run in single (cpp-layer) thread
                 # see https://github.com/pytorch/pytorch/issues/89693
-                mesh = torch.from_numpy(mesh_np)
-                mesh = mesh.float().to(self.device)
+                if mesh_np is None:
+                    mesh = None
+                else:
+                    mesh = torch.from_numpy(mesh_np)
+                    mesh = mesh.float().to(self.device)
                 desc = torch.from_numpy(desc_np)
                 desc = desc.float().to(self.device)
         else:
@@ -129,12 +140,18 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             # is constly. So if you are sure that you are running program in
             # a single process. Then set limit_thread = False
             desc_table = task.export_table()
-            mesh_np = np.expand_dims(desc_table.get_mesh(), axis=(0, 1))
             desc_np = np.array(desc_table.get_vector_descs())
-            mesh = torch.from_numpy(mesh_np)
-            mesh = mesh.float().to(self.device)
             desc = torch.from_numpy(desc_np)
             desc = desc.float().to(self.device)
+
+            mesh_np_tmp = desc_table.get_mesh()
+            if mesh_np_tmp is None:
+                mesh = None
+            else:
+                mesh_np = np.expand_dims(mesh_np_tmp, axis=(0, 1))
+                mesh = torch.from_numpy(mesh_np)
+                mesh = mesh.float().to(self.device)
+
 
         n_batch, _ = desc_np.shape
 
