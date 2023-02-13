@@ -30,7 +30,7 @@ from hifuku.datagen import (
 )
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.neuralnet import (
-    AutoEncoderProtocol,
+    AutoEncoderBase,
     IterationPredictor,
     IterationPredictorConfig,
     IterationPredictorDataset,
@@ -54,7 +54,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     task_type: Type[ProblemT]
     solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
-    ae_model: AutoEncoderProtocol
+    ae_model: AutoEncoderBase
     predictors: List[IterationPredictor]
     margins: List[float]
     coverage_results: List[Optional[CoverageResult]]
@@ -78,7 +78,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         task_type: Type[ProblemT],
         solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config,
-        ae_model: AutoEncoderProtocol,
+        ae_model: AutoEncoderBase,
         solvable_threshold_factor: float,
     ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
         uuidval = str(uuid.uuid4())[-8:]
@@ -102,7 +102,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
     @property
     def device(self) -> torch.device:
-        return self.ae_model.device
+        return self.ae_model.get_device()
 
     def _infer_iteration_num(self, task: ProblemT) -> np.ndarray:
         """
@@ -381,7 +381,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         problem_type: Type[ProblemT],
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         solver_config: ConfigT,
-        ae_model: AutoEncoderProtocol,
+        ae_model: AutoEncoderBase,
         config: LibrarySamplerConfig,
         pool_single: Optional[ProblemPool[ProblemT]] = None,
         pool_multiple: Optional[ProblemPool[ProblemT]] = None,

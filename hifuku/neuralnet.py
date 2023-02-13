@@ -1,7 +1,7 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Protocol, Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -16,24 +16,53 @@ from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.types import RawData
 
 
-class AutoEncoderProtocol(Protocol):
+class AutoEncoderBase(ABC):
+    @abstractmethod
     def encode(self, X: Optional[torch.Tensor]) -> torch.Tensor:
         ...
 
     @property
-    def device(self) -> torch.device:
-        ...
-
-    @property
+    @abstractmethod
     def n_bottleneck(self) -> int:
         ...
 
     @property
+    @abstractmethod
     def trained(self) -> bool:
         ...
 
+    @abstractmethod
+    def get_device(self) -> torch.device:
+        ...
+
+    @abstractmethod
     def put_on_device(self, device: torch.device) -> None:
         ...
+
+
+class NullAutoEncoder(AutoEncoderBase):
+    device: torch.device  # unused
+
+    def __init__(self):
+        self.device = torch.device("cpu")
+
+    def encode(self, X: Optional[torch.Tensor]) -> torch.Tensor:
+        assert X is None
+        return torch.empty((1, 0))
+
+    @property
+    def n_bottleneck(self) -> int:
+        return 0
+
+    @property
+    def trained(self) -> bool:
+        return True
+
+    def put_on_device(self, device: torch.device) -> None:
+        self.device = device
+
+    def get_device(self) -> torch.device:
+        return self.device
 
 
 @dataclass
@@ -57,7 +86,7 @@ class IterationPredictorDataset(Dataset):
         )
 
     @classmethod
-    def load(cls, dataset_path: Path, ae_model: AutoEncoderProtocol):
+    def load(cls, dataset_path: Path, ae_model: AutoEncoderBase):
         device = detect_device()
         ae_model.put_on_device(device)
         dataset = LazyDecomplessDataset.load(dataset_path, RawData, n_worker=-1)
@@ -205,7 +234,7 @@ class AutoEncoderConfig(ModelConfigBase):
 VoxelAutoEncoderConfig = AutoEncoderConfig  # for backword compatibility TODO: remove this
 
 
-class AutoEncoderBase(ModelBase[AutoEncoderConfig]):
+class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
     encoder: nn.Sequential
     decoder: nn.Sequential
     trained: bool = False  # flag to show the model is trained
@@ -217,6 +246,9 @@ class AutoEncoderBase(ModelBase[AutoEncoderConfig]):
 
         def forward(self, x):
             return x.view(self.shape)
+
+    def get_device(self) -> torch.device:
+        return self.device
 
     def encode(self, mesh: Optional[Tensor]) -> Tensor:
         assert mesh is not None
@@ -238,7 +270,7 @@ class AutoEncoderBase(ModelBase[AutoEncoderConfig]):
         ...
 
 
-class VoxelAutoEncoder(AutoEncoderBase):
+class VoxelAutoEncoder(NeuralAutoEncoderBase):
     def _setup_from_config(self, config: AutoEncoderConfig) -> None:
         n_channel = 1
         # NOTE: DO NOT add bath normalization layer
