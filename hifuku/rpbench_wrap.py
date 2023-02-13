@@ -1,5 +1,6 @@
 import torch
 from rpbench.interface import SamplableBase, TaskBase
+from rpbench.maze import MazeSolvingTask as _MazeSolvingTask
 
 # fmt: off
 from rpbench.tabletop import (
@@ -53,4 +54,5 @@ class TabletopBoxDualArmReachingTask(_TabletopBoxDualArmReachingTask, PicklableT
 class TabletopBoxVoxbloxRightArmReachingTask(_TabletopBoxVoxbloxRightArmReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class TabletopVoxbloxBoxWorldWrap(_TabletopVoxbloxBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
+class MazeSolvingTask(_MazeSolvingTask, PicklableTaskBase): ...  # noqa
 # fmt: on
