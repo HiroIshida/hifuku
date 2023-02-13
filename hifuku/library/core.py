@@ -30,10 +30,10 @@ from hifuku.datagen import (
 )
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.neuralnet import (
+    AutoEncoderProtocol,
     IterationPredictor,
     IterationPredictorConfig,
     IterationPredictorDataset,
-    VoxelAutoEncoder,
 )
 from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
 from hifuku.types import RawData, get_clamped_iter
@@ -54,7 +54,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     task_type: Type[ProblemT]
     solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
-    ae_model: VoxelAutoEncoder
+    ae_model: AutoEncoderProtocol
     predictors: List[IterationPredictor]
     margins: List[float]
     coverage_results: List[Optional[CoverageResult]]
@@ -78,7 +78,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         task_type: Type[ProblemT],
         solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config,
-        ae_model: VoxelAutoEncoder,
+        ae_model: AutoEncoderProtocol,
         solvable_threshold_factor: float,
     ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
         uuidval = str(uuid.uuid4())[-8:]
@@ -112,7 +112,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
         if self.limit_thread:
             # FIXME: maybe threadpool_limits and num_torch_thread scope can be
-            # integrated into one? In that case, if-else conditioning due to 
+            # integrated into one? In that case, if-else conditioning due to
             # mesh_np_tmp can be simplar
 
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
@@ -152,10 +152,9 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 mesh = torch.from_numpy(mesh_np)
                 mesh = mesh.float().to(self.device)
 
-
         n_batch, _ = desc_np.shape
 
-        encoded: torch.Tensor = self.ae_model.encoder(mesh)
+        encoded: torch.Tensor = self.ae_model.encode(mesh)
         encoded_repeated = encoded.repeat(n_batch, 1)
 
         itervals_list = []
@@ -382,7 +381,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         problem_type: Type[ProblemT],
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         solver_config: ConfigT,
-        ae_model: VoxelAutoEncoder,
+        ae_model: AutoEncoderProtocol,
         config: LibrarySamplerConfig,
         pool_single: Optional[ProblemPool[ProblemT]] = None,
         pool_multiple: Optional[ProblemPool[ProblemT]] = None,
@@ -562,7 +561,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         # train
         model_conf = IterationPredictorConfig(
-            n_dim_vector_description, self.library.ae_model.config.dim_bottleneck, 10
+            n_dim_vector_description, self.library.ae_model.n_bottleneck, 10
         )
         model = IterationPredictor(model_conf)
         model.initial_solution = init_solution

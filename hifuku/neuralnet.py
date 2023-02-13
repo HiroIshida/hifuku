@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Protocol, Tuple
 
 import torch
 import torch.nn as nn
@@ -14,6 +14,26 @@ from torch.utils.data import Dataset
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.types import RawData
+
+
+class AutoEncoderProtocol(Protocol):
+    def encode(self, X: Optional[torch.Tensor]) -> torch.Tensor:
+        ...
+
+    @property
+    def device(self) -> torch.device:
+        ...
+
+    @property
+    def n_bottleneck(self) -> int:
+        ...
+
+    @property
+    def trained(self) -> bool:
+        ...
+
+    def put_on_device(self, device: torch.device) -> None:
+        ...
 
 
 @dataclass
@@ -37,7 +57,7 @@ class IterationPredictorDataset(Dataset):
         )
 
     @classmethod
-    def load(cls, dataset_path: Path, ae_model: "VoxelAutoEncoder"):
+    def load(cls, dataset_path: Path, ae_model: AutoEncoderProtocol):
         device = detect_device()
         ae_model.put_on_device(device)
         dataset = LazyDecomplessDataset.load(dataset_path, RawData, n_worker=-1)
@@ -53,7 +73,7 @@ class IterationPredictorDataset(Dataset):
             mesh, description, iterval = sample
 
             mesh = mesh.to(device)  # n_batch x (*shape)
-            encoded: torch.Tensor = ae_model.encoder(mesh).detach().cpu()
+            encoded: torch.Tensor = ae_model.encode(mesh).detach().cpu()
             n_batch, n_problem, _ = description.shape
 
             for i in range(n_batch):
@@ -198,12 +218,20 @@ class AutoEncoderBase(ModelBase[AutoEncoderConfig]):
         def forward(self, x):
             return x.view(self.shape)
 
+    def encode(self, mesh: Optional[Tensor]) -> Tensor:
+        assert mesh is not None
+        return self.encoder(mesh)
+
     def loss(self, mesh: Tensor) -> LossDict:
         self.trained = True
         encoded = self.encoder(mesh)
         reconst = self.decoder(encoded)
         loss = nn.MSELoss()(mesh, reconst)
         return LossDict({"reconstruction": loss})
+
+    @property
+    def n_bottleneck(self) -> int:
+        return self.config.dim_bottleneck
 
     @abstractmethod
     def _setup_from_config(self, config: AutoEncoderConfig) -> None:
