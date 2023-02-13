@@ -99,7 +99,12 @@ class TBRR_RRT_DomainProvider(
 
     @classmethod
     def get_solver_config(cls) -> OMPLSolverConfig:
-        return OMPLSolverConfig(n_max_call=5000, n_max_satisfaction_trial=1)
+        return OMPLSolverConfig(
+            n_max_call=3000,
+            n_max_satisfaction_trial=1,
+            expbased_planner_backend="ertconnect",
+            ertconnect_eps=0.5,
+        )
 
     @classmethod
     @abstractmethod

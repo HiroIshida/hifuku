@@ -13,6 +13,7 @@ import hifuku
 from hifuku.domain import (
     DomainProvider,
     TBDR_SQP_DomainProvider,
+    TBRR_RRT_DomainProvider,
     TBRR_SQP_DomainProvider,
 )
 from hifuku.library import (
@@ -26,6 +27,7 @@ from hifuku.utils import create_default_logger, filter_warnings
 
 class DomainType(Enum):
     tbrr_sqp = TBRR_SQP_DomainProvider
+    tbrr_rrt = TBRR_RRT_DomainProvider
     tbdr_sqp = TBDR_SQP_DomainProvider
 
 
@@ -56,13 +58,14 @@ if __name__ == "__main__":
 
     ae_model = TrainCache.load_latest(pp_mesh, VoxelAutoEncoder).best_model
     lconfig = LibrarySamplerConfig(
-        n_problem=2000,
-        n_problem_inner=200,
+        n_problem=10000,
+        n_problem_inner=50,
         train_config=TrainConfig(n_epoch=40),
-        n_solution_candidate=10,
-        n_difficult_problem=100,
-        solvable_threshold_factor=0.6,
-        acceptable_false_positive_rate=0.01,
+        n_solution_candidate=50,
+        n_difficult_problem=300,
+        solvable_threshold_factor=1.0,
+        difficult_threshold_factor=1.0,
+        acceptable_false_positive_rate=0.03,
     )  # all pass
 
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
@@ -74,7 +77,9 @@ if __name__ == "__main__":
         pool_single=None,
         use_distributed=True,
     )
-
+    # solver=MultiProcessBatchProblemSolver(
+    #     domain.get_solver_type(), domain.get_solver_config(), 2
+    # ),
     if warm_start:
         lib = SolutionLibrary.load(
             pp, domain.get_task_type(), domain.get_solver_type(), torch.device("cuda")
@@ -82,6 +87,6 @@ if __name__ == "__main__":
         lib.limit_thread = True
         lib_sampler.library = lib
 
-    for i in range(50):
+    for i in range(100):
         print(i)
         lib_sampler.step_active_sampling(pp)

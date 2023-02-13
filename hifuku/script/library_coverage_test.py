@@ -14,7 +14,7 @@ mp_batch_solver = TBRR_SQP_DomainProvider.get_multiprocess_batch_solver()
 domain_name = TBRR_SQP_DomainProvider.get_domain_name()
 
 pp = get_project_path("tabletop_solution_library-{}".format(domain_name))
-validation_pool = [TabletopBoxRightArmReachingTask.sample(1) for _ in range(100)]
+validation_pool = [TabletopBoxRightArmReachingTask.sample(1) for _ in range(1000)]
 lib = SolutionLibrary.load(pp, task_type, solver_type, device=torch.device("cpu"))[0]
 coverage = lib.measure_full_coverage(validation_pool, mp_batch_solver)
 print(coverage)
