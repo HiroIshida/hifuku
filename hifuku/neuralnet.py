@@ -3,13 +3,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 import tqdm
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from mohou.utils import detect_device
-from rpbench.interface import DescriptionTable
 from skmp.trajectory import Trajectory
 from torch import Tensor
 from torch.utils.data import Dataset
@@ -177,23 +175,6 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             solution_loss = nn.MSELoss()(solution_pred, solution) * 1000
             dic["solution"] = solution_loss
         return LossDict(dic)
-
-    def infer(self, desc_table: DescriptionTable, ae_model: "VoxelAutoEncoder") -> np.ndarray:
-        assert self.device == torch.device("cpu")
-        mesh_np = np.expand_dims(desc_table.get_mesh(), axis=(0, 1))
-        desc_np = np.array(desc_table.get_vector_descs())
-        mesh = torch.from_numpy(mesh_np)
-        mesh = mesh.float().to(self.device)
-        desc = torch.from_numpy(desc_np)
-        desc = desc.float().to(self.device)
-
-        n_batch, _ = desc_np.shape
-
-        encoded: torch.Tensor = ae_model.encoder(mesh)
-        encoded_repeated = encoded.repeat(n_batch, 1)
-        itervals, _ = self.forward((encoded_repeated, desc))
-        out_np = itervals.cpu().detach().numpy().flatten()
-        return out_np
 
 
 @dataclass

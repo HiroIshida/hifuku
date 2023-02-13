@@ -33,8 +33,7 @@ def test_network():
     model.loss(sample)
 
     task_type = TBRR_SQP_DomainProvider.get_task_type()
-    task = task_type.sample(1)
-    model.infer(task.export_table(), ae_model=ae)
+    task_type.sample(1)
 
 
 if __name__ == "__main__":

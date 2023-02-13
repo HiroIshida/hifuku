@@ -5,6 +5,7 @@ from mohou.file import get_project_path
 from mohou.trainer import TrainCache
 
 from hifuku.domain import TBRR_SQP_DomainProvider
+from hifuku.library.core import SolutionLibrary
 from hifuku.neuralnet import IterationPredictor, VoxelAutoEncoder
 
 mesh_sampler_type = TBRR_SQP_DomainProvider.get_compat_mesh_sampler_type()
@@ -34,8 +35,10 @@ for problem in task.export_problems():
     results.append(result)
 
 desc_table = task.export_table()
+lib = SolutionLibrary(  # FIXME: temp implemented this after deletion of model.infer
+    task_type, solver_type, solver_config, ae_model, [pred], [0.0], [None], 1.0, "dummy"
+)
 ts = time.time()
-out = pred.infer(task.export_table(), ae_model)
-print(out)
+lib.infer(task)
 print(time.time() - ts)
 # time to infer
