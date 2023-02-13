@@ -188,7 +188,7 @@ VoxelAutoEncoderConfig = AutoEncoderConfig  # for backword compatibility TODO: r
 class AutoEncoderBase(ModelBase[AutoEncoderConfig]):
     encoder: nn.Sequential
     decoder: nn.Sequential
-    loss_called: bool = False  # flag to show the model is trained
+    trained: bool = False  # flag to show the model is trained
 
     class Reshape(nn.Module):
         def __init__(self, *args):
@@ -199,7 +199,7 @@ class AutoEncoderBase(ModelBase[AutoEncoderConfig]):
             return x.view(self.shape)
 
     def loss(self, mesh: Tensor) -> LossDict:
-        self.loss_called = True
+        self.trained = True
         encoded = self.encoder(mesh)
         reconst = self.decoder(encoded)
         loss = nn.MSELoss()(mesh, reconst)

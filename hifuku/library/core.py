@@ -63,7 +63,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     limit_thread: bool = False
 
     def __post_init__(self):
-        assert self.ae_model.loss_called
+        assert self.ae_model.trained
 
     @dataclass
     class InferenceResult:
