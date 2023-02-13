@@ -18,7 +18,7 @@ from hifuku.types import RawData
 
 class AutoEncoderBase(ABC):
     @abstractmethod
-    def encode(self, X: Optional[torch.Tensor]) -> torch.Tensor:
+    def encode(self, X: torch.Tensor) -> torch.Tensor:
         ...
 
     @property
@@ -41,14 +41,17 @@ class AutoEncoderBase(ABC):
 
 
 class NullAutoEncoder(AutoEncoderBase):
-    device: torch.device  # unused
+    device: torch.device
 
     def __init__(self):
         self.device = torch.device("cpu")
 
-    def encode(self, X: Optional[torch.Tensor]) -> torch.Tensor:
-        assert X is None
-        return torch.empty((1, 0))
+    def encode(self, X: torch.Tensor) -> torch.Tensor:
+        # assume that X is empty tensor
+        assert X.ndim == 2
+        n_batch, dummy = X.shape
+        assert dummy == 0
+        return torch.empty((n_batch, 0)).to(self.device)
 
     @property
     def n_bottleneck(self) -> int:
@@ -250,8 +253,7 @@ class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
     def get_device(self) -> torch.device:
         return self.device
 
-    def encode(self, mesh: Optional[Tensor]) -> Tensor:
-        assert mesh is not None
+    def encode(self, mesh: Tensor) -> Tensor:
         return self.encoder(mesh)
 
     def loss(self, mesh: Tensor) -> LossDict:

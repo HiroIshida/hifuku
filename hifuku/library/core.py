@@ -129,7 +129,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 # float() must be run in single (cpp-layer) thread
                 # see https://github.com/pytorch/pytorch/issues/89693
                 if mesh_np is None:
-                    mesh = None
+                    mesh = torch.empty((1, 0))
                 else:
                     mesh = torch.from_numpy(mesh_np)
                     mesh = mesh.float().to(self.device)
@@ -146,7 +146,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
             mesh_np_tmp = desc_table.get_mesh()
             if mesh_np_tmp is None:
-                mesh = None
+                mesh = torch.empty((1, 0))
             else:
                 mesh_np = np.expand_dims(mesh_np_tmp, axis=(0, 1))
                 mesh = torch.from_numpy(mesh_np)

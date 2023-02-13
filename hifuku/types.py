@@ -51,7 +51,10 @@ class RawData(TensorChunkBase):
 
     def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         np_mesh = self.desc.get_mesh()
-        torch_mesh = torch.from_numpy(np_mesh).float().unsqueeze(0)
+        if np_mesh is None:
+            torch_mesh = torch.empty((0))
+        else:
+            torch_mesh = torch.from_numpy(np_mesh).float().unsqueeze(0)
 
         np_vector_descs = self.desc.get_vector_descs()
 
