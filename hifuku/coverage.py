@@ -53,7 +53,7 @@ class CoverageResult:
         assert np.all(diffs > 0.0)
 
         positive_gt = self.values_ground_truth <= self.threshold
-        eps = 1e-2
+        eps = 1e-6
 
         def fp_rate(margin: float) -> Optional[float]:
             positive_est = self.values_estimation + margin + eps <= self.threshold
