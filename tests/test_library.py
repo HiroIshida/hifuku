@@ -17,6 +17,7 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
+from hifuku.domain import TBRR_RRT_DomainProvider
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
@@ -71,14 +72,13 @@ def _test_compute_real_itervals():
 
 
 def test_SolutionLibrarySampler():
-    problem_type = TabletopBoxRightArmReachingTask
-    nlp_solcon = SQPBasedSolverConfig(
-        n_wp=15, n_max_call=10, motion_step_satisfaction="debug_ignore"
-    )
-    solver = MultiProcessBatchProblemSolver[SQPBasedSolverConfig, SQPBasedSolverResult](
-        SQPBasedSolver, nlp_solcon, n_process=2
-    )
-    sampler = MultiProcessBatchProblemSampler[TabletopBoxRightArmReachingTask](n_process=2)
+    domain_provider = TBRR_RRT_DomainProvider
+    problem_type = domain_provider.get_task_type()
+    solcon = domain_provider.get_solver_config()
+    solver_type = domain_provider.get_solver_type()
+
+    solver = MultiProcessBatchProblemSolver(solver_type, solcon, n_process=2)
+    sampler = MultiProcessBatchProblemSampler[problem_type](n_process=2)
     tconfig = TrainConfig(n_epoch=1)
     lconfig = LibrarySamplerConfig(
         n_problem=10,
@@ -107,8 +107,8 @@ def test_SolutionLibrarySampler():
             create_default_logger(td_path, "test_trajectorylib")
             lib_sampler = SimpleSolutionLibrarySampler.initialize(
                 problem_type,
-                SQPBasedSolver,
-                nlp_solcon,
+                solver_type,
+                solcon,
                 ae_model,
                 lconfig,
                 problems_validation=pool_validation,
