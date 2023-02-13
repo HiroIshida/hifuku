@@ -6,11 +6,19 @@ from mohou.trainer import TrainCache
 
 from hifuku.domain import TBRR_SQP_DomainProvider
 from hifuku.library.core import SolutionLibrary
-from hifuku.neuralnet import IterationPredictor, VoxelAutoEncoder
+from hifuku.neuralnet import (
+    AutoEncoderBase,
+    IterationPredictor,
+    NullAutoEncoder,
+    VoxelAutoEncoder,
+)
 
 mesh_sampler_type = TBRR_SQP_DomainProvider.get_compat_mesh_sampler_type()
-ae_pp = get_project_path("hifuku-{}".format(mesh_sampler_type.__name__))
-ae_model = TrainCache.load(ae_pp, VoxelAutoEncoder).best_model
+if mesh_sampler_type is None:
+    ae_model: AutoEncoderBase = NullAutoEncoder()
+else:
+    ae_pp = get_project_path("hifuku-{}".format(mesh_sampler_type.__name__))
+    ae_model = TrainCache.load(ae_pp, VoxelAutoEncoder).best_model
 
 pp = get_project_path("TBRR_SQP")
 pred: IterationPredictor = TrainCache.load_latest(pp, IterationPredictor).best_model

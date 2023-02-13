@@ -21,7 +21,7 @@ from hifuku.library import (
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
 )
-from hifuku.neuralnet import VoxelAutoEncoder
+from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder, VoxelAutoEncoder
 from hifuku.utils import create_default_logger, filter_warnings
 
 
@@ -46,7 +46,12 @@ if __name__ == "__main__":
     mesh_sampler_type = domain.get_compat_mesh_sampler_type()
     domain_name = domain.get_domain_name()
 
-    pp_mesh = get_project_path("hifuku-{}".format(mesh_sampler_type.__name__))
+    if mesh_sampler_type is None:
+        ae_model: AutoEncoderBase = NullAutoEncoder()
+    else:
+        ae_pp = get_project_path("hifuku-{}".format(mesh_sampler_type.__name__))
+        ae_model = TrainCache.load(ae_pp, VoxelAutoEncoder).best_model
+
     pp = get_project_path("tabletop_solution_library-{}".format(domain_name))
     pp.mkdir(exist_ok=True)
 
@@ -56,7 +61,6 @@ if __name__ == "__main__":
     log_package_version_info(logger, skmp)
     log_package_version_info(logger, selcol)
 
-    ae_model = TrainCache.load_latest(pp_mesh, VoxelAutoEncoder).best_model
     lconfig = LibrarySamplerConfig(
         n_problem=10000,
         n_problem_inner=50,
