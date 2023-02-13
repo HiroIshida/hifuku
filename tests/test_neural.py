@@ -2,17 +2,17 @@ import torch
 
 from hifuku.domain import TBRR_SQP_DomainProvider
 from hifuku.neuralnet import (
+    AutoEncoderConfig,
     IterationPredictor,
     IterationPredictorConfig,
     VoxelAutoEncoder,
-    VoxelAutoEncoderConfig,
 )
 
 
 def test_network():
     device = torch.device("cpu")
     # test autoencoder
-    ae_config = VoxelAutoEncoderConfig()
+    ae_config = AutoEncoderConfig()
     ae = VoxelAutoEncoder(ae_config, device=device)
 
     # test iteration predictor

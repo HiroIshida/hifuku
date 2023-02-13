@@ -22,7 +22,7 @@ from hifuku.library import (
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
 )
-from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
+from hifuku.neuralnet import AutoEncoderConfig, VoxelAutoEncoder
 from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
 from hifuku.utils import create_default_logger
 
@@ -97,7 +97,7 @@ def test_SolutionLibrarySampler():
         test_devices.append(torch.device("cuda"))
 
     for device in test_devices:
-        ae_model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
+        ae_model = VoxelAutoEncoder(AutoEncoderConfig())
         ae_model.loss_called = True  # mock that model is already trained
         ae_model.put_on_device(device)
         pool_validation = [problem_type.sample(1) for _ in range(10)]

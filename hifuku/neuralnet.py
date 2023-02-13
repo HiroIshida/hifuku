@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
@@ -196,11 +197,14 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
 
 
 @dataclass
-class VoxelAutoEncoderConfig(ModelConfigBase):
+class AutoEncoderConfig(ModelConfigBase):
     dim_bottleneck: int = 1024
 
 
-class VoxelAutoEncoder(ModelBase[VoxelAutoEncoderConfig]):
+VoxelAutoEncoderConfig = AutoEncoderConfig  # for backword compatibility TODO: remove this
+
+
+class AutoEncoderBase(ModelBase[AutoEncoderConfig]):
     encoder: nn.Sequential
     decoder: nn.Sequential
     loss_called: bool = False  # flag to show the model is trained
@@ -213,7 +217,20 @@ class VoxelAutoEncoder(ModelBase[VoxelAutoEncoderConfig]):
         def forward(self, x):
             return x.view(self.shape)
 
-    def _setup_from_config(self, config: VoxelAutoEncoderConfig) -> None:
+    def loss(self, mesh: Tensor) -> LossDict:
+        self.loss_called = True
+        encoded = self.encoder(mesh)
+        reconst = self.decoder(encoded)
+        loss = nn.MSELoss()(mesh, reconst)
+        return LossDict({"reconstruction": loss})
+
+    @abstractmethod
+    def _setup_from_config(self, config: AutoEncoderConfig) -> None:
+        ...
+
+
+class VoxelAutoEncoder(AutoEncoderBase):
+    def _setup_from_config(self, config: AutoEncoderConfig) -> None:
         n_channel = 1
         # NOTE: DO NOT add bath normalization layer
         encoder_layers = [
@@ -245,10 +262,3 @@ class VoxelAutoEncoder(ModelBase[VoxelAutoEncoderConfig]):
             nn.ConvTranspose3d(8, 1, (4, 4, 3), padding=1, stride=(2, 2, 1)),
         ]
         self.decoder = nn.Sequential(*decoder_layers)
-
-    def loss(self, mesh: Tensor) -> LossDict:
-        self.loss_called = True
-        encoded = self.encoder(mesh)
-        reconst = self.decoder(encoded)
-        loss = nn.MSELoss()(mesh, reconst)
-        return LossDict({"reconstruction": loss})

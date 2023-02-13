@@ -3,7 +3,7 @@ from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train_lower
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
-from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
+from hifuku.neuralnet import AutoEncoderConfig, VoxelAutoEncoder
 from hifuku.rpbench_wrap import TabletopBoxWorldWrap
 
 problem_type = TabletopBoxWorldWrap
@@ -21,7 +21,7 @@ train_loader = LazyDecomplessDataLoader(dataset_train, batch_size=500)
 valid_loader = LazyDecomplessDataLoader(dataset_valid, batch_size=50, shuffle=False)
 print("finish setup loader")
 
-model_conf = VoxelAutoEncoderConfig()
+model_conf = AutoEncoderConfig()
 tcache = TrainCache.from_model(VoxelAutoEncoder(model_conf))
 train_conf = TrainConfig(n_epoch=100)
 train_lower(pp, tcache, train_loader, valid_loader, train_conf)
