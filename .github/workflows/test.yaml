@@ -32,6 +32,7 @@ jobs:
                   cd /tmp && git clone git@github.com:HiroIshida/rpbench.git && cd rpbench && pip3 install .
             - name: install this package
               run: |
+                  sudo apt-get install libspatialindex-dev freeglut3-dev libsuitesparse-dev libblas-dev liblapack-dev
                   pip3 install -e .
 
             - name: pip install pytest and mypy
