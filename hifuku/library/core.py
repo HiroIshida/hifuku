@@ -497,6 +497,10 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             self.problems_validation, self.solver
         )
         logger.info(coverage_result)
+
+        with open("/tmp/hifuku_coverage_debug.pkl", "wb") as f:
+            pickle.dump(coverage_result, f)
+
         margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
         logger.info("margin is set to {}".format(margin))
