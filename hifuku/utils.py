@@ -64,7 +64,7 @@ def create_default_logger(project_path: Path, prefix: str) -> Logger:
     log_dir_path.mkdir(parents=True, exist_ok=True)
     log_file_path = log_dir_path / (prefix + timestr + ".log")
 
-    logger = logging.getLogger("hifuku")
+    logger = logging.getLogger()  # root logger
     logger.setLevel(logging.DEBUG)
 
     fmt = logging.Formatter("[%(levelname)s] %(asctime)s %(name)s: %(message)s")
