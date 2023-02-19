@@ -240,7 +240,7 @@ VoxelAutoEncoderConfig = AutoEncoderConfig  # for backword compatibility TODO: r
 class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
     encoder: nn.Sequential
     decoder: nn.Sequential
-    trained: bool = False  # flag to show the model is trained
+    loss_called: bool = False  # flag to show the model is trained
 
     class Reshape(nn.Module):
         def __init__(self, *args):
@@ -250,6 +250,10 @@ class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
         def forward(self, x):
             return x.view(self.shape)
 
+    @property
+    def trained(self) -> bool:
+        return self.loss_called
+
     def get_device(self) -> torch.device:
         return self.device
 
@@ -257,7 +261,7 @@ class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
         return self.encoder(mesh)
 
     def loss(self, mesh: Tensor) -> LossDict:
-        self.trained = True
+        self.loss_called = True
         encoded = self.encoder(mesh)
         reconst = self.decoder(encoded)
         loss = nn.MSELoss()(mesh, reconst)
