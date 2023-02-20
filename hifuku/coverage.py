@@ -19,6 +19,13 @@ class CoverageResult:
     def __len__(self) -> int:
         return len(self.values_ground_truth)
 
+    def bootstrap_sampling(self) -> "CoverageResult":
+        n = self.__len__()
+        indices = np.random.randint(n, size=n)
+        vgt = self.values_ground_truth[indices]
+        vest = self.values_estimation[indices]
+        return CoverageResult(vgt, vest, self.threshold)
+
     @cached_property
     def true_positive_bools(self) -> np.ndarray:
         return np.logical_and(
