@@ -56,7 +56,7 @@ class CoverageResult:
         eps = 1e-6
 
         def fp_rate(margin: float) -> Optional[float]:
-            positive_est = self.values_estimation + margin + eps <= self.threshold
+            positive_est = self.values_estimation + margin + eps < self.threshold
             n_positive = np.sum(positive_est)
             no_positive = n_positive == 0
             if no_positive:
