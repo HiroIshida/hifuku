@@ -64,8 +64,8 @@ if __name__ == "__main__":
     lconfig = LibrarySamplerConfig(
         n_problem=10000,
         n_problem_inner=50,
-        train_config=TrainConfig(n_epoch=40),
-        n_solution_candidate=50,
+        train_config=TrainConfig(n_epoch=100),
+        n_solution_candidate=30,
         n_difficult_problem=300,
         solvable_threshold_factor=1.0,
         difficult_threshold_factor=1.0,
