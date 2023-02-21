@@ -1,35 +1,20 @@
 import argparse
-from enum import Enum
 
 import rpbench
 import selcol
 import skmp
-import torch
-from mohou.file import get_project_path
-from mohou.trainer import TrainCache, TrainConfig
+from mohou.trainer import TrainConfig
 from mohou.utils import log_package_version_info
 
 import hifuku
-from hifuku.domain import (
-    DomainProvider,
-    TBDR_SQP_DomainProvider,
-    TBRR_RRT_DomainProvider,
-    TBRR_SQP_DomainProvider,
+from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
+from hifuku.script_utils import (
+    DomainSelector,
+    get_project_path,
+    load_compatible_autoencoder,
+    load_library,
 )
-from hifuku.library import (
-    LibrarySamplerConfig,
-    SimpleSolutionLibrarySampler,
-    SolutionLibrary,
-)
-from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder, VoxelAutoEncoder
 from hifuku.utils import create_default_logger, filter_warnings
-
-
-class DomainType(Enum):
-    tbrr_sqp = TBRR_SQP_DomainProvider
-    tbrr_rrt = TBRR_RRT_DomainProvider
-    tbdr_sqp = TBDR_SQP_DomainProvider
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -37,23 +22,12 @@ if __name__ == "__main__":
     parser.add_argument("--warm", action="store_true", help="warm start")
 
     args = parser.parse_args()
-    mesh_type_name: str = args.type
+    domain_name: str = args.type
     warm_start: bool = args.warm
 
     filter_warnings()
-
-    domain: DomainProvider = DomainType[mesh_type_name].value
-    mesh_sampler_type = domain.get_compat_mesh_sampler_type()
-    domain_name = domain.get_domain_name()
-
-    if mesh_sampler_type is None:
-        ae_model: AutoEncoderBase = NullAutoEncoder()
-    else:
-        ae_pp = get_project_path("hifuku-{}".format(mesh_sampler_type.__name__))
-        ae_model = TrainCache.load(ae_pp, VoxelAutoEncoder).best_model
-
-    pp = get_project_path("tabletop_solution_library-{}".format(domain_name))
-    pp.mkdir(exist_ok=True)
+    domain = DomainSelector[domain_name].value
+    pp = get_project_path(domain_name)
 
     logger = create_default_logger(pp, "library_gen")
     log_package_version_info(logger, hifuku)
@@ -72,6 +46,7 @@ if __name__ == "__main__":
         acceptable_false_positive_rate=0.03,
     )  # all pass
 
+    ae_model = load_compatible_autoencoder(domain_name)
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
         domain.get_task_type(),
         domain.get_solver_type(),
@@ -81,15 +56,9 @@ if __name__ == "__main__":
         pool_single=None,
         use_distributed=True,
     )
-    # solver=MultiProcessBatchProblemSolver(
-    #     domain.get_solver_type(), domain.get_solver_config(), 2
-    # ),
+
     if warm_start:
-        lib = SolutionLibrary.load(
-            pp, domain.get_task_type(), domain.get_solver_type(), torch.device("cuda")
-        )[0]
-        lib.limit_thread = True
-        lib_sampler.library = lib
+        lib_sampler.library = load_library(domain_name, "cuda", True)
 
     for i in range(100):
         print(i)
