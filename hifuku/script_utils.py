@@ -1,6 +1,6 @@
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import mohou.file
 import torch
@@ -42,12 +42,16 @@ def get_project_path(domain_name: str) -> Path:
 
 
 def load_library(
-    domain_name: str, device: Literal["cpu", "cuda"], limit_thread: bool = False
+    domain_name: str,
+    device: Literal["cpu", "cuda"],
+    limit_thread: bool = False,
+    project_path: Optional[Path] = None,
 ) -> SolutionLibrary:
     domain = DomainSelector[domain_name].value
-    pp = get_project_path(domain_name)
+    if project_path is None:
+        project_path = get_project_path(domain_name)
     lib = SolutionLibrary.load(
-        pp, domain.get_task_type(), domain.get_solver_type(), torch.device(device)
+        project_path, domain.get_task_type(), domain.get_solver_type(), torch.device(device)
     )[0]
     lib.limit_thread = limit_thread
     return lib
