@@ -57,7 +57,7 @@ class CoverageResult:
         fp_bools = self.false_postive_bools
         values_est_fp = self.values_estimation[fp_bools]
         diffs = self.threshold - values_est_fp
-        assert np.all(diffs > 0.0)
+        assert np.all(diffs >= 0.0)
 
         positive_gt = self.values_ground_truth <= self.threshold
         eps = 1e-6
