@@ -131,9 +131,15 @@ class ClientBase(Generic[MainRequestT]):
     ) -> None:
         logger.debug("send_and_recive_and_get_elapsed_time called on pid: {}".format(os.getpid()))
         with http_connection(*hostport) as conn:
-            response = send_request(conn, request)
-        logger.debug("send_and_recive_and_get_elapsed_time finished on pid: {}".format(os.getpid()))
-        queue.put((hostport, response.elapsed_time))
+            try:
+                response = send_request(conn, request)
+                logger.debug(
+                    "send_and_recive_and_get_elapsed_time finished on pid: {}".format(os.getpid())
+                )
+                queue.put((hostport, response.elapsed_time))
+            except Exception as e:
+                logger.error("error occured in send_request: {}".format(e))
+                queue.put(e)
 
     def _measure_performance_of_each_server(
         self,
@@ -162,7 +168,10 @@ class ClientBase(Generic[MainRequestT]):
             for p in process_list:
                 p.join()
 
-        for hostport, elapsed in hostport_elapsed_pairs:
+        for pair_maybe_exception in hostport_elapsed_pairs:
+            if isinstance(pair_maybe_exception, Exception):
+                raise pair_maybe_exception
+            hostport, elapsed = hostport_elapsed_pairs
             score_map[hostport] = 1.0 / elapsed
 
         # normalize

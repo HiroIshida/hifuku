@@ -371,4 +371,6 @@ class DistributedBatchProblemSolver(
             idx_result_pairs = list(zip(indices_all, results_list_all))
             idx_result_pairs_sorted = sorted(idx_result_pairs, key=lambda x: x[0])  # type: ignore
             _, results = zip(*idx_result_pairs_sorted)
-        return list(results)  # type: ignore
+            ret = list(results)
+            assert len(ret) == len(problems)
+        return ret  # type: ignore
