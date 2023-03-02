@@ -389,6 +389,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         solver: Optional[BatchProblemSolver[ConfigT, ResultT]] = None,
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
         use_distributed: bool = False,
+        reuse_cached_validation_set: bool = False,
     ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -425,10 +426,25 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             pool_multiple = TrivialProblemPool(problem_type, config.n_problem_inner)
         assert pool_multiple.parallelizable()
 
-        if problems_validation is None:
-            problems_validation = sampler.sample_batch(
-                1000, TrivialProblemPool(problem_type, 1).as_predicated()
-            )
+        # create validation problems
+        parent_path = Path("/tmp/hifuku-validatino-set")
+        parent_path.mkdir(exist_ok=True)
+        validation_cache_path = parent_path / "{}-validation_set.pkl".format(problem_type.__name__)
+
+        if reuse_cached_validation_set:
+            assert problems_validation is None
+            assert validation_cache_path.exists()
+            with validation_cache_path.open(mode="rb") as f:
+                problems_validation = pickle.load(f)
+                assert problems_validation is not None
+        else:
+            if problems_validation is None:
+                problems_validation = sampler.sample_batch(
+                    10000, TrivialProblemPool(problem_type, 1).as_predicated()
+                )
+                with validation_cache_path.open(mode="wb") as f:
+                    pickle.dump(problems_validation, f)
+
         for prob in problems_validation:
             assert prob.n_inner_task == 1
 

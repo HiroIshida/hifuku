@@ -55,6 +55,7 @@ if __name__ == "__main__":
         lconfig,
         pool_single=None,
         use_distributed=True,
+        reuse_cached_validation_set=warm_start,
     )
 
     if warm_start:
