@@ -560,9 +560,17 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         logger.info("start generating dataset")
 
-        # create dataset
+        # create dataset. Dataset creation by a large problem set often causes
+        # memory error. To avoid this, we split the batch and process separately
+        # if len(problems) > n_tau.
         init_solutions = [init_solution] * self.config.n_problem
-        self.solver.create_dataset(problems, init_solutions, cache_dir_path, n_process=None)
+
+        n_tau = 5000  # TODO: should be adaptive according to the data size
+        partial_problems_list = [problems[i : i + n_tau] for i in range(0, len(problems), n_tau)]
+        for partial_problems in partial_problems_list:
+            self.solver.create_dataset(
+                partial_problems, init_solutions, cache_dir_path, n_process=None
+            )
 
         dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
         raw_dataset = LazyDecomplessDataset.load(cache_dir_path, RawData, n_worker=-1)
