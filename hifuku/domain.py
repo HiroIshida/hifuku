@@ -1,6 +1,8 @@
+import time
 from abc import ABC, abstractmethod
 from typing import Generic, Optional, Type
 
+import tqdm
 from rpbench.interface import SamplableBase
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.solver.nlp_solver import (
@@ -183,3 +185,23 @@ class Maze_RRT_DomainProvider(DomainProvider[MazeSolvingTask, OMPLSolverConfig, 
     @abstractmethod
     def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
         return None
+
+
+def measure_time_per_call(domain: Type[DomainProvider], n_sample: int = 10) -> float:
+    task_type = domain.get_task_type()
+    solver_type = domain.get_solver_type()
+    solver_config = domain.get_solver_config()
+    solver = solver_type.init(solver_config)
+
+    n_call_sum = 0
+    elapsed_time_sum = 0.0
+    for _ in tqdm.tqdm(range(n_sample)):
+        task = task_type.sample(1)
+        problem = task.export_problems()[0]
+        solver.setup(problem)
+        ts = time.time()
+        res = solver.solve()
+        elapsed_time_sum += time.time() - ts
+        n_call_sum += res.n_call
+    time_per_call_mean = elapsed_time_sum / n_call_sum
+    return time_per_call_mean
