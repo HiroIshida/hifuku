@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing import Process
 from pathlib import Path
-from typing import Generic, List, Optional, Tuple, Type
+from typing import Generic, List, Optional, Sequence, Tuple, Type
 
 import numpy as np
 import threadpoolctl
@@ -36,9 +36,10 @@ class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
     problems: List[ProblemT]
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
-    init_solutions: List[Trajectory]
+    init_solutions: Sequence[Optional[Trajectory]]
     show_process_bar: bool
     cache_path: Path
+    solve_default: bool = False
 
     def __len__(self) -> int:
         return len(self.problems)
@@ -103,7 +104,7 @@ class DumpDatasetWorker(Generic[ProblemT, ConfigT, ResultT]):
     problems: List[ProblemT]
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
-    init_solutions: List[Trajectory]
+    init_solutions: Sequence[Optional[Trajectory]]
     results_list: List[Tuple[ResultT, ...]]
     cache_path: Path
     show_progress_bar: bool
@@ -137,14 +138,14 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
     def solve_batch(
         self,
         problems: List[ProblemT],
-        init_solutions: List[Trajectory],
+        init_solutions: Sequence[Optional[Trajectory]],
     ) -> List[Tuple[ResultT, ...]]:
         ...
 
     def create_dataset(
         self,
         problems: List[ProblemT],
-        init_solutions: List[Trajectory],
+        init_solutions: Sequence[Optional[Trajectory]],
         cache_dir_path: Path,
         n_process: Optional[int],
     ) -> None:
@@ -212,7 +213,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
     def solve_batch(
         self,
         tasks: List[ProblemT],
-        init_solutions: List[Trajectory],
+        init_solutions: Sequence[Optional[Trajectory]],
     ) -> List[Tuple[ResultT, ...]]:
 
         filter_warnings()
@@ -325,7 +326,7 @@ class DistributedBatchProblemSolver(
     def solve_batch(
         self,
         problems: List[ProblemT],
-        init_solutions: List[Trajectory],
+        init_solutions: Sequence[Optional[Trajectory]],
     ) -> List[Tuple[ResultT, ...]]:
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())

@@ -2,7 +2,7 @@ import pickle
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, TypeVar
+from typing import Optional, Tuple, TypeVar
 
 import numpy as np
 import torch
@@ -26,7 +26,7 @@ def get_clamped_iter(result: ResultProtocol, config: ConfigProtocol) -> int:
 
 @dataclass
 class RawData(TensorChunkBase):
-    init_solution: Trajectory
+    init_solution: Optional[Trajectory]
     desc: DescriptionTable
     results: Tuple[ResultProtocol, ...]
     solver_config: ConfigProtocol

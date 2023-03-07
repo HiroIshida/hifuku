@@ -28,7 +28,6 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSolver,
     sample_feasible_problem_with_solution,
 )
-from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.neuralnet import (
     AutoEncoderBase,
     IterationPredictor,
@@ -36,7 +35,7 @@ from hifuku.neuralnet import (
     IterationPredictorDataset,
 )
 from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
-from hifuku.types import RawData, get_clamped_iter
+from hifuku.types import get_clamped_iter
 from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
@@ -573,10 +572,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             )
 
         dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
-        raw_dataset = LazyDecomplessDataset.load(cache_dir_path, RawData, n_worker=-1)
-
-        rawdata = raw_dataset.get_data(np.array([0]))[0]
-        init_solution = rawdata.init_solution
 
         logger.info("start training model")
 
