@@ -1,6 +1,7 @@
 import logging
 import os
 import pickle
+import shutil
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
@@ -365,7 +366,16 @@ class DistributedBatchProblemSolver(
             indices_all: List[int] = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    indices_part, results_list_part = pickle.load(f)
+                    try:
+                        indices_part, results_list_part = pickle.load(f)
+                    except Exception as e:
+                        temp_file_path = "/tmp/malignant_pickle.pkl"
+                        shutil.move(str(file_path), temp_file_path)
+                        logger.error(
+                            "loading pickle file failed. move the file at issue to {} for the future analysis."
+                        )
+                        raise e
+
                     results_list_all.extend(results_list_part)
                     indices_all.extend(indices_part)
 
