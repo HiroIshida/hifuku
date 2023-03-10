@@ -37,10 +37,10 @@ if __name__ == "__main__":
 
     lconfig = LibrarySamplerConfig(
         n_problem=10000,
-        n_problem_inner=50,
+        n_problem_inner=200,
         train_config=TrainConfig(n_epoch=100),
-        n_solution_candidate=30,
-        n_difficult_problem=300,
+        n_solution_candidate=100,
+        n_difficult_problem=500,
         solvable_threshold_factor=1.0,
         difficult_threshold_factor=1.0,
         acceptable_false_positive_rate=0.03,
