@@ -4,6 +4,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from cloud_geodesic import FastMarchingTree
 from mohou.trainer import TrainCache
 from quotdim.neural import IsometricMap
 
@@ -20,9 +21,12 @@ tcache = TrainCache.load(pp, IsometricMap)
 model = tcache.best_model
 model.put_on_device(torch.device("cpu"))
 Z = model.forward(torch.from_numpy(np.array(X)).float()).detach().numpy()
-# Z = Z[:3000]
+Z = Z[:5000]
+tree = FastMarchingTree(Z, 50)
+tree.span_tree()
+costs = tree.get_costs()
 
 fig = plt.figure()
 ax = fig.add_subplot(projection="3d")
-ax.scatter(Z[:, 0], Z[:, 1], Z[:, 1], s=1)
+ax.scatter(Z[:, 0], Z[:, 1], Z[:, 2], s=1, c=costs)
 plt.show()
