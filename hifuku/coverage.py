@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Callable
@@ -7,6 +8,8 @@ import numpy as np
 import sympy
 from scipy.optimize import minimize
 from sympy import symbols
+
+logger = logging.getLogger(__name__)
 
 
 class MarginOptimizer:
@@ -211,13 +214,17 @@ class CoverageResult:
             if Z_1 == 0:
                 assert np.inf  # to indicate that the coresponding traj is useless
 
-            # print("margin: {}, Z1: {}, Z2: {}".format(margin, Z_1, Z_2))
             opt = MarginOptimizer(confidence_coefficient, Z_1, Z_2, m)
             half_interval = opt.optimize(grid_search=False)
             assert half_interval > 0
 
             est_center = Z_2 / Z_1
             lower_bound = est_center - half_interval
+            logger.debug(
+                "m: {}, Z1: {}, Z2: {}, Z2/Z1: {}, lb: {}".format(
+                    margin, Z_1, Z_2, est_center, lower_bound
+                )
+            )
             if lower_bound > true_positive_lower_bound:
                 return margin
         return np.inf
