@@ -8,6 +8,8 @@ from mohou.trainer import TrainCache
 
 from hifuku.domain import (
     DomainProvider,
+    RingObstacleFree_RRT_DomainProvider,
+    RingObstacleFreeBlocked_RRT_DomainProvider,
     TBDR_SQP_DomainProvider,
     TBRR_RRT_DomainProvider,
     TBRR_SQP_DomainProvider,
@@ -20,6 +22,8 @@ class DomainSelector(Enum):
     tbrr_sqp = TBRR_SQP_DomainProvider
     tbrr_rrt = TBRR_RRT_DomainProvider
     tbdr_sqp = TBDR_SQP_DomainProvider
+    ring_rrt = RingObstacleFree_RRT_DomainProvider
+    ring_blocked_rrt = RingObstacleFreeBlocked_RRT_DomainProvider
 
 
 def load_compatible_autoencoder(domain_name: str) -> AutoEncoderBase:
