@@ -1,6 +1,9 @@
 import torch
 from rpbench.interface import SamplableBase, TaskBase
 from rpbench.maze import MazeSolvingTask as _MazeSolvingTask
+from rpbench.ring import (
+    RingObstacleFreeBlockedPlanningTask as _RingObstacleFreeBlockedPlanningTask,
+)
 from rpbench.ring import RingObstacleFreePlanningTask as _RingObstacleFreePlanningTask
 
 # fmt: off
@@ -57,4 +60,5 @@ class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplable
 class TabletopVoxbloxBoxWorldWrap(_TabletopVoxbloxBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class MazeSolvingTask(_MazeSolvingTask, PicklableTaskBase): ...  # noqa
 class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskBase): ...  # noqa
+class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, PicklableTaskBase): ...  # noqa
 # fmt: on
