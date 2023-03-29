@@ -43,7 +43,7 @@ if __name__ == "__main__":
         n_difficult_problem=500,
         solvable_threshold_factor=1.0,
         difficult_threshold_factor=1.0,
-        acceptable_false_positive_rate=0.03,
+        acceptable_true_positive_rate=0.95,
     )  # all pass
 
     ae_model = load_compatible_autoencoder(domain_name)

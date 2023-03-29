@@ -343,7 +343,7 @@ class LibrarySamplerConfig:
     n_difficult_problem: int = 100
     solvable_threshold_factor: float = 0.8
     difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
-    acceptable_false_positive_rate: float = 0.005
+    acceptable_true_positive_rate: float = 0.95
     ignore_useless_traj: bool = True
 
 
@@ -516,7 +516,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         with open("/tmp/hifuku_coverage_debug.pkl", "wb") as f:
             pickle.dump(coverage_result, f)
 
-        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+        margin = coverage_result.determine_margin(self.config.acceptable_true_positive_rate)
 
         logger.info("margin is set to {}".format(margin))
 

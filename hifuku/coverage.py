@@ -215,7 +215,7 @@ class CoverageResult:
                 assert np.inf  # to indicate that the coresponding traj is useless
 
             opt = MarginOptimizer(confidence_coefficient, Z_1, Z_2, m)
-            half_interval = opt.optimize(grid_search=False)
+            half_interval = opt.optimize(grid_search=True)
             assert half_interval > 0
 
             est_center = Z_2 / Z_1
@@ -226,6 +226,7 @@ class CoverageResult:
                 )
             )
             if lower_bound > true_positive_lower_bound:
+                logger.debug("return {} because lb {} > {}".format(margin, lower_bound, true_positive_lower_bound))
                 return margin
         return np.inf
 
