@@ -110,7 +110,7 @@ class IterationPredictorDataset(Dataset):
         for sample in tqdm.tqdm(loader):
             mesh, description, iterval = sample
 
-            mesh_used = mesh is None
+            mesh_used = mesh is not None
 
             if mesh_used:
                 mesh = mesh.to(device)  # n_batch x (*shape)

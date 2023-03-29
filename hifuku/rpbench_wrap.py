@@ -1,6 +1,7 @@
 import torch
 from rpbench.interface import SamplableBase, TaskBase
 from rpbench.maze import MazeSolvingTask as _MazeSolvingTask
+from rpbench.ring import RingObstacleFreePlanningTask as _RingObstacleFreePlanningTask
 
 # fmt: off
 from rpbench.tabletop import (
@@ -14,7 +15,6 @@ from rpbench.tabletop import (
 )
 from rpbench.tabletop import TabletopBoxWorldWrap as _TabletopBoxWorldWrap
 from rpbench.tabletop import TabletopVoxbloxBoxWorldWrap as _TabletopVoxbloxBoxWorldWrap
-from rpbench.ring import RingObstacleFreePlanningTask as _RingObstacleFreePlanningTask
 
 # fmt: on
 from hifuku.llazy.dataset import PicklableChunkBase, PicklableTensorChunkBase

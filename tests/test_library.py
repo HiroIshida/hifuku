@@ -1,6 +1,6 @@
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Type
 
 import numpy as np
 import torch
@@ -17,13 +17,17 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
-from hifuku.domain import TBRR_RRT_DomainProvider
+from hifuku.domain import (
+    DomainProvider,
+    RingObstacleFree_RRT_DomainProvider,
+    TBRR_RRT_DomainProvider,
+)
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
 )
-from hifuku.neuralnet import AutoEncoderConfig, VoxelAutoEncoder
+from hifuku.neuralnet import AutoEncoderConfig, NullAutoEncoder, VoxelAutoEncoder
 from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
 from hifuku.utils import create_default_logger
 
@@ -71,11 +75,11 @@ def _test_compute_real_itervals():
     assert n_mismatch < 3
 
 
-def test_SolutionLibrarySampler():
-    domain_provider = TBRR_RRT_DomainProvider
+def _test_SolutionLibrarySampler(domain_provider: Type[DomainProvider]):
     problem_type = domain_provider.get_task_type()
     solcon = domain_provider.get_solver_config()
     solver_type = domain_provider.get_solver_type()
+    compat_mesh_type = domain_provider.get_compat_mesh_sampler_type()
 
     solver = MultiProcessBatchProblemSolver(solver_type, solcon, n_process=2)
     sampler = MultiProcessBatchProblemSampler[problem_type](n_process=2)
@@ -97,9 +101,12 @@ def test_SolutionLibrarySampler():
         test_devices.append(torch.device("cuda"))
 
     for device in test_devices:
-        ae_model = VoxelAutoEncoder(AutoEncoderConfig())
-        ae_model.loss_called = True  # mock that model is already trained
-        ae_model.put_on_device(device)
+        if compat_mesh_type is None:
+            ae_model = NullAutoEncoder()
+        else:
+            ae_model = VoxelAutoEncoder(AutoEncoderConfig())
+            ae_model.loss_called = True  # mock that model is already trained
+            ae_model.put_on_device(device)
         pool_validation = [problem_type.sample(1) for _ in range(10)]
 
         with tempfile.TemporaryDirectory() as td:
@@ -131,5 +138,10 @@ def test_SolutionLibrarySampler():
                 np.testing.assert_almost_equal(iters, iters_again)
 
 
+def test_SolutionLibrarySampler():
+    _test_SolutionLibrarySampler(RingObstacleFree_RRT_DomainProvider)
+    _test_SolutionLibrarySampler(TBRR_RRT_DomainProvider)
+
+
 if __name__ == "__main__":
-    test_SolutionLibrarySampler()
+    _test_SolutionLibrarySampler(TBRR_RRT_DomainProvider)

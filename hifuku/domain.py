@@ -21,10 +21,10 @@ from hifuku.datagen import (
 from hifuku.pool import ProblemT
 from hifuku.rpbench_wrap import (
     MazeSolvingTask,
+    RingObstacleFreePlanningTask,
     TabletopBoxDualArmReachingTask,
     TabletopBoxRightArmReachingTask,
     TabletopBoxWorldWrap,
-    RingObstacleFreePlanningTask
 )
 
 
@@ -188,7 +188,9 @@ class Maze_RRT_DomainProvider(DomainProvider[MazeSolvingTask, OMPLSolverConfig, 
         return None
 
 
-class RingObstacleFree_RRT_DomainProvider(DomainProvider[RingObstacleFreePlanningTask, OMPLSolverConfig, OMPLSolverResult]):
+class RingObstacleFree_RRT_DomainProvider(
+    DomainProvider[RingObstacleFreePlanningTask, OMPLSolverConfig, OMPLSolverResult]
+):
     @classmethod
     def get_task_type(cls) -> Type[RingObstacleFreePlanningTask]:
         return RingObstacleFreePlanningTask
