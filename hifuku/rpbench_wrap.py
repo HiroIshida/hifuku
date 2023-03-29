@@ -14,6 +14,7 @@ from rpbench.tabletop import (
 )
 from rpbench.tabletop import TabletopBoxWorldWrap as _TabletopBoxWorldWrap
 from rpbench.tabletop import TabletopVoxbloxBoxWorldWrap as _TabletopVoxbloxBoxWorldWrap
+from rpbench.ring import RingObstacleFreePlanningTask as _RingObstacleFreePlanningTask
 
 # fmt: on
 from hifuku.llazy.dataset import PicklableChunkBase, PicklableTensorChunkBase
@@ -55,4 +56,5 @@ class TabletopBoxVoxbloxRightArmReachingTask(_TabletopBoxVoxbloxRightArmReaching
 class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class TabletopVoxbloxBoxWorldWrap(_TabletopVoxbloxBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class MazeSolvingTask(_MazeSolvingTask, PicklableTaskBase): ...  # noqa
+class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskBase): ...  # noqa
 # fmt: on

@@ -24,6 +24,7 @@ from hifuku.rpbench_wrap import (
     TabletopBoxDualArmReachingTask,
     TabletopBoxRightArmReachingTask,
     TabletopBoxWorldWrap,
+    RingObstacleFreePlanningTask
 )
 
 
@@ -179,6 +180,32 @@ class Maze_RRT_DomainProvider(DomainProvider[MazeSolvingTask, OMPLSolverConfig, 
             n_max_satisfaction_trial=1,
             expbased_planner_backend="ertconnect",
             ertconnect_eps=0.5,
+        )
+
+    @classmethod
+    @abstractmethod
+    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
+        return None
+
+
+class RingObstacleFree_RRT_DomainProvider(DomainProvider[RingObstacleFreePlanningTask, OMPLSolverConfig, OMPLSolverResult]):
+    @classmethod
+    def get_task_type(cls) -> Type[RingObstacleFreePlanningTask]:
+        return RingObstacleFreePlanningTask
+
+    @classmethod
+    def get_solver_type(
+        cls,
+    ) -> Type[AbstractScratchSolver[OMPLSolverConfig, OMPLSolverResult]]:
+        return OMPLSolver
+
+    @classmethod
+    def get_solver_config(cls) -> OMPLSolverConfig:
+        return OMPLSolverConfig(
+            n_max_call=100,
+            n_max_satisfaction_trial=1,
+            expbased_planner_backend="ertconnect",
+            ertconnect_eps=0.1,
         )
 
     @classmethod
