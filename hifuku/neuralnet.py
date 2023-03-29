@@ -70,7 +70,7 @@ class NullAutoEncoder(AutoEncoderBase):
 
 @dataclass
 class IterationPredictorDataset(Dataset):
-    meshe_encodeds: torch.Tensor
+    mesh_encodeds: Optional[torch.Tensor]
     descriptions: torch.Tensor
     itervals: torch.Tensor
     _problem_per_sample: int
@@ -79,11 +79,15 @@ class IterationPredictorDataset(Dataset):
         return len(self.descriptions)
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor, ...]:
+        if self.mesh_encodeds is None:
+            mesh_encoded_here = torch.empty(0)
+        else:
+            mesh_encoded_here = self.mesh_encodeds[idx // self._problem_per_sample]
         # Note: mesh_encoded is (n_sample, size) shape, though
         # otheres have shape of (n_sample * n_problem, size).
         # Thus we must devide the dix by n_problem
         return (
-            self.meshe_encodeds[idx // self._problem_per_sample],
+            mesh_encoded_here,
             self.descriptions[idx],
             self.itervals[idx],
         )
@@ -101,20 +105,33 @@ class IterationPredictorDataset(Dataset):
 
         # create minibatch list
         n_problem: int = 0
+        mesh_used: bool = False  # dirty. set in the for loop
+
         for sample in tqdm.tqdm(loader):
             mesh, description, iterval = sample
 
-            mesh = mesh.to(device)  # n_batch x (*shape)
-            encoded: torch.Tensor = ae_model.encode(mesh).detach().cpu()
+            mesh_used = mesh is None
+
+            if mesh_used:
+                mesh = mesh.to(device)  # n_batch x (*shape)
+                encoded: torch.Tensor = ae_model.encode(mesh).detach().cpu()
+
             n_batch, n_problem, _ = description.shape
 
             for i in range(n_batch):
-                encoded_list.append(encoded[i].unsqueeze(dim=0))
+
+                if mesh_used:
+                    encoded_list.append(encoded[i].unsqueeze(dim=0))
+
                 description_list.append(description[i])
                 iterval_list.append(iterval[i])
         assert n_problem > 0
 
-        mesh_encodeds_concat = torch.cat(encoded_list, dim=0)  # n_batch x n_bottleneck
+        if mesh_used:
+            mesh_encodeds_concat = torch.cat(encoded_list, dim=0)  # n_batch x n_bottleneck
+        else:
+            mesh_encodeds_concat = None
+
         descriptions_concat = torch.cat(description_list, dim=0)
         itervals_concat = torch.cat(iterval_list, dim=0)
 
