@@ -20,6 +20,7 @@ from hifuku.datagen import (
 )
 from hifuku.pool import ProblemT
 from hifuku.rpbench_wrap import (
+    EightRoomsPlanningTask,
     MazeSolvingTask,
     RingObstacleFreeBlockedPlanningTask,
     RingObstacleFreePlanningTask,
@@ -234,6 +235,34 @@ class RingObstacleFreeBlocked_RRT_DomainProvider(
     def get_solver_config(cls) -> OMPLSolverConfig:
         return OMPLSolverConfig(
             n_max_call=100,
+            n_max_satisfaction_trial=1,
+            expbased_planner_backend="ertconnect",
+            ertconnect_eps=0.1,
+        )
+
+    @classmethod
+    @abstractmethod
+    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
+        return None
+
+
+class EightRooms_RRT_DomainProvider(
+    DomainProvider[EightRoomsPlanningTask, OMPLSolverConfig, OMPLSolverResult]
+):
+    @classmethod
+    def get_task_type(cls) -> Type[EightRoomsPlanningTask]:
+        return EightRoomsPlanningTask
+
+    @classmethod
+    def get_solver_type(
+        cls,
+    ) -> Type[AbstractScratchSolver[OMPLSolverConfig, OMPLSolverResult]]:
+        return OMPLSolver
+
+    @classmethod
+    def get_solver_config(cls) -> OMPLSolverConfig:
+        return OMPLSolverConfig(
+            n_max_call=500,
             n_max_satisfaction_trial=1,
             expbased_planner_backend="ertconnect",
             ertconnect_eps=0.1,
