@@ -13,21 +13,19 @@ from skmp.solver.nlp_solver import (
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 from skmp.trajectory import Trajectory
 
-from hifuku.datagen import (
-    MultiProcessBatchProblemSampler,
-    MultiProcessBatchProblemSolver,
-)
-from hifuku.domain import (
-    DomainProvider,
-    RingObstacleFree_RRT_DomainProvider,
-    TBRR_RRT_DomainProvider,
-)
+from hifuku.datagen import MultiProcessBatchProblemSolver
+from hifuku.domain import DomainProtocol, RingObstacleFree_RRT_Domain, TBRR_RRT_Domain
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
 )
-from hifuku.neuralnet import AutoEncoderConfig, NullAutoEncoder, VoxelAutoEncoder
+from hifuku.neuralnet import (
+    AutoEncoderBase,
+    AutoEncoderConfig,
+    NullAutoEncoder,
+    VoxelAutoEncoder,
+)
 from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
 from hifuku.utils import create_default_logger
 
@@ -75,14 +73,15 @@ def _test_compute_real_itervals():
     assert n_mismatch < 3
 
 
-def _test_SolutionLibrarySampler(domain_provider: Type[DomainProvider]):
-    problem_type = domain_provider.get_task_type()
-    solcon = domain_provider.get_solver_config()
-    solver_type = domain_provider.get_solver_type()
-    compat_mesh_type = domain_provider.get_compat_mesh_sampler_type()
+def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
+    problem_type = domain.task_type
+    solcon = domain.solver_config
+    solver_type = domain.solver_type
+    compat_mesh_sampler_type = domain.mesh_sampler_type
 
-    solver = MultiProcessBatchProblemSolver(solver_type, solcon, n_process=2)
-    sampler = MultiProcessBatchProblemSampler[problem_type](n_process=2)
+    solver = domain.get_multiprocess_batch_solver(2)
+    sampler = domain.get_multiprocess_batch_sampler(2)
+
     tconfig = TrainConfig(n_epoch=1)
     lconfig = LibrarySamplerConfig(
         n_problem=10,
@@ -101,7 +100,8 @@ def _test_SolutionLibrarySampler(domain_provider: Type[DomainProvider]):
         test_devices.append(torch.device("cuda"))
 
     for device in test_devices:
-        if compat_mesh_type is None:
+        ae_model: AutoEncoderBase
+        if compat_mesh_sampler_type is None:
             ae_model = NullAutoEncoder()
         else:
             ae_model = VoxelAutoEncoder(AutoEncoderConfig())
@@ -139,9 +139,9 @@ def _test_SolutionLibrarySampler(domain_provider: Type[DomainProvider]):
 
 
 def test_SolutionLibrarySampler():
-    _test_SolutionLibrarySampler(RingObstacleFree_RRT_DomainProvider)
-    _test_SolutionLibrarySampler(TBRR_RRT_DomainProvider)
+    _test_SolutionLibrarySampler(RingObstacleFree_RRT_Domain)
+    _test_SolutionLibrarySampler(TBRR_RRT_Domain)
 
 
 if __name__ == "__main__":
-    _test_SolutionLibrarySampler(TBRR_RRT_DomainProvider)
+    _test_SolutionLibrarySampler(TBRR_RRT_Domain)
