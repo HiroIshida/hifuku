@@ -2,23 +2,25 @@ import torch
 from rpbench.interface import SamplableBase, TaskBase
 from rpbench.maze import MazeSolvingTask as _MazeSolvingTask
 from rpbench.multiple_rooms import EightRoomsPlanningTask as _EightRoomsPlanningTask
+
+# fmt: off
+from rpbench.pr2.tabletop import (
+    TabletopBoxDualArmReachingTask as _TabletopBoxDualArmReachingTask,
+)
+from rpbench.pr2.tabletop import (
+    TabletopBoxRightArmReachingTask as _TabletopBoxRightArmReachingTask,
+)
+from rpbench.pr2.tabletop import (
+    TabletopBoxVoxbloxRightArmReachingTask as _TabletopBoxVoxbloxRightArmReachingTask,
+)
+from rpbench.pr2.tabletop import TabletopBoxWorldWrap as _TabletopBoxWorldWrap
+from rpbench.pr2.tabletop import (
+    TabletopVoxbloxBoxWorldWrap as _TabletopVoxbloxBoxWorldWrap,
+)
 from rpbench.ring import (
     RingObstacleFreeBlockedPlanningTask as _RingObstacleFreeBlockedPlanningTask,
 )
 from rpbench.ring import RingObstacleFreePlanningTask as _RingObstacleFreePlanningTask
-
-# fmt: off
-from rpbench.tabletop import (
-    TabletopBoxDualArmReachingTask as _TabletopBoxDualArmReachingTask,
-)
-from rpbench.tabletop import (
-    TabletopBoxRightArmReachingTask as _TabletopBoxRightArmReachingTask,
-)
-from rpbench.tabletop import (
-    TabletopBoxVoxbloxRightArmReachingTask as _TabletopBoxVoxbloxRightArmReachingTask,
-)
-from rpbench.tabletop import TabletopBoxWorldWrap as _TabletopBoxWorldWrap
-from rpbench.tabletop import TabletopVoxbloxBoxWorldWrap as _TabletopVoxbloxBoxWorldWrap
 
 # fmt: on
 from hifuku.llazy.dataset import PicklableChunkBase, PicklableTensorChunkBase
