@@ -1,14 +1,16 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from rpbench.ring import RingObstacleFreePlanningTask, RingObstacleFreeWorld
 
+from hifuku.domain import EightRooms_SQP_Domain
 from hifuku.script_utils import load_library
 
-task = RingObstacleFreePlanningTask.sample
-world = RingObstacleFreeWorld.sample()
+domain = EightRooms_SQP_Domain
+# domain = EightRooms_Lightning_Domain
+config = domain.solver_config
+world = domain.task_type.get_world_type().sample()
 
-lib = load_library("ring_rrt", "cpu")
+lib = load_library(domain, "cpu")
 
 fig, ax = plt.subplots()
 world.visualize((fig, ax))
@@ -22,18 +24,20 @@ for pred, margin in zip(lib.predictors, lib.margins):
     assert sol is not None
     arr = sol.numpy()
 
-    xlin = np.linspace(0, 1, 100)
-    ylin = np.linspace(0, 1, 100)
+    xlin = np.linspace(-1, 1, 100)
+    ylin = np.linspace(-1, 1, 100)
     X, Y = np.meshgrid(xlin, ylin)
-    pts = np.array(list(zip(X.flatten(), Y.flatten())))
+    pts = list(zip(X.flatten(), Y.flatten()))
     n_batch = len(pts)
     for i in range(n_batch):
-        pts[i] = np.hstack((np.array([0.5, 0.05]), pts[i]))
+        pts[i] = np.hstack((np.array([0.0, 0.0]), pts[i]))
+    pts = np.array(pts)
     pts_torch = torch.from_numpy(np.array(pts)).float()
 
     mesh_torch = torch.empty((n_batch, 0))
     iter_preds, _ = pred.forward((mesh_torch, pts_torch))
-    iters = iter_preds.cpu().detach().numpy().flatten() - (100 - margin)
+    print(config.n_max_call)
+    iters = iter_preds.cpu().detach().numpy().flatten() - (config.n_max_call - margin)
 
     values = -sdf(pts[:, 2:])
     iters = np.maximum(values, iters)
