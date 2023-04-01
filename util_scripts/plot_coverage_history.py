@@ -13,7 +13,7 @@ def get_rate_history(lib):
     for covres, m in zip(lib.coverage_results, lib.margins):
         est_ok = covres.values_estimation + m < covres.threshold
         bools = np.logical_or(bools, est_ok)
-        rates.append(np.sum(bools) / n_coverage_sample)
+        rates.append(float(np.sum(bools) / n_coverage_sample))
     return rates
 
 

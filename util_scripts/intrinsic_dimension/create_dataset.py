@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from multiprocessing import Process
 from pathlib import Path
-from typing import Generic
+from typing import Generic, Type
 
 import numpy as np
 import threadpoolctl
@@ -12,17 +12,17 @@ import tqdm
 from skmp.solver.interface import ConfigT, ResultT
 
 from hifuku.datagen.utils import split_number
-from hifuku.domain import DomainProvider
+from hifuku.domain import DomainProtocol, select_domain
 from hifuku.library.core import SolutionLibrary
 from hifuku.pool import ProblemT
-from hifuku.script_utils import DomainSelector, load_library
+from hifuku.script_utils import load_library
 from hifuku.utils import get_random_seed, num_torch_thread
 
 
 @dataclass
 class Sampler(Generic[ProblemT, ConfigT, ResultT]):
     lib: SolutionLibrary[ProblemT, ConfigT, ResultT]
-    domain: DomainProvider[ProblemT, ConfigT, ResultT]
+    domain: Type[DomainProtocol]
     n_sample: int
     dump_path: Path
     show_progress_bar: bool = False
@@ -34,10 +34,8 @@ class Sampler(Generic[ProblemT, ConfigT, ResultT]):
         np.random.seed(random_seed)
         disable_tqdm = not self.show_progress_bar
 
-        task_type = self.domain.get_task_type()
-        solcon = self.domain.get_solver_config()
-        solver_type = self.domain.get_solver_type()
-        solver = solver_type.init(solcon)
+        task_type = self.domain.task_type
+        solver = self.domain.create_solver()
 
         n_saved = 0
         threashold = self.lib.success_iter_threshold()
@@ -46,11 +44,11 @@ class Sampler(Generic[ProblemT, ConfigT, ResultT]):
                 with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
                     while n_saved < self.n_sample:
                         task1 = task_type.sample(1)
-                        iter_nums = self.lib._infer_iteration_num(task1).flatten()
+                        iter_nums = self.lib._infer_iteration_num(task1).flatten()  # type: ignore[arg-type]
                         bools_feasible1 = iter_nums < threashold
 
                         task2 = task_type.sample(1)
-                        iter_nums = self.lib._infer_iteration_num(task1).flatten()
+                        iter_nums = self.lib._infer_iteration_num(task1).flatten()  # type: ignore[arg-type]
                         bools_feasible2 = iter_nums < threashold
 
                         bools_close = np.logical_and(bools_feasible1, bools_feasible2)
@@ -93,7 +91,7 @@ if __name__ == "__main__":
     domain_name: str = args.domain
 
     lib = load_library(domain_name, "cpu", limit_thread=True)
-    domain: DomainProvider = DomainSelector[domain_name].value
+    domain = select_domain(domain_name)
 
     n_sample = 1000
     n_process = 12
@@ -122,5 +120,5 @@ if __name__ == "__main__":
             raw_data.append((x1, x2, cost))
 
     ppp = Path("dataset.pkl")
-    with ppp.open(mode="wb") as f:
-        pickle.dump(raw_data, f)
+    with ppp.open(mode="wb") as ff:
+        pickle.dump(raw_data, ff)
