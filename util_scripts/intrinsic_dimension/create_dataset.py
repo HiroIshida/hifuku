@@ -92,19 +92,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     domain_name: str = args.domain
 
-    lib = load_library(
-        domain_name,
-        "cpu",
-        limit_thread=True,
-        project_path=Path(
-            "~/.mohou/tabletop_solution_library-TBRR_RRT-n10000-alpha0.5"
-        ).expanduser(),
-    )
-
+    lib = load_library(domain_name, "cpu", limit_thread=True)
     domain: DomainProvider = DomainSelector[domain_name].value
 
-    n_sample = 10000
-    n_process = 4
+    n_sample = 1000
+    n_process = 12
 
     n_alloc_list = split_number(n_sample, n_process)
 
@@ -120,3 +112,15 @@ if __name__ == "__main__":
 
     for p in process_list:
         p.join()
+
+    raw_data = []
+    for file_path in pp.iterdir():
+        with file_path.open(mode="rb") as f:
+            task1, task2, cost = pickle.load(f)
+            x1 = task1.descriptions[0][1]
+            x2 = task2.descriptions[0][1]
+            raw_data.append((x1, x2, cost))
+
+    ppp = Path("dataset.pkl")
+    with ppp.open(mode="wb") as f:
+        pickle.dump(raw_data, f)

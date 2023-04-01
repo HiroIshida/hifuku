@@ -16,13 +16,13 @@ for x, y, _ in raw_dataset:
     X.append(x)
     X.append(y)
 
-pp = Path("./isometric_embedding/out4dim")
+pp = Path("./isometric_embedding/out2dim")
 tcache = TrainCache.load(pp, IsometricMap)
 model = tcache.best_model
 model.put_on_device(torch.device("cpu"))
 Z = model.forward(torch.from_numpy(np.array(X)).float()).detach().numpy()
 
-radius_list = [10, 20, 40, 80, 120, 150, 200, 250, 300, 400, 500, 600, 700]
+radius_list = [10, 20, 40, 80]
 dims = []
 for radius in radius_list:
     dim = determine_average_id(Z, radius=radius, n_neighbour=200)
