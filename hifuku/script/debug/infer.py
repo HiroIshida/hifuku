@@ -4,7 +4,7 @@ import torch
 from mohou.file import get_project_path
 from mohou.trainer import TrainCache
 
-from hifuku.domain import TBRR_SQP_DomainProvider
+from hifuku.domain import TBRR_SQP_Domain
 from hifuku.library.core import SolutionLibrary
 from hifuku.neuralnet import (
     AutoEncoderBase,
@@ -13,7 +13,7 @@ from hifuku.neuralnet import (
     VoxelAutoEncoder,
 )
 
-mesh_sampler_type = TBRR_SQP_DomainProvider.get_compat_mesh_sampler_type()
+mesh_sampler_type = TBRR_SQP_Domain.mesh_sampler_type
 if mesh_sampler_type is None:
     ae_model: AutoEncoderBase = NullAutoEncoder()
 else:
@@ -28,15 +28,13 @@ ae_model.put_on_device(device)
 pred.put_on_device(device)
 
 
-task_type = TBRR_SQP_DomainProvider.get_task_type()
-solver_type = TBRR_SQP_DomainProvider.get_solver_type()
-solver_config = TBRR_SQP_DomainProvider.get_solver_config()
+task_type = TBRR_SQP_Domain.task_type
 
 task = task_type.sample(5)
 assert pred.initial_solution is not None
 
 results = []
-solver = solver_type.init(solver_config)
+solver = TBRR_SQP_Domain.create_solver()
 for problem in task.export_problems():
     solver.setup(problem)
     result = solver.solve(pred.initial_solution)
@@ -44,7 +42,15 @@ for problem in task.export_problems():
 
 desc_table = task.export_table()
 lib = SolutionLibrary(  # FIXME: temp implemented this after deletion of model.infer
-    task_type, solver_type, solver_config, ae_model, [pred], [0.0], [None], 1.0, "dummy"
+    task_type,
+    TBRR_SQP_Domain.solver_type,
+    TBRR_SQP_Domain.solver_config,
+    ae_model,
+    [pred],
+    [0.0],
+    [None],
+    1.0,
+    "dummy",
 )
 ts = time.time()
 lib.infer(task)

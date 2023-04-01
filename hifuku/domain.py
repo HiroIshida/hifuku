@@ -1,27 +1,25 @@
 import time
-from abc import ABC, abstractmethod
-from typing import Generic, Optional, Type
+from enum import Enum
+from typing import ClassVar, Optional, Protocol, Type
 
 import tqdm
 from rpbench.interface import SamplableBase
-from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
-from skmp.solver.nlp_solver import (
-    SQPBasedSolver,
-    SQPBasedSolverConfig,
-    SQPBasedSolverResult,
-)
-from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig, OMPLSolverResult
+from skmp.solver.interface import AbstractScratchSolver, ConfigProtocol
+from skmp.solver.nlp_solver import SQPBasedSolver, SQPBasedSolverConfig
+from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 
-from hifuku.datagen import (
+from hifuku.datagen.batch_sampler import (
     DistributeBatchProblemSampler,
-    DistributedBatchProblemSolver,
     MultiProcessBatchProblemSampler,
+)
+from hifuku.datagen.batch_solver import (
+    DistributedBatchProblemSolver,
     MultiProcessBatchProblemSolver,
 )
-from hifuku.pool import ProblemT
 from hifuku.rpbench_wrap import (
     EightRoomsPlanningTask,
     MazeSolvingTask,
+    PicklableTaskBase,
     RingObstacleFreeBlockedPlanningTask,
     RingObstacleFreePlanningTask,
     TabletopBoxDualArmReachingTask,
@@ -30,255 +28,121 @@ from hifuku.rpbench_wrap import (
 )
 
 
-class DomainProvider(ABC, Generic[ProblemT, ConfigT, ResultT]):
-    """*stateless* Domain informatino Provider
-    where domain is composed of task_type, solver, solver_config
-    """
+class DomainProtocol(Protocol):
+    task_type: ClassVar[Type[PicklableTaskBase]]
+    solver_type: ClassVar[Type[AbstractScratchSolver]]
+    solver_config: ClassVar[ConfigProtocol]
+    mesh_sampler_type: ClassVar[Optional[Type[SamplableBase]]]
 
     @classmethod
-    @abstractmethod
-    def get_task_type(cls) -> Type[ProblemT]:
-        ...
+    def get_domain_name(cls) -> str:
+        return cls.__name__.split("_Domain")[0]
 
     @classmethod
-    @abstractmethod
-    def get_solver_type(cls) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
-        ...
-
-    @classmethod
-    @abstractmethod
-    def get_solver_config(cls) -> ConfigT:
-        ...
-
-    @classmethod
-    @abstractmethod
-    def get_compat_mesh_sampler_type(
-        cls,
-    ) -> Optional[Type[SamplableBase]]:  # TODO: ok to use it directly from rpbench?
-        ...
+    def create_solver(cls) -> AbstractScratchSolver:
+        return cls.solver_type.init(cls.solver_config)
 
     @classmethod
     def get_multiprocess_batch_solver(
         cls, n_process: Optional[int] = None
-    ) -> MultiProcessBatchProblemSolver[ConfigT, ResultT]:
+    ) -> MultiProcessBatchProblemSolver:
         return MultiProcessBatchProblemSolver(
-            cls.get_solver_type(), cls.get_solver_config(), n_process=n_process
+            cls.solver_type, cls.solver_config, n_process=n_process
         )
 
     @classmethod
     def get_multiprocess_batch_sampler(
         cls, n_process: Optional[int] = None
-    ) -> MultiProcessBatchProblemSampler[ProblemT]:
-        return MultiProcessBatchProblemSampler[ProblemT](n_process=n_process)
+    ) -> MultiProcessBatchProblemSampler:
+        return MultiProcessBatchProblemSampler(n_process=n_process)
 
     @classmethod
-    def get_distributed_batch_solver(
-        cls, *args, **kwargs
-    ) -> DistributedBatchProblemSolver[ConfigT, ResultT]:
-        return DistributedBatchProblemSolver(
-            cls.get_solver_type(), cls.get_solver_config(), *args, **kwargs
-        )
+    def get_distributed_batch_solver(cls, *args, **kwargs) -> DistributedBatchProblemSolver:
+        return DistributedBatchProblemSolver(cls.solver_type, cls.solver_config, *args, **kwargs)
 
     @classmethod
-    def get_distributed_batch_sampler(
-        cls, *args, **kwargs
-    ) -> DistributeBatchProblemSampler[ProblemT]:
-        return DistributeBatchProblemSampler[ProblemT](*args, **kwargs)
-
-    @classmethod
-    def get_domain_name(cls) -> str:
-        return cls.__name__.split("_DomainProvider")[0]
+    def get_distributed_batch_sampler(cls, *args, **kwargs) -> DistributeBatchProblemSampler:
+        return DistributeBatchProblemSampler(*args, **kwargs)
 
 
-class TBRR_RRT_DomainProvider(
-    DomainProvider[TabletopBoxRightArmReachingTask, OMPLSolverConfig, OMPLSolverResult]
-):
-    @classmethod
-    def get_task_type(cls) -> Type[TabletopBoxRightArmReachingTask]:
-        return TabletopBoxRightArmReachingTask
-
-    @classmethod
-    def get_solver_type(
-        cls,
-    ) -> Type[AbstractScratchSolver[OMPLSolverConfig, OMPLSolverResult]]:
-        return OMPLSolver
-
-    @classmethod
-    def get_solver_config(cls) -> OMPLSolverConfig:
-        return OMPLSolverConfig(
-            n_max_call=3000,
-            n_max_satisfaction_trial=1,
-            expbased_planner_backend="ertconnect",
-            ertconnect_eps=0.5,
-        )
-
-    @classmethod
-    @abstractmethod
-    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
-        return TabletopBoxWorldWrap
+class TBRR_RRT_Domain(DomainProtocol):
+    task_type = TabletopBoxRightArmReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=3000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.5,
+    )
+    mesh_sampler_type = TabletopBoxWorldWrap
 
 
-class TBRR_SQP_DomainProvider(
-    DomainProvider[TabletopBoxRightArmReachingTask, SQPBasedSolverConfig, SQPBasedSolverResult]
-):
-    @classmethod
-    def get_task_type(cls) -> Type[TabletopBoxRightArmReachingTask]:
-        return TabletopBoxRightArmReachingTask
-
-    @classmethod
-    def get_solver_type(
-        cls,
-    ) -> Type[AbstractScratchSolver[SQPBasedSolverConfig, SQPBasedSolverResult]]:
-        return SQPBasedSolver
-
-    @classmethod
-    def get_solver_config(cls) -> SQPBasedSolverConfig:
-        return SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
-
-    @classmethod
-    @abstractmethod
-    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
-        return TabletopBoxWorldWrap
+class TBRR_SQP_Domain(DomainProtocol):
+    task_type = TabletopBoxRightArmReachingTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
+    mesh_sampler_type = TabletopBoxWorldWrap
 
 
-class TBDR_SQP_DomainProvider(
-    DomainProvider[TabletopBoxDualArmReachingTask, SQPBasedSolverConfig, SQPBasedSolverResult]
-):
-    @classmethod
-    def get_task_type(cls) -> Type[TabletopBoxDualArmReachingTask]:
-        return TabletopBoxDualArmReachingTask
-
-    @classmethod
-    def get_solver_type(
-        cls,
-    ) -> Type[AbstractScratchSolver[SQPBasedSolverConfig, SQPBasedSolverResult]]:
-        return SQPBasedSolver
-
-    @classmethod
-    def get_solver_config(cls) -> SQPBasedSolverConfig:
-        return SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
-
-    @classmethod
-    @abstractmethod
-    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
-        return TabletopBoxWorldWrap
+class TBDR_SQP_Domain(DomainProtocol):
+    task_type = TabletopBoxDualArmReachingTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
+    mesh_sampler_type = TabletopBoxWorldWrap
 
 
-class Maze_RRT_DomainProvider(DomainProvider[MazeSolvingTask, OMPLSolverConfig, OMPLSolverResult]):
-    @classmethod
-    def get_task_type(cls) -> Type[MazeSolvingTask]:
-        return MazeSolvingTask
-
-    @classmethod
-    def get_solver_type(
-        cls,
-    ) -> Type[AbstractScratchSolver[OMPLSolverConfig, OMPLSolverResult]]:
-        return OMPLSolver
-
-    @classmethod
-    def get_solver_config(cls) -> OMPLSolverConfig:
-        return OMPLSolverConfig(
-            n_max_call=3000,
-            n_max_satisfaction_trial=1,
-            expbased_planner_backend="ertconnect",
-            ertconnect_eps=0.5,
-        )
-
-    @classmethod
-    @abstractmethod
-    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
-        return None
+class Maze_RRT_Domain(DomainProtocol):
+    task_type = MazeSolvingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=3000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.5,
+    )
+    mesh_sampler_type = None
 
 
-class RingObstacleFree_RRT_DomainProvider(
-    DomainProvider[RingObstacleFreePlanningTask, OMPLSolverConfig, OMPLSolverResult]
-):
-    @classmethod
-    def get_task_type(cls) -> Type[RingObstacleFreePlanningTask]:
-        return RingObstacleFreePlanningTask
-
-    @classmethod
-    def get_solver_type(
-        cls,
-    ) -> Type[AbstractScratchSolver[OMPLSolverConfig, OMPLSolverResult]]:
-        return OMPLSolver
-
-    @classmethod
-    def get_solver_config(cls) -> OMPLSolverConfig:
-        return OMPLSolverConfig(
-            n_max_call=100,
-            n_max_satisfaction_trial=1,
-            expbased_planner_backend="ertconnect",
-            ertconnect_eps=0.1,
-        )
-
-    @classmethod
-    @abstractmethod
-    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
-        return None
+class RingObstacleFree_RRT_Domain(DomainProtocol):
+    task_type = RingObstacleFreePlanningTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=100,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    mesh_sampler_type = None
 
 
-class RingObstacleFreeBlocked_RRT_DomainProvider(
-    DomainProvider[RingObstacleFreeBlockedPlanningTask, OMPLSolverConfig, OMPLSolverResult]
-):
-    @classmethod
-    def get_task_type(cls) -> Type[RingObstacleFreeBlockedPlanningTask]:
-        return RingObstacleFreeBlockedPlanningTask
-
-    @classmethod
-    def get_solver_type(
-        cls,
-    ) -> Type[AbstractScratchSolver[OMPLSolverConfig, OMPLSolverResult]]:
-        return OMPLSolver
-
-    @classmethod
-    def get_solver_config(cls) -> OMPLSolverConfig:
-        return OMPLSolverConfig(
-            n_max_call=100,
-            n_max_satisfaction_trial=1,
-            expbased_planner_backend="ertconnect",
-            ertconnect_eps=0.1,
-        )
-
-    @classmethod
-    @abstractmethod
-    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
-        return None
+class RingObstacleFreeBlocked_RRT_Domain(DomainProtocol):
+    task_type = RingObstacleFreeBlockedPlanningTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=100,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    mesh_sampler_type = None
 
 
-class EightRooms_SQP_DomainProvider(
-    DomainProvider[EightRoomsPlanningTask, SQPBasedSolverConfig, SQPBasedSolverResult]
-):
-    @classmethod
-    def get_task_type(cls) -> Type[EightRoomsPlanningTask]:
-        return EightRoomsPlanningTask
-
-    @classmethod
-    def get_solver_type(
-        cls,
-    ) -> Type[AbstractScratchSolver[SQPBasedSolverConfig, SQPBasedSolverResult]]:
-        return SQPBasedSolver
-
-    @classmethod
-    def get_solver_config(cls) -> SQPBasedSolverConfig:
-        return SQPBasedSolverConfig(n_wp=100, n_max_call=30, motion_step_satisfaction="explicit")
-
-    @classmethod
-    @abstractmethod
-    def get_compat_mesh_sampler_type(cls) -> Optional[Type[SamplableBase]]:
-        return None
+class EightRooms_SQP_Domain(DomainProtocol):
+    task_type = EightRoomsPlanningTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=100, n_max_call=30, motion_step_satisfaction="explicit"
+    )
+    mesh_sampler_type = None
 
 
-def measure_time_per_call(domain: Type[DomainProvider], n_sample: int = 10) -> float:
-    task_type = domain.get_task_type()
-    solver_type = domain.get_solver_type()
-    solver_config = domain.get_solver_config()
-    solver = solver_type.init(solver_config)
+def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
+    solver = domain.create_solver()
 
     n_call_sum = 0
     elapsed_time_sum = 0.0
     for _ in tqdm.tqdm(range(n_sample)):
-        task = task_type.sample(1)
+        task = domain.task_type.sample(1)
         problem = task.export_problems()[0]
         solver.setup(problem)
         ts = time.time()
@@ -287,3 +151,15 @@ def measure_time_per_call(domain: Type[DomainProvider], n_sample: int = 10) -> f
         n_call_sum += res.n_call
     time_per_call_mean = elapsed_time_sum / n_call_sum
     return time_per_call_mean
+
+
+def select_domain(domain_name: str) -> Type[DomainProtocol]:
+    class DomainCollection(Enum):
+        tbrr_sqp = TBRR_SQP_Domain
+        tbrr_rrt = TBRR_RRT_Domain
+        tbdr_sqp = TBDR_SQP_Domain
+        ring_rrt = RingObstacleFree_RRT_Domain
+        ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
+        eight_rooms_sqp = EightRooms_SQP_Domain
+
+    return DomainCollection[domain_name].value

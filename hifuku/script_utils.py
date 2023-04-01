@@ -1,4 +1,3 @@
-from enum import Enum
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -6,41 +5,23 @@ import mohou.file
 import torch
 from mohou.trainer import TrainCache
 
-from hifuku.domain import (
-    DomainProvider,
-    EightRooms_SQP_DomainProvider,
-    RingObstacleFree_RRT_DomainProvider,
-    RingObstacleFreeBlocked_RRT_DomainProvider,
-    TBDR_SQP_DomainProvider,
-    TBRR_RRT_DomainProvider,
-    TBRR_SQP_DomainProvider,
-)
+from hifuku.domain import select_domain
 from hifuku.library import SolutionLibrary
 from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder, VoxelAutoEncoder
 
 
-class DomainSelector(Enum):
-    tbrr_sqp = TBRR_SQP_DomainProvider
-    tbrr_rrt = TBRR_RRT_DomainProvider
-    tbdr_sqp = TBDR_SQP_DomainProvider
-    ring_rrt = RingObstacleFree_RRT_DomainProvider
-    ring_blocked_rrt = RingObstacleFreeBlocked_RRT_DomainProvider
-    eight_rooms_sqp = EightRooms_SQP_DomainProvider
-
-
 def load_compatible_autoencoder(domain_name: str) -> AutoEncoderBase:
-    domain: DomainProvider = DomainSelector[domain_name].value
-    mesh_sampler_type = domain.get_compat_mesh_sampler_type()
-    if mesh_sampler_type is None:
+    domain = select_domain(domain_name)
+    if domain.mesh_sampler_type is None:
         ae_model: AutoEncoderBase = NullAutoEncoder()
     else:
-        ae_pp = mohou.file.get_project_path("hifuku-{}".format(mesh_sampler_type.__name__))
+        ae_pp = mohou.file.get_project_path("hifuku-{}".format(domain.mesh_sampler_type.__name__))
         ae_model = TrainCache.load(ae_pp, VoxelAutoEncoder).best_model
     return ae_model
 
 
 def get_project_path(domain_name: str) -> Path:
-    domain: DomainProvider = DomainSelector[domain_name].value
+    domain = select_domain(domain_name)
     domain_identifier = domain.get_domain_name()
     pp = mohou.file.get_project_path("tabletop_solution_library-{}".format(domain_identifier))
     pp.mkdir(exist_ok=True)
@@ -53,11 +34,11 @@ def load_library(
     limit_thread: bool = False,
     project_path: Optional[Path] = None,
 ) -> SolutionLibrary:
-    domain = DomainSelector[domain_name].value
+    domain = select_domain(domain_name)
     if project_path is None:
         project_path = get_project_path(domain_name)
     lib = SolutionLibrary.load(
-        project_path, domain.get_task_type(), domain.get_solver_type(), torch.device(device)
+        project_path, domain.task_type, domain.solver_type, torch.device(device)
     )[0]
     lib.limit_thread = limit_thread
     return lib

@@ -3,7 +3,7 @@ from mohou.file import get_project_path
 from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train
 
-from hifuku.domain import TBRR_SQP_DomainProvider
+from hifuku.domain import TBRR_SQP_Domain
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.neuralnet import (
     AutoEncoderBase,
@@ -15,7 +15,7 @@ from hifuku.neuralnet import (
 )
 from hifuku.types import RawData
 
-mesh_sampler_type = TBRR_SQP_DomainProvider.get_compat_mesh_sampler_type()
+mesh_sampler_type = TBRR_SQP_Domain.mesh_sampler_type
 if mesh_sampler_type is None:
     ae_model: AutoEncoderBase = NullAutoEncoder()
 else:

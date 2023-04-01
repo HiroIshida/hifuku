@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 from mohou.file import get_project_path
 
-from hifuku.domain import TBRR_SQP_DomainProvider
+from hifuku.domain import TBRR_SQP_Domain
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
 warnings.filterwarnings("ignore", message="texture specified in URDF is not supported")
@@ -16,12 +16,11 @@ if __name__ == "__main__":
     pp.mkdir(exist_ok=True)
     cache_base_path = pp / "cache"
     cache_base_path.mkdir(exist_ok=True)
-    batch_solver = TBRR_SQP_DomainProvider.get_multiprocess_batch_solver()
+    batch_solver = TBRR_SQP_Domain.get_multiprocess_batch_solver()
 
-    task_type = TBRR_SQP_DomainProvider.get_task_type()
-    std_task = task_type.sample(1, standard=True)
+    std_task = TBRR_SQP_Domain.task_type.sample(1, standard=True)
     init_solution = std_task.solve_default()[0].traj
     assert init_solution is not None
-    problems = [TBRR_SQP_DomainProvider.get_task_type().sample(50) for _ in range(n_problem)]
+    problems = [TBRR_SQP_Domain.task_type.sample(50) for _ in range(n_problem)]
     init_solutions = [init_solution] * n_problem
     batch_solver.create_dataset(problems, init_solutions, cache_base_path, None)

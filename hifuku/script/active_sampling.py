@@ -7,9 +7,9 @@ from mohou.trainer import TrainConfig
 from mohou.utils import log_package_version_info
 
 import hifuku
+from hifuku.domain import select_domain
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.script_utils import (
-    DomainSelector,
     get_project_path,
     load_compatible_autoencoder,
     load_library,
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     warm_start: bool = args.warm
 
     filter_warnings()
-    domain = DomainSelector[domain_name].value
+    domain = select_domain(domain_name)
     pp = get_project_path(domain_name)
 
     logger = create_default_logger(pp, "library_gen")
@@ -48,9 +48,9 @@ if __name__ == "__main__":
 
     ae_model = load_compatible_autoencoder(domain_name)
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
-        domain.get_task_type(),
-        domain.get_solver_type(),
-        domain.get_solver_config(),
+        domain.task_type,
+        domain.solver_type,
+        domain.solver_config,
         ae_model,
         lconfig,
         pool_single=None,
