@@ -246,8 +246,8 @@ class RingObstacleFreeBlocked_RRT_DomainProvider(
         return None
 
 
-class EightRooms_RRT_DomainProvider(
-    DomainProvider[EightRoomsPlanningTask, OMPLSolverConfig, OMPLSolverResult]
+class EightRooms_SQP_DomainProvider(
+    DomainProvider[EightRoomsPlanningTask, SQPBasedSolverConfig, SQPBasedSolverResult]
 ):
     @classmethod
     def get_task_type(cls) -> Type[EightRoomsPlanningTask]:
@@ -256,17 +256,12 @@ class EightRooms_RRT_DomainProvider(
     @classmethod
     def get_solver_type(
         cls,
-    ) -> Type[AbstractScratchSolver[OMPLSolverConfig, OMPLSolverResult]]:
-        return OMPLSolver
+    ) -> Type[AbstractScratchSolver[SQPBasedSolverConfig, SQPBasedSolverResult]]:
+        return SQPBasedSolver
 
     @classmethod
-    def get_solver_config(cls) -> OMPLSolverConfig:
-        return OMPLSolverConfig(
-            n_max_call=500,
-            n_max_satisfaction_trial=1,
-            expbased_planner_backend="ertconnect",
-            ertconnect_eps=0.1,
-        )
+    def get_solver_config(cls) -> SQPBasedSolverConfig:
+        return SQPBasedSolverConfig(n_wp=100, n_max_call=30, motion_step_satisfaction="explicit")
 
     @classmethod
     @abstractmethod
