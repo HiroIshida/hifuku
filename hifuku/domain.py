@@ -136,6 +136,13 @@ class EightRooms_SQP_Domain(DomainProtocol):
     mesh_sampler_type = None
 
 
+class EightRooms_Lightning_Domain(DomainProtocol):
+    task_type = EightRoomsPlanningTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(1000, 1, simplify=True, expbased_planner_backend="lightning")
+    mesh_sampler_type = None
+
+
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
     solver = domain.create_solver()
 
@@ -161,5 +168,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         ring_rrt = RingObstacleFree_RRT_Domain
         ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
         eight_rooms_sqp = EightRooms_SQP_Domain
+        eight_rooms_lt = EightRooms_Lightning_Domain
 
     return DomainCollection[domain_name].value
