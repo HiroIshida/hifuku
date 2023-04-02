@@ -74,6 +74,14 @@ class PostHandler(BaseHTTPRequestHandler):
     def process_SampleProblemRequest(
         self, request: SampleProblemRequest[ProblemT]
     ) -> SampleProblemResponse[ProblemT]:
+
+        # NOTE: by calling this line (sample()) some pre-computation
+        # e.g. sdf mesh creation will running.
+        # Without this line, all the processes will do pre-computation
+        # by themself in MultiProcessBatchProblemSampler which sometimes
+        # stall the entire procedure
+        request.pool.problem_type.sample(1, standard=True)  # don't delete
+
         ts = time.time()
         logging.info("request: {}".format(request))
         sampler = MultiProcessBatchProblemSampler[ProblemT](request.n_process)
