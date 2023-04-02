@@ -2,6 +2,7 @@ import torch
 from rpbench.interface import SamplableBase, TaskBase
 from rpbench.maze import MazeSolvingTask as _MazeSolvingTask
 from rpbench.multiple_rooms import EightRoomsPlanningTask as _EightRoomsPlanningTask
+from rpbench.pr2.kivapod import KivapodEmptyReachingTask as _KivapodEmptyReachingTask
 
 # fmt: off
 from rpbench.pr2.tabletop import (
@@ -56,6 +57,7 @@ class PicklableTensorExportSamplableBase(PicklableTensorChunkBase, PicklableSamp
 
 
 # fmt: off
+class KivapodEmptyReachingTask(_KivapodEmptyReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxRightArmReachingTask(_TabletopBoxRightArmReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxDualArmReachingTask(_TabletopBoxDualArmReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxVoxbloxRightArmReachingTask(_TabletopBoxVoxbloxRightArmReachingTask, PicklableTaskBase): ...  # noqa

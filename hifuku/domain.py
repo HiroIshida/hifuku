@@ -18,6 +18,7 @@ from hifuku.datagen.batch_solver import (
 )
 from hifuku.rpbench_wrap import (
     EightRoomsPlanningTask,
+    KivapodEmptyReachingTask,
     MazeSolvingTask,
     PicklableTaskBase,
     RingObstacleFreeBlockedPlanningTask,
@@ -91,6 +92,18 @@ class TBDR_SQP_Domain(DomainProtocol):
     mesh_sampler_type = TabletopBoxWorldWrap
 
 
+class Kivapod_Empty_RRT_Domain(DomainProtocol):
+    task_type = KivapodEmptyReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=3000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.5,
+    )
+    mesh_sampler_type = None
+
+
 class Maze_RRT_Domain(DomainProtocol):
     task_type = MazeSolvingTask
     solver_type = OMPLSolver
@@ -131,7 +144,7 @@ class EightRooms_SQP_Domain(DomainProtocol):
     task_type = EightRoomsPlanningTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
-        n_wp=100, n_max_call=30, motion_step_satisfaction="explicit"
+        n_wp=60, n_max_call=10, motion_step_satisfaction="explicit"
     )
     mesh_sampler_type = None
 
@@ -139,7 +152,7 @@ class EightRooms_SQP_Domain(DomainProtocol):
 class EightRooms_Lightning_Domain(DomainProtocol):
     task_type = EightRoomsPlanningTask
     solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(1000, 1, simplify=True, expbased_planner_backend="lightning")
+    solver_config = OMPLSolverConfig(200, 1, simplify=False, expbased_planner_backend="lightning")
     mesh_sampler_type = None
 
 
@@ -165,6 +178,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         tbrr_sqp = TBRR_SQP_Domain
         tbrr_rrt = TBRR_RRT_Domain
         tbdr_sqp = TBDR_SQP_Domain
+        kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
         ring_rrt = RingObstacleFree_RRT_Domain
         ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
         eight_rooms_sqp = EightRooms_SQP_Domain
