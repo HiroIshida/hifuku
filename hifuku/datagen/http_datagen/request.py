@@ -2,7 +2,7 @@ import contextlib
 import logging
 import pickle
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from http.client import HTTPConnection
 from typing import Generic, List, Optional, Sequence, Tuple, Type, TypeVar, overload
 
@@ -90,10 +90,10 @@ class SampleProblemResponse(Generic[ProblemT], MainResponse):
     elapsed_time: float
 
     def __str__(self) -> str:
-        vis_dict = asdict(self)
+        vis_dict = {}
         n_problems = len(self.problems)
-        if n_problems > 0:
-            vis_dict["problems"] = "[...({} problems)...]".format(n_problems)
+        vis_dict["problems"] = "[...({} problems)...]".format(n_problems)
+        vis_dict["elapsed_time"] = self.elapsed_time
         return vis_dict.__str__()
 
 
