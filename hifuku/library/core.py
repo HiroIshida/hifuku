@@ -263,6 +263,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 device = torch.device("cpu")
         libraries = []
         for path in base_path.iterdir():
+            logger.debug("load from path: {}".format(path))
             m = re.match(r"Library-(\w+)-(\w+).pkl", path.name)
             if m is not None and m[1] == task_type.__name__:
                 logger.info("library found at {}".format(path))
@@ -436,16 +437,25 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             with validation_cache_path.open(mode="rb") as f:
                 problems_validation = pickle.load(f)
                 assert problems_validation is not None
+            logger.info("validation set is load from {}".format(validation_cache_path))
         else:
             if problems_validation is None:
+                logger.info("start creating validation set")
                 problems_validation = sampler.sample_batch(
                     10000, TrivialProblemPool(problem_type, 1).as_predicated()
                 )
                 with validation_cache_path.open(mode="wb") as f:
                     pickle.dump(problems_validation, f)
+                logger.info(
+                    "validation set with {} elements is created".format(len(problems_validation))
+                )
+        assert len(problems_validation) > 0
 
         for prob in problems_validation:
             assert prob.n_inner_task == 1
+            logger.info(
+                "validation set with {} elements is created".format(len(problems_validation))
+            )
 
         logger.info("library sampler config: {}".format(config))
         return cls(
