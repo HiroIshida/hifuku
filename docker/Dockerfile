@@ -60,3 +60,6 @@ RUN git clone git@github.com:HiroIshida/scikit-motionplan.git && pip3 install -e
 RUN git clone git@github.com:HiroIshida/rpbench.git && pip3 install -e rpbench
 RUN git clone git@github.com:HiroIshida/hifuku.git && cd hifuku && pip3 install -e .
 RUN pip3 install pyglet==1.5.27
+
+# finally install required to run skrobot
+RUN sudo apt-get install libspatialindex-dev freeglut3-dev libsuitesparse-dev libblas-dev liblapack-dev -y
