@@ -28,6 +28,7 @@ jobs:
             - name: install dep package
               run: |
                   sudo apt-get update && sudo apt install libunwind-dev && sudo apt-get install libgoogle-glog-dev  # voxbloxpy
+                  pip3 install scikit-build
                   cd /tmp && git clone git@github.com:HiroIshida/scikit-motionplan.git && cd scikit-motionplan && pip3 install .
                   cd /tmp && git clone git@github.com:HiroIshida/rpbench.git && cd rpbench && pip3 install .
             - name: install this package
@@ -39,16 +40,6 @@ jobs:
               run: |
                   pip3 install pytest
                   pip3 install mypy
-
-            - name: pip install skrobot from source (ishida-dev)
-              run: |
-                  cd /tmp
-                  git clone https://github.com/iory/scikit-robot.git
-                  cd scikit-robot
-                  git remote add h-ishida https://github.com/HiroIshida/scikit-robot.git
-                  git fetch h-ishida
-                  git checkout h-ishida/master
-                  pip3 install -e .
 
             - name: Run Pytest with timeout
               run: |
