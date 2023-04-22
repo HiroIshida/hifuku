@@ -18,6 +18,7 @@ from hifuku.datagen.batch_solver import (
 )
 from hifuku.rpbench_wrap import (
     EightRoomsPlanningTask,
+    HumanoidTableReachingTask,
     KivapodEmptyReachingTask,
     MazeSolvingTask,
     PicklableTaskBase,
@@ -156,6 +157,21 @@ class EightRooms_Lightning_Domain(DomainProtocol):
     mesh_sampler_type = None
 
 
+class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
+    task_type = HumanoidTableReachingTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=40,
+        n_max_call=8,
+        motion_step_satisfaction="explicit",
+        verbose=False,
+        ctol_eq=1e-3,
+        ctol_ineq=1e-3,
+        ineq_tighten_coef=0.0,
+    )
+    mesh_sampler_type = None
+
+
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
     solver = domain.create_solver()
 
@@ -183,5 +199,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
         eight_rooms_sqp = EightRooms_SQP_Domain
         eight_rooms_lt = EightRooms_Lightning_Domain
+        humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
 
     return DomainCollection[domain_name].value

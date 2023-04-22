@@ -1,5 +1,8 @@
 import torch
 from rpbench.interface import SamplableBase, TaskBase
+from rpbench.jaxon.below_table import (
+    HumanoidTableReachingTask as _HumanoidTableReachingTask,
+)
 from rpbench.maze import MazeSolvingTask as _MazeSolvingTask
 from rpbench.multiple_rooms import EightRoomsPlanningTask as _EightRoomsPlanningTask
 from rpbench.pr2.kivapod import KivapodEmptyReachingTask as _KivapodEmptyReachingTask
@@ -67,4 +70,5 @@ class MazeSolvingTask(_MazeSolvingTask, PicklableTaskBase): ...  # noqa
 class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskBase): ...  # noqa
 class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, PicklableTaskBase): ...  # noqa
 class EightRoomsPlanningTask(_EightRoomsPlanningTask, PicklableTaskBase): ...  # noqa
+class HumanoidTableReachingTask(_HumanoidTableReachingTask, PicklableTaskBase): ...  # noqa
 # fmt: on
