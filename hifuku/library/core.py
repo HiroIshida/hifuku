@@ -2,6 +2,7 @@ import copy
 import logging
 import pickle
 import re
+import shutil
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -582,6 +583,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             )
 
         dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
+        shutil.rmtree(cache_dir_path)
 
         logger.info("start training model")
 
