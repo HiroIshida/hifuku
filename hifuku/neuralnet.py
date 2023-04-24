@@ -155,7 +155,6 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
     iter_linears: nn.Sequential
     solution_linears: Optional[nn.Sequential]
     description_expand_lineras: nn.Sequential
-    margin: Optional[float] = None
     initial_solution: Optional[Trajectory] = None
 
     def _setup_from_config(self, config: IterationPredictorConfig) -> None:
