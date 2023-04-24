@@ -28,6 +28,7 @@ jobs:
             - name: install dep package
               run: |
                   sudo apt-get update && sudo apt install libunwind-dev && sudo apt-get install libgoogle-glog-dev  # voxbloxpy
+                  pip3 install ompl-thin --prefer-binary
                   pip3 install scikit-build
                   cd /tmp && git clone git@github.com:HiroIshida/scikit-motionplan.git && cd scikit-motionplan && pip3 install .
                   cd /tmp && git clone git@github.com:HiroIshida/rpbench.git && cd rpbench && pip3 install .
