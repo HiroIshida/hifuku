@@ -307,7 +307,7 @@ class LibraryBasedSolver(
         assert len(inference_results) == 1
         inference_result = inference_results[0]
 
-        seems_infeasible = inference_result.nit > self.library.solver_config.n_max_call
+        seems_infeasible = inference_result.nit > self.library.success_iter_threshold()
         if seems_infeasible:
             result_type = self.solver.get_result_type()
             return result_type.abnormal(time.time() - ts)
