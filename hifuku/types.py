@@ -20,7 +20,7 @@ def get_clamped_iter(result: ResultProtocol, config: ConfigProtocol) -> int:
     # (failure case)
 
     if result.traj is None:
-        return config.n_max_call + 1
+        return int(config.n_max_call * 2)
     return result.n_call
 
 

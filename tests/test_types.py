@@ -63,7 +63,7 @@ def test_rawdata_to_tensor_iternum_clamp():
         traj_dummy, task.export_table(), tuple(results), OMPLSolverConfig(n_max_call=n_max_call)
     )
     _, _, torch_nits = data.to_tensors()
-    assert list(torch_nits.numpy()) == [1, 5, n_max_call + 1, n_max_call + 1]
+    assert list(torch_nits.numpy()) == [1, 5, n_max_call * 2, n_max_call * 2]
 
 
 if __name__ == "__main__":
