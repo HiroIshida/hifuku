@@ -11,7 +11,6 @@ from hifuku.library import LibraryBasedSolver, SolutionLibrary
 
 domain = HumanoidTableRarmReaching_SQP_Domain
 solver_table = CompatibleSolvers.get_compatible_solvers(domain.task_type)
-solver_table.pop("rrtconnect")
 
 # setup proposed solver
 pp = get_project_path("tabletop_solution_library-{}".format(domain.get_domain_name()))
@@ -22,7 +21,7 @@ solver_table["proposed"] = proposed
 
 results = []
 
-for i in range(100):
+for i in range(300):
     print(i)
 
     task = HumanoidTableReachingTask.sample(1)
