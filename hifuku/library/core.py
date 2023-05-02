@@ -27,7 +27,6 @@ from hifuku.datagen import (
     DistributedBatchProblemSolver,
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
-    sample_feasible_problem_with_solution,
 )
 from hifuku.neuralnet import (
     AutoEncoderBase,
@@ -345,7 +344,6 @@ class LibrarySamplerConfig:
     n_problem: int
     n_problem_inner: int
     train_config: TrainConfig
-    n_process_solcan_sample: int = 4
     n_solution_candidate: int = 10
     n_difficult_problem: int = 100
     solvable_threshold_factor: float = 0.8
@@ -621,13 +619,25 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             problem_pool.problem_type, self.library, self.difficult_iter_threshold
         )
         predicated_pool = problem_pool.make_predicated(pred, 40)
-        outputs = sample_feasible_problem_with_solution(
-            n_sample, predicated_pool, self.config.n_process_solcan_sample
-        )
 
-        # because n_problem_inner == 1, take [0]
-        solution_candidates = [o.results[0].traj for o in outputs]
-        return solution_candidates
+        prefix = "_sample_solution_canidates:"
+
+        logger.info("{} start sampling solution solved difficult problems".format(prefix))
+        n_batch = 1000  # TODO: avoid hard-coding
+        feasible_solutions: List[Trajectory] = []
+        while True:
+            logger.info("{} sample batch".format(prefix))
+            problems = self.sampler.sample_batch(n_batch, predicated_pool)
+            logger.info("{} solve batch".format(prefix))
+            resultss = self.solver.solve_batch(problems, [None] * n_batch)
+
+            for results in resultss:
+                result = results[0]
+                if result.traj is not None:
+                    feasible_solutions.append(result.traj)
+                    if len(feasible_solutions) == n_sample:
+                        return feasible_solutions
+            logger.info("{} progress {} / {} ".format(prefix, len(feasible_solutions), n_sample))
 
     def _sample_difficult_problems(
         self,

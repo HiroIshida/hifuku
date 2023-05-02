@@ -1,6 +1,5 @@
 # flake8: noqa
 
-from hifuku.datagen.batch_pipelined import sample_feasible_problem_with_solution
 from hifuku.datagen.batch_sampler import (
     BatchProblemSampler,
     DistributeBatchProblemSampler,
