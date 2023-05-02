@@ -286,13 +286,14 @@ class LibraryBasedSolver(
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     solver: AbstractScratchSolver[ConfigT, ResultT]
     task: Optional[ProblemT]
+    previous_false_positive: Optional[bool]
 
     @classmethod
     def init(
         cls, library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     ) -> "LibraryBasedSolver[ProblemT, ConfigT, ResultT]":
         solver = library.solver_type.init(library.solver_config)
-        return cls(library, solver, None)
+        return cls(library, solver, None, None)
 
     def setup(self, task: ProblemT) -> None:
         assert task.n_inner_task == 1
@@ -301,6 +302,8 @@ class LibraryBasedSolver(
         self.task = task
 
     def solve(self) -> ResultT:
+        self.previous_false_positive = None
+
         ts = time.time()
         assert self.task is not None
         inference_results = self.library.infer(self.task)
@@ -313,6 +316,8 @@ class LibraryBasedSolver(
             return result_type.abnormal(time.time() - ts)
         solver_result = self.solver.solve(inference_result.init_solution)
         solver_result.time_elapsed = time.time() - ts
+
+        self.previous_false_positive = solver_result.traj is None
         return solver_result
 
 
