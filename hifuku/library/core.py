@@ -621,19 +621,40 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         assert problem_pool.n_problem_inner == 1
 
-        pred = DifficultProblemPredicate(
-            problem_pool.problem_type, self.library, self.difficult_iter_threshold
+        # because sampling from near-feasible-boundary is effective in most case....
+        pred_bit_difficult = DifficultProblemPredicate(
+            problem_pool.problem_type,
+            self.library,
+            self.difficult_iter_threshold,
+            self.difficult_iter_threshold * 1.2,
         )
-        predicated_pool = problem_pool.make_predicated(pred, 40)
+        predicated_pool_bit_difficult = problem_pool.make_predicated(pred_bit_difficult, 40)
+
+        # but, we also need to sample from far-boundary because some of the possible
+        # feasible regions are disjoint from the ones obtained so far
+        pred_difficult = DifficultProblemPredicate(
+            problem_pool.problem_type, self.library, self.difficult_iter_threshold, None
+        )
+        predicated_pool_difficult = problem_pool.make_predicated(pred_difficult, 40)
 
         prefix = "_sample_solution_canidates:"
 
         logger.info("{} start sampling solution solved difficult problems".format(prefix))
-        n_batch = 1000  # TODO: avoid hard-coding
+
+        # TODO: dont hardcode
+        n_batch = n_sample * 20
+        n_batch_little_difficult = int(n_batch * 0.8)
+        n_batch_difficult = n_batch - n_batch_little_difficult
+
         feasible_solutions: List[Trajectory] = []
         while True:
             logger.info("{} sample batch".format(prefix))
-            problems = self.sampler.sample_batch(n_batch, predicated_pool)
+            problems1 = self.sampler.sample_batch(
+                n_batch_little_difficult, predicated_pool_bit_difficult
+            )
+            problems2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
+            problems = problems1 + problems2
+
             logger.info("{} solve batch".format(prefix))
             resultss = self.solver.solve_batch(problems, [None] * n_batch)
 
