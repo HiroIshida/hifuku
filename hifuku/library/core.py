@@ -324,7 +324,8 @@ class LibraryBasedSolver(
 class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
     task_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
-    difficult_iter_threshold: float
+    th_min_iter: float
+    th_max_iter: Optional[float] = None
 
     def __post_init__(self):
         # note: library must be put on cpu
@@ -336,7 +337,12 @@ class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
         assert task.n_inner_task == 1
         infer_res = self.library.infer(task)[0]
         iterval = infer_res.nit
-        return iterval > self.difficult_iter_threshold
+        if iterval < self.th_min_iter:
+            return False
+        if self.th_max_iter is None:
+            return True
+        else:
+            return iterval < self.th_max_iter
 
 
 @dataclass
