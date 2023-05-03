@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Generic, List, Optional, Sequence, Tuple, Type
 
 import numpy as np
-import psutil
 import threadpoolctl
 import tqdm
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
@@ -156,8 +155,9 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         results_list = self.solve_batch(problems, init_solutions)
 
         if n_process is None:
-            n_process = psutil.cpu_count(logical=False)
-            assert n_process is not None
+            cpu_count = os.cpu_count()
+            assert cpu_count is not None
+            n_process = int(0.5 * cpu_count)
 
         n_problem = len(problems)
         indices = np.array(list(range(n_problem)))
@@ -205,9 +205,9 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         super().__init__(solver_t, config)
         if n_process is None:
             logger.info("n_process is not set. automatically determine")
-            n_process = psutil.cpu_count(logical=False)
-            assert n_process is not None
-        assert n_process > 0
+            cpu_num = os.cpu_count()
+            assert cpu_num is not None
+            n_process = int(cpu_num * 0.5)
         logger.info("n_process is set to {}".format(n_process))
         self.n_process = n_process
 

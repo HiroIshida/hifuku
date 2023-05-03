@@ -1,12 +1,12 @@
 import argparse
 import logging
+import os
 import pickle
 import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-import psutil
 from skmp.solver.interface import ConfigT, ResultT
 
 from hifuku.datagen import (
@@ -39,10 +39,11 @@ class PostHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def process_GetCPUInfoRequest(self, request: GetCPUInfoRequest) -> GetCPUInfoResponse:
-        n_cpu = psutil.cpu_count(logical=False)
+        n_cpu = os.cpu_count()
         assert n_cpu is not None
-        logging.info("cpu count: {}".format(n_cpu))
-        resp = GetCPUInfoResponse(n_cpu)
+        cpu_count = int(n_cpu * 0.5)
+        logging.info("cpu count: {}".format(cpu_count))
+        resp = GetCPUInfoResponse(cpu_count)
         return resp
 
     def process_GetModuleHashValueRequest(

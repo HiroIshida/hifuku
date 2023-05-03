@@ -48,7 +48,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
     def __init__(self, n_process: Optional[int] = None):
         cpu_count = os.cpu_count()
         assert cpu_count is not None
-        n_physical_cpu = int(0.5 * cpu_count)  # TODO: use psutil to obtain physical num
+        n_physical_cpu = int(0.5 * cpu_count)
 
         if n_process is None:
             n_process = n_physical_cpu
