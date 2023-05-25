@@ -20,8 +20,9 @@ proposed = LibraryBasedSolver.init(lib)
 solver_table["proposed"] = proposed
 
 results = []
+false_positive_seq = []
 
-for i in range(300):
+for i in range(500):
     print(i)
 
     task = HumanoidTableReachingTask.sample(1)
@@ -38,9 +39,17 @@ for i in range(300):
         print("solved?: {}, time: {}".format(res.traj is not None, res.time_elapsed))
 
         result[name] = res
+
+        if name == "proposed":
+            if solver.previous_false_positive is not None:
+                false_positive_seq.append(solver.previous_false_positive)
+                false_positive_count = sum(false_positive_seq)
+                fp_rate = false_positive_count / len(false_positive_seq)
+                print("current fp rate: {}".format(fp_rate))
+
     results.append(result)
 
 result_base_path = Path("./result")
 result_path: Path = result_base_path / "result-{}".format(domain.get_domain_name())
 with result_path.open(mode="wb") as f:
-    pickle.dump(results, f)
+    pickle.dump((results, false_positive_seq), f)
