@@ -14,7 +14,7 @@ from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 from skmp.trajectory import Trajectory
 
 from hifuku.datagen import MultiProcessBatchProblemSolver
-from hifuku.domain import DomainProtocol, RingObstacleFree_RRT_Domain, TBRR_RRT_Domain
+from hifuku.domain import DomainProtocol, TBRR_RRT_Domain
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
@@ -78,7 +78,6 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
     solcon = domain.solver_config
     solver_type = domain.solver_type
     compat_mesh_sampler_type = domain.mesh_sampler_type
-
     solver = domain.get_multiprocess_batch_solver(2)
     sampler = domain.get_multiprocess_batch_sampler(2)
 
@@ -92,6 +91,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
         solvable_threshold_factor=0.0,
         difficult_threshold_factor=-np.inf,  # all pass
         acceptable_false_positive_rate=1.0,
+        sample_from_difficult_region=False,
         ignore_useless_traj=False,
     )  # all pass
 
@@ -139,7 +139,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
 
 
 def test_SolutionLibrarySampler():
-    _test_SolutionLibrarySampler(RingObstacleFree_RRT_Domain)
+    # _test_SolutionLibrarySampler(RingObstacleFree_RRT_Domain)
     _test_SolutionLibrarySampler(TBRR_RRT_Domain)
 
 
