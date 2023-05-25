@@ -30,7 +30,7 @@ if __name__ == "__main__":
     n_grid = 50
     region_center = region.worldpos()
     extent = np.array(region._extents)
-    margin = 0.5
+    margin = 0.0
     lb = region_center - (0.5 + margin) * extent
     ub = region_center + (0.5 + margin) * extent
     xlin, ylin, zlin = [np.linspace(lb[i], ub[i], n_grid) for i in range(3)]
@@ -44,12 +44,18 @@ if __name__ == "__main__":
     vecs = vec.repeat(len(pts), 1)
     vecs[:, 6:9] = torch.from_numpy(pts).float()
 
+    task: HumanoidTableReachingTask
+    config = task.config_provider.get_config()
+    efkin = config.get_endeffector_kin()
+    jaxon = task.config_provider.get_jaxon()
+
     mesh_links = []
+    line_links = []
     idx = 0
     for idx in range(len(lib.predictors)):
-        print(idx)
+        pred = lib.predictors[idx]
         values = lib.success_iter_threshold() - (
-            lib.predictors[idx].forward((dummy_desc, vecs))[0] + lib.margins[idx]
+            pred.forward((dummy_desc, vecs))[0] + lib.margins[idx]
         )
         values = values.detach().numpy()
         if np.max(values) > 0.0:
@@ -64,32 +70,29 @@ if __name__ == "__main__":
             mesh = trimesh.smoothing.filter_laplacian(mesh)
 
             mesh_link = MeshLink(mesh)
-            mesh_link.visual_mesh.visual.face_colors[:, 0] = 255
-            mesh_link.visual_mesh.visual.face_colors[:, 1] = 0
-            mesh_link.visual_mesh.visual.face_colors[:, 2] = 0
+            rgb = np.random.randint(0, 255, 3)
+            mesh_link.visual_mesh.visual.face_colors[:, 0] = rgb[0]
+            mesh_link.visual_mesh.visual.face_colors[:, 1] = rgb[1]
+            mesh_link.visual_mesh.visual.face_colors[:, 2] = rgb[2]
             mesh_link.visual_mesh.visual.face_colors[:, 3] = 150
             mesh_links.append(mesh_link)
 
-    task: HumanoidTableReachingTask
-    config = task.config_provider.get_config()
-    efkin = config.get_endeffector_kin()
-    jaxon = task.config_provider.get_jaxon()
+            traj = pred.initial_solution
 
-    line_links = []
-    for pred in lib.predictors:
-        traj = pred.initial_solution
+            feature_pointss, _ = efkin.map(traj.numpy())
 
-        feature_pointss, _ = efkin.map(traj.numpy())
+            n_wp, n_feature, n_tspace = feature_pointss.shape
+            feature_points = feature_pointss[:, 2, :]
 
-        n_wp, n_feature, n_tspace = feature_pointss.shape
-        feature_points = feature_pointss[:, 0, :]
+            pts = []
+            for feature_point in feature_points:
+                pt = feature_point[:3]
+                pts.append(pt)
+            print(pts)
 
-        pts = []
-        for feature_point in feature_points:
-            pt = feature_point[:3]
-            pts.append(pt)
-        line_link = LineString(np.array(pts))
-        line_links.append(line_link)
+            line_link = LineString(np.array(pts))
+            line_link.visual_mesh.colors = [[rgb[0], rgb[1], rgb[2], 255]]
+            line_links.append(line_link)
 
     vis = TrimeshSceneViewer()
     task.world.visualize(vis)
