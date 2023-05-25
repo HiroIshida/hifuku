@@ -20,10 +20,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
     parser.add_argument("--warm", action="store_true", help="warm start")
+    parser.add_argument("--lm", action="store_true", help="use light weight nn")
 
     args = parser.parse_args()
     domain_name: str = args.type
     warm_start: bool = args.warm
+    use_light_model: bool = args.lm
 
     filter_warnings()
     domain = select_domain(domain_name)
@@ -35,6 +37,11 @@ if __name__ == "__main__":
     log_package_version_info(logger, skmp)
     log_package_version_info(logger, selcol)
 
+    if use_light_model:
+        iterpred_model_config = {"n_layer1_width": 100, "n_layer2_width": 100, "n_layer3_width": 20}
+    else:
+        iterpred_model_config = None
+
     lconfig = LibrarySamplerConfig(
         n_problem=10000,
         n_problem_inner=200,
@@ -44,6 +51,7 @@ if __name__ == "__main__":
         solvable_threshold_factor=1.0,
         difficult_threshold_factor=1.0,
         acceptable_false_positive_rate=0.03,
+        iterpred_model_config=iterpred_model_config,
     )  # all pass
 
     ae_model = load_compatible_autoencoder(domain_name)
