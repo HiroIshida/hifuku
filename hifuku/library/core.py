@@ -8,7 +8,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, List, Optional, Tuple, Type
+from typing import Dict, Generic, List, Optional, Tuple, Type
 
 import numpy as np
 import threadpoolctl
@@ -357,6 +357,7 @@ class LibrarySamplerConfig:
     acceptable_false_positive_rate: float = 0.005
     sample_from_difficult_region: bool = True
     ignore_useless_traj: bool = True
+    iterpred_model_config: Optional[Dict] = None
 
 
 @dataclass
@@ -605,9 +606,17 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         n_dim_vector_description = vector_desc.shape[0]
 
         # train
-        model_conf = IterationPredictorConfig(
-            n_dim_vector_description, self.library.ae_model.n_bottleneck, 10
-        )
+        if self.config.iterpred_model_config is not None:
+            model_conf = IterationPredictorConfig(
+                n_dim_vector_description,
+                self.library.ae_model.n_bottleneck,
+                **self.config.iterpred_model_config
+            )
+        else:
+            model_conf = IterationPredictorConfig(
+                n_dim_vector_description, self.library.ae_model.n_bottleneck
+            )
+
         model = IterationPredictor(model_conf)
         model.initial_solution = init_solution
         tcache = TrainCache.from_model(model)

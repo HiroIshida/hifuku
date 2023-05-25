@@ -144,16 +144,15 @@ class IterationPredictorDataset(Dataset):
 class IterationPredictorConfig(ModelConfigBase):
     dim_problem_descriptor: int
     dim_conv_bottleneck: int
-    dim_conv: int = 3
     n_layer1_width: int = 500
     n_layer2_width: int = 100
+    n_layer3_width: int = 50
     dim_description_expand: Optional[int] = 300
     use_solution_pred: bool = False
 
 
 class IterationPredictor(ModelBase[IterationPredictorConfig]):
     linears: nn.Sequential
-    iter_linears: nn.Sequential
     description_expand_linears: Optional[nn.Sequential]
     initial_solution: Optional[Trajectory] = None
 
@@ -176,9 +175,10 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             nn.ReLU(),
             nn.Linear(config.n_layer1_width, config.n_layer2_width),
             nn.ReLU(),
+            nn.Linear(config.n_layer2_width, config.n_layer3_width),
+            nn.ReLU(),
+            nn.Linear(config.n_layer3_width, 1),
         )
-
-        self.iter_linears = nn.Sequential(nn.Linear(100, 50), nn.ReLU(), nn.Linear(50, 1))
 
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
         mesh_features, descriptor = sample
@@ -186,9 +186,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             descriptor = self.description_expand_linears(descriptor)
 
         vectors = torch.concat([mesh_features, descriptor], dim=1)
-        tmp = self.linears(vectors)
-        iter_pred = self.iter_linears(tmp)
-
+        iter_pred = self.linears(vectors)
         solution_pred = None
         return iter_pred, solution_pred
 

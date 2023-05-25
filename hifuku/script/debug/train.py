@@ -31,7 +31,7 @@ rawdata = raw_dataset.get_data(np.array([0]))[0]
 init_solution = rawdata.init_solution
 
 logger = create_default_logger(pp, "iteration_predictor")
-model_conf = IterationPredictorConfig(12, ae_model.n_bottleneck, 10)
+model_conf = IterationPredictorConfig(12, ae_model.n_bottleneck)
 model = IterationPredictor(model_conf)
 model.initial_solution = init_solution
 tcache = TrainCache.from_model(model)
