@@ -146,7 +146,9 @@ class IterationPredictorConfig(ModelConfigBase):
     dim_conv_bottleneck: int
     dim_solution: int
     dim_conv: int = 3
-    dim_description_expand: int = 300
+    n_layer1_width: int = 500
+    n_layer2_width: int = 100
+    dim_description_expand: Optional[int] = 300
     use_solution_pred: bool = False
 
 
@@ -154,24 +156,27 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
     linears: nn.Sequential
     iter_linears: nn.Sequential
     solution_linears: Optional[nn.Sequential]
-    description_expand_lineras: nn.Sequential
+    description_expand_linears: Optional[nn.Sequential]
     initial_solution: Optional[Trajectory] = None
 
     def _setup_from_config(self, config: IterationPredictorConfig) -> None:
 
-        self.description_expand_lineras = nn.Sequential(
-            nn.Linear(config.dim_problem_descriptor, config.dim_description_expand),
-            nn.ReLU(),
-            nn.Linear(config.dim_description_expand, config.dim_description_expand),
-            nn.ReLU(),
-        )
-
-        n_input = config.dim_conv_bottleneck + config.dim_description_expand
+        if config.dim_description_expand is not None:
+            self.description_expand_linears = nn.Sequential(
+                nn.Linear(config.dim_problem_descriptor, config.dim_description_expand),
+                nn.ReLU(),
+                nn.Linear(config.dim_description_expand, config.dim_description_expand),
+                nn.ReLU(),
+            )
+            n_input = config.dim_conv_bottleneck + config.dim_description_expand
+        else:
+            self.description_expand_linears = None
+            n_input = config.dim_conv_bottleneck + config.dim_problem_descriptor
 
         self.linears = nn.Sequential(
-            nn.Linear(n_input, 500),
+            nn.Linear(n_input, config.n_layer1_width),
             nn.ReLU(),
-            nn.Linear(500, 100),
+            nn.Linear(config.n_layer1_width, config.n_layer2_width),
             nn.ReLU(),
         )
 
@@ -184,40 +189,12 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         else:
             self.solution_linears = None
 
-    def forward_nested(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
-        mesh_features, descriptor = sample
-        # descriptor: (n_batch x n_pose x dim_descriptor)
-        n_batch, n_pose, _ = descriptor.shape
-
-        # mesh_features_rep: (n_batch * n_pose x dim_feature)
-        mesh_features_rep = mesh_features.repeat(n_pose, 1)
-
-        # descriptor_flatten: (n_batch * n_pose x dim_descriptor)
-        descriptor_flatten = descriptor.reshape(n_batch * n_pose, -1)
-        expanded = self.description_expand_lineras(descriptor_flatten)
-
-        vectors = torch.concat([mesh_features_rep, expanded], dim=1)
-        tmp = self.linears(vectors)
-
-        # iter_pred: (n_batch * n_pose)
-        iter_pred = self.iter_linears(tmp)
-        # iter_pred: (n_batch x n_pose)
-        iter_pred = iter_pred.reshape(n_batch, n_pose)
-
-        if self.solution_linears is not None:
-            # solution_pred: (n_batch * n_pose x dim_solution)
-            solution_pred = self.solution_linears(tmp)
-            # solution_pred: (n_batch x n_pose x dim_solution)
-            solution_pred = solution_pred.reshape(n_batch, n_pose, -1)
-        else:
-            solution_pred = None
-        return iter_pred, solution_pred
-
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
         mesh_features, descriptor = sample
-        expanded = self.description_expand_lineras(descriptor)
+        if self.description_expand_linears is not None:
+            descriptor = self.description_expand_linears(descriptor)
 
-        vectors = torch.concat([mesh_features, expanded], dim=1)
+        vectors = torch.concat([mesh_features, descriptor], dim=1)
         tmp = self.linears(vectors)
         iter_pred = self.iter_linears(tmp)
 
