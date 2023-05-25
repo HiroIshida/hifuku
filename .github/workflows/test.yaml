@@ -44,7 +44,7 @@ jobs:
 
             - name: Run Pytest with timeout
               run: |
-                  timeout 1200 pytest -v tests
+                  timeout 1200 pytest -s -v tests
 
             - name: Run mypy
               run: |
