@@ -514,7 +514,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         else:
             init_solution = self._determine_init_solution_init()
             problems = self._generate_problem_samples_init()
-        predictor = self.learn_predictors(init_solution, project_path, problems)
+        predictor = self.learn_predictor(init_solution, project_path, problems)
 
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
@@ -562,7 +562,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
         return difficult_iter_threshold
 
-    def learn_predictors(
+    def learn_predictor(
         self,
         init_solution: Trajectory,
         project_path: Path,
