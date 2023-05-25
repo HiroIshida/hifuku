@@ -355,6 +355,7 @@ class LibrarySamplerConfig:
     solvable_threshold_factor: float = 0.8
     difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
     acceptable_false_positive_rate: float = 0.005
+    sample_from_difficult_region: bool = True
     ignore_useless_traj: bool = True
 
 
@@ -621,21 +622,27 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         assert problem_pool.n_problem_inner == 1
 
-        # because sampling from near-feasible-boundary is effective in most case....
-        pred_bit_difficult = DifficultProblemPredicate(
-            problem_pool.problem_type,
-            self.library,
-            self.difficult_iter_threshold,
-            self.difficult_iter_threshold * 1.2,
-        )
-        predicated_pool_bit_difficult = problem_pool.make_predicated(pred_bit_difficult, 40)
+        if self.config.sample_from_difficult_region:
+            # because sampling from near-feasible-boundary is effective in most case....
+            pred_bit_difficult = DifficultProblemPredicate(
+                problem_pool.problem_type,
+                self.library,
+                self.difficult_iter_threshold,
+                self.difficult_iter_threshold * 1.2,
+            )
+            predicated_pool_bit_difficult = problem_pool.make_predicated(pred_bit_difficult, 40)
 
-        # but, we also need to sample from far-boundary because some of the possible
-        # feasible regions are disjoint from the ones obtained so far
-        pred_difficult = DifficultProblemPredicate(
-            problem_pool.problem_type, self.library, self.difficult_iter_threshold, None
-        )
-        predicated_pool_difficult = problem_pool.make_predicated(pred_difficult, 40)
+            # but, we also need to sample from far-boundary because some of the possible
+            # feasible regions are disjoint from the ones obtained so far
+            pred_difficult = DifficultProblemPredicate(
+                problem_pool.problem_type, self.library, self.difficult_iter_threshold, None
+            )
+            predicated_pool_difficult = problem_pool.make_predicated(pred_difficult, 40)
+        else:
+            # "sampling from difficult" get stuck when the classifier is not properly trained
+            # which becomes problem in test where classifier is trained with dummy small sample
+            predicated_pool_bit_difficult = problem_pool.as_predicated()
+            predicated_pool_difficult = predicated_pool_bit_difficult
 
         prefix = "_sample_solution_canidates:"
 
