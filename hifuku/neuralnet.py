@@ -144,7 +144,6 @@ class IterationPredictorDataset(Dataset):
 class IterationPredictorConfig(ModelConfigBase):
     dim_problem_descriptor: int
     dim_conv_bottleneck: int
-    dim_solution: int
     dim_conv: int = 3
     n_layer1_width: int = 500
     n_layer2_width: int = 100
@@ -155,7 +154,6 @@ class IterationPredictorConfig(ModelConfigBase):
 class IterationPredictor(ModelBase[IterationPredictorConfig]):
     linears: nn.Sequential
     iter_linears: nn.Sequential
-    solution_linears: Optional[nn.Sequential]
     description_expand_linears: Optional[nn.Sequential]
     initial_solution: Optional[Trajectory] = None
 
@@ -182,13 +180,6 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
 
         self.iter_linears = nn.Sequential(nn.Linear(100, 50), nn.ReLU(), nn.Linear(50, 1))
 
-        if config.use_solution_pred:
-            self.solution_linears = nn.Sequential(
-                nn.Linear(100, 50), nn.ReLU(), nn.Linear(50, config.dim_solution)
-            )
-        else:
-            self.solution_linears = None
-
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
         mesh_features, descriptor = sample
         if self.description_expand_linears is not None:
@@ -198,7 +189,6 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         tmp = self.linears(vectors)
         iter_pred = self.iter_linears(tmp)
 
-        assert self.solution_linears is None, "under construction"
         solution_pred = None
         return iter_pred, solution_pred
 
