@@ -280,7 +280,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
 @dataclass
 class LibraryBasedSolver(
-    AbstractTaskSolver[ProblemT, ResultT], Generic[ProblemT, ConfigT, ResultT]
+    AbstractTaskSolver[ProblemT, ConfigT, ResultT], Generic[ProblemT, ConfigT, ResultT]
 ):
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     solver: AbstractScratchSolver[ConfigT, ResultT]
