@@ -1,4 +1,5 @@
 import torch
+from rpbench.bubbly_world import BubblyPointConnectTask as _BubblyPointConnectTask
 from rpbench.interface import SamplableBase, TaskBase
 from rpbench.jaxon.below_table import (
     HumanoidTableReachingTask as _HumanoidTableReachingTask,
@@ -71,4 +72,5 @@ class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskB
 class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, PicklableTaskBase): ...  # noqa
 class EightRoomsPlanningTask(_EightRoomsPlanningTask, PicklableTaskBase): ...  # noqa
 class HumanoidTableReachingTask(_HumanoidTableReachingTask, PicklableTaskBase): ...  # noqa
+class BubblyPointConnectTask(_BubblyPointConnectTask, PicklableTaskBase): ...  # noqa
 # fmt: on

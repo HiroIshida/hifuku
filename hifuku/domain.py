@@ -17,6 +17,7 @@ from hifuku.datagen.batch_solver import (
     MultiProcessBatchProblemSolver,
 )
 from hifuku.rpbench_wrap import (
+    BubblyPointConnectTask,
     EightRoomsPlanningTask,
     HumanoidTableReachingTask,
     KivapodEmptyReachingTask,
@@ -172,6 +173,18 @@ class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
     mesh_sampler_type = None
 
 
+class BubblyPointConnecting_SQP_Domain(DomainProtocol):
+    task_type = BubblyPointConnectTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=40,
+        n_max_call=5,
+        motion_step_satisfaction="explicit",
+        verbose=False,
+    )
+    mesh_sampler_type = None
+
+
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
     solver = domain.create_solver()
 
@@ -200,5 +213,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         eight_rooms_sqp = EightRooms_SQP_Domain
         eight_rooms_lt = EightRooms_Lightning_Domain
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
+        bubbly_sqp = BubblyPointConnecting_SQP_Domain
 
     return DomainCollection[domain_name].value
