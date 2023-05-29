@@ -1,10 +1,8 @@
 import torch
-from rpbench.bubbly_world import BubblyPointConnectTask as _BubblyPointConnectTask
 from rpbench.interface import SamplableBase, TaskBase
 from rpbench.jaxon.below_table import (
     HumanoidTableReachingTask as _HumanoidTableReachingTask,
 )
-from rpbench.maze import MazeSolvingTask as _MazeSolvingTask
 from rpbench.multiple_rooms import EightRoomsPlanningTask as _EightRoomsPlanningTask
 from rpbench.pr2.kivapod import KivapodEmptyReachingTask as _KivapodEmptyReachingTask
 
@@ -26,6 +24,13 @@ from rpbench.ring import (
     RingObstacleFreeBlockedPlanningTask as _RingObstacleFreeBlockedPlanningTask,
 )
 from rpbench.ring import RingObstacleFreePlanningTask as _RingObstacleFreePlanningTask
+from rpbench.two_dimensional.bubbly_world import (
+    BubblyMeshPointConnectTask as _BubblyMeshPointConnectTask,
+)
+from rpbench.two_dimensional.bubbly_world import (
+    BubblyPointConnectTask as _BubblyPointConnectTask,
+)
+from rpbench.two_dimensional.maze import MazeSolvingTask as _MazeSolvingTask
 
 # fmt: on
 from hifuku.llazy.dataset import PicklableChunkBase, PicklableTensorChunkBase
@@ -73,4 +78,5 @@ class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, 
 class EightRoomsPlanningTask(_EightRoomsPlanningTask, PicklableTaskBase): ...  # noqa
 class HumanoidTableReachingTask(_HumanoidTableReachingTask, PicklableTaskBase): ...  # noqa
 class BubblyPointConnectTask(_BubblyPointConnectTask, PicklableTaskBase): ...  # noqa
+class BubblyMeshPointConnectTask(_BubblyMeshPointConnectTask, PicklableTaskBase): ...  # noqa
 # fmt: on
