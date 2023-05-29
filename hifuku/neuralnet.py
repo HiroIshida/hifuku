@@ -290,3 +290,41 @@ class VoxelAutoEncoder(NeuralAutoEncoderBase):
             nn.ConvTranspose3d(8, 1, (4, 4, 3), padding=1, stride=(2, 2, 1)),
         ]
         self.decoder = nn.Sequential(*decoder_layers)
+
+
+class PixelAutoEncoder(NeuralAutoEncoderBase):
+    def _setup_from_config(self, config: AutoEncoderConfig) -> None:
+        # suppose n_pixel = 112
+        n_channel = 1
+        encoder_layers = [
+            nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 56x56
+            nn.ReLU(inplace=True),
+            nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),  # 28x28
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),  # 14x14
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),  # 7x7
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 128, 3, padding=1, stride=(2, 2)),  # 4x4
+            nn.ReLU(inplace=True),
+            nn.Flatten(),
+            nn.Linear(128 * 16, config.dim_bottleneck),
+            nn.ReLU(inplace=True),
+        ]
+        self.encoder = nn.Sequential(*encoder_layers)
+
+        decoder_layers = [
+            nn.Linear(config.dim_bottleneck, 128 * 16),
+            nn.ReLU(inplace=True),
+            self.Reshape(-1, 128, 4, 4),
+            nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(16, 8, 4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(8, n_channel, 4, stride=2, padding=1),
+        ]
+        self.decoder = nn.Sequential(*decoder_layers)
