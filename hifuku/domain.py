@@ -185,6 +185,15 @@ class BubblyPointConnecting_SQP_Domain(DomainProtocol):
     mesh_sampler_type = None
 
 
+class BubblyPointConnecting_RRT_Domain(DomainProtocol):
+    task_type = BubblyPointConnectTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.1
+    )
+    mesh_sampler_type = None
+
+
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
     solver = domain.create_solver()
 
@@ -214,5 +223,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         eight_rooms_lt = EightRooms_Lightning_Domain
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         bubbly_sqp = BubblyPointConnecting_SQP_Domain
+        bubbly_rrt = BubblyPointConnecting_RRT_Domain
 
     return DomainCollection[domain_name].value
