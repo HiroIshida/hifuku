@@ -17,6 +17,7 @@ from hifuku.datagen.batch_solver import (
     MultiProcessBatchProblemSolver,
 )
 from hifuku.rpbench_wrap import (
+    BubblyMeshPointConnectTask,
     BubblyPointConnectTask,
     EightRoomsPlanningTask,
     HumanoidTableReachingTask,
@@ -189,7 +190,16 @@ class BubblyPointConnecting_RRT_Domain(DomainProtocol):
     task_type = BubblyPointConnectTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
-        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.1
+        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.5
+    )
+    mesh_sampler_type = None
+
+
+class BubblyMeshPointConnecting_RRT_Domain(DomainProtocol):
+    task_type = BubblyMeshPointConnectTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.5
     )
     mesh_sampler_type = None
 
@@ -224,5 +234,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         bubbly_sqp = BubblyPointConnecting_SQP_Domain
         bubbly_rrt = BubblyPointConnecting_RRT_Domain
+        bubbly_mesh_rrt = BubblyMeshPointConnecting_RRT_Domain
 
     return DomainCollection[domain_name].value
