@@ -176,12 +176,12 @@ class BubblyPointConnecting_SQP_Domain(DomainProtocol):
     task_type = BubblyPointConnectTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
-        n_wp=40,
-        n_max_call=10,
-        motion_step_satisfaction="explicit",
+        n_wp=20,
+        n_max_call=20,
+        motion_step_satisfaction="implicit",
         verbose=False,
     )
-    auto_encoder_project_name = None
+    auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
 
 
 class BubblyPointConnecting_RRT_Domain(DomainProtocol):
@@ -190,7 +190,7 @@ class BubblyPointConnecting_RRT_Domain(DomainProtocol):
     solver_config = OMPLSolverConfig(
         200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.5
     )
-    auto_encoder_project_name = None
+    auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
 
 
 class BubblyMeshPointConnecting_SQP_Domain(DomainProtocol):
@@ -202,7 +202,7 @@ class BubblyMeshPointConnecting_SQP_Domain(DomainProtocol):
         motion_step_satisfaction="implicit",
         verbose=False,
     )
-    auto_encoder_project_name = None
+    auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
 
 
 class BubblyMeshPointConnecting_RRT_Domain(DomainProtocol):
@@ -211,7 +211,7 @@ class BubblyMeshPointConnecting_RRT_Domain(DomainProtocol):
     solver_config = OMPLSolverConfig(
         200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
     )
-    auto_encoder_project_name = None
+    auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
 
 
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
