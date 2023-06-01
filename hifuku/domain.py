@@ -179,7 +179,7 @@ class BubblyPointConnecting_SQP_Domain(DomainProtocol):
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
         n_wp=40,
-        n_max_call=5,
+        n_max_call=10,
         motion_step_satisfaction="explicit",
         verbose=False,
     )
@@ -195,11 +195,23 @@ class BubblyPointConnecting_RRT_Domain(DomainProtocol):
     mesh_sampler_type = None
 
 
+class BubblyMeshPointConnecting_SQP_Domain(DomainProtocol):
+    task_type = BubblyMeshPointConnectTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=40,
+        n_max_call=10,
+        motion_step_satisfaction="explicit",
+        verbose=False,
+    )
+    mesh_sampler_type = None
+
+
 class BubblyMeshPointConnecting_RRT_Domain(DomainProtocol):
     task_type = BubblyMeshPointConnectTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
-        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.5
+        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
     )
     mesh_sampler_type = None
 
@@ -234,6 +246,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         bubbly_sqp = BubblyPointConnecting_SQP_Domain
         bubbly_rrt = BubblyPointConnecting_RRT_Domain
+        bubbly_mesh_sqp = BubblyMeshPointConnecting_SQP_Domain
         bubbly_mesh_rrt = BubblyMeshPointConnecting_RRT_Domain
 
     return DomainCollection[domain_name].value
