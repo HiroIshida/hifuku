@@ -1,55 +1,67 @@
+import argparse
 import pickle
 from pathlib import Path
 
 import torch
 from mohou.file import get_project_path
 from rpbench.compatible_solver import CompatibleSolvers
-from rpbench.jaxon.below_table import HumanoidTableReachingTask
 
-from hifuku.domain import HumanoidTableRarmReaching_SQP_Domain
+from hifuku.domain import select_domain
 from hifuku.library import LibraryBasedSolver, SolutionLibrary
 
-domain = HumanoidTableRarmReaching_SQP_Domain
-solver_table = CompatibleSolvers.get_compatible_solvers(domain.task_type)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-domain", type=str, default="humanoid_trr_sqp", help="")
+    parser.add_argument("-n", type=int, default=300, help="")
+    args = parser.parse_args()
 
-# setup proposed solver
-pp = get_project_path("tabletop_solution_library-{}".format(domain.get_domain_name()))
-libraries = SolutionLibrary.load(pp, domain.task_type, domain.solver_type, torch.device("cpu"))
-lib = libraries[0]
-proposed = LibraryBasedSolver.init(lib)
-solver_table["proposed"] = proposed
+    n_sample = args.n
 
-results = []
-false_positive_seq = []
+    domain_name: str = args.domain
+    domain = select_domain(domain_name)
+    pp = get_project_path(domain_name)
+    task_type = domain.task_type
 
-for i in range(500):
-    print(i)
+    solver_table = CompatibleSolvers.get_compatible_solvers(task_type.__name__)
 
-    task = HumanoidTableReachingTask.sample(1)
+    # setup proposed solver
+    pp = get_project_path("tabletop_solution_library-{}".format(domain.get_domain_name()))
+    libraries = SolutionLibrary.load(pp, domain.task_type, domain.solver_type, torch.device("cpu"))
+    lib = libraries[0]
+    proposed = LibraryBasedSolver.init(lib)
+    solver_table["proposed"] = proposed
 
-    result = {}
-    for name, solver in solver_table.items():
-        print("solver name: {}".format(name))
+    results = []
+    false_positive_seq = []
 
-        print("start setting up")
-        solver.setup(task)
+    for i in range(n_sample):
+        print(i)
 
-        print("start solving")
-        res = solver.solve()
-        print("solved?: {}, time: {}".format(res.traj is not None, res.time_elapsed))
+        task = task_type.sample(1)
 
-        result[name] = res
+        result = {}
+        for name, solver in solver_table.items():
+            print("solver name: {}".format(name))
 
-        if name == "proposed":
-            if solver.previous_false_positive is not None:
-                false_positive_seq.append(solver.previous_false_positive)
-                false_positive_count = sum(false_positive_seq)
-                fp_rate = false_positive_count / len(false_positive_seq)
-                print("current fp rate: {}".format(fp_rate))
+            print("start setting up")
+            solver.setup(task)
 
-    results.append(result)
+            print("start solving")
+            res = solver.solve()
+            print("solved?: {}, time: {}".format(res.traj is not None, res.time_elapsed))
 
-result_base_path = Path("./result")
-result_path: Path = result_base_path / "result-{}".format(domain.get_domain_name())
-with result_path.open(mode="wb") as f:
-    pickle.dump((results, false_positive_seq), f)
+            result[name] = res
+
+            if name == "proposed":
+                if solver.previous_false_positive is not None:
+                    false_positive_seq.append(solver.previous_false_positive)
+                    false_positive_count = sum(false_positive_seq)
+                    fp_rate = false_positive_count / len(false_positive_seq)
+                    print("current fp rate: {}".format(fp_rate))
+
+        results.append(result)
+
+    result_base_path = Path("./result")
+    result_path: Path = result_base_path / "result-{}".format(domain.get_domain_name())
+    with result_path.open(mode="wb") as f:
+        pickle.dump((results, false_positive_seq), f)
