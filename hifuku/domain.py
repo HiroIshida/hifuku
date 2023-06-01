@@ -3,7 +3,6 @@ from enum import Enum
 from typing import ClassVar, Optional, Protocol, Type
 
 import tqdm
-from rpbench.interface import SamplableBase
 from skmp.solver.interface import AbstractScratchSolver, ConfigProtocol
 from skmp.solver.nlp_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
@@ -28,7 +27,6 @@ from hifuku.rpbench_wrap import (
     RingObstacleFreePlanningTask,
     TabletopBoxDualArmReachingTask,
     TabletopBoxRightArmReachingTask,
-    TabletopBoxWorldWrap,
 )
 
 
@@ -36,7 +34,7 @@ class DomainProtocol(Protocol):
     task_type: ClassVar[Type[PicklableTaskBase]]
     solver_type: ClassVar[Type[AbstractScratchSolver]]
     solver_config: ClassVar[ConfigProtocol]
-    mesh_sampler_type: ClassVar[Optional[Type[SamplableBase]]]
+    auto_encoder_project_name: ClassVar[Optional[str]]
 
     @classmethod
     def get_domain_name(cls) -> str:
@@ -78,21 +76,21 @@ class TBRR_RRT_Domain(DomainProtocol):
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.5,
     )
-    mesh_sampler_type = TabletopBoxWorldWrap
+    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
 
 
 class TBRR_SQP_Domain(DomainProtocol):
     task_type = TabletopBoxRightArmReachingTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
-    mesh_sampler_type = TabletopBoxWorldWrap
+    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
 
 
 class TBDR_SQP_Domain(DomainProtocol):
     task_type = TabletopBoxDualArmReachingTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
-    mesh_sampler_type = TabletopBoxWorldWrap
+    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
 
 
 class Kivapod_Empty_RRT_Domain(DomainProtocol):
@@ -104,7 +102,7 @@ class Kivapod_Empty_RRT_Domain(DomainProtocol):
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.5,
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class Maze_RRT_Domain(DomainProtocol):
@@ -116,7 +114,7 @@ class Maze_RRT_Domain(DomainProtocol):
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.5,
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class RingObstacleFree_RRT_Domain(DomainProtocol):
@@ -128,7 +126,7 @@ class RingObstacleFree_RRT_Domain(DomainProtocol):
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.1,
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class RingObstacleFreeBlocked_RRT_Domain(DomainProtocol):
@@ -140,7 +138,7 @@ class RingObstacleFreeBlocked_RRT_Domain(DomainProtocol):
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.1,
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class EightRooms_SQP_Domain(DomainProtocol):
@@ -149,14 +147,14 @@ class EightRooms_SQP_Domain(DomainProtocol):
     solver_config = SQPBasedSolverConfig(
         n_wp=60, n_max_call=10, motion_step_satisfaction="explicit"
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class EightRooms_Lightning_Domain(DomainProtocol):
     task_type = EightRoomsPlanningTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(200, 1, simplify=False, expbased_planner_backend="lightning")
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
@@ -171,7 +169,7 @@ class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
         ctol_ineq=1e-3,
         ineq_tighten_coef=0.0,
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class BubblyPointConnecting_SQP_Domain(DomainProtocol):
@@ -183,7 +181,7 @@ class BubblyPointConnecting_SQP_Domain(DomainProtocol):
         motion_step_satisfaction="explicit",
         verbose=False,
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class BubblyPointConnecting_RRT_Domain(DomainProtocol):
@@ -192,7 +190,7 @@ class BubblyPointConnecting_RRT_Domain(DomainProtocol):
     solver_config = OMPLSolverConfig(
         200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.5
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class BubblyMeshPointConnecting_SQP_Domain(DomainProtocol):
@@ -204,7 +202,7 @@ class BubblyMeshPointConnecting_SQP_Domain(DomainProtocol):
         motion_step_satisfaction="explicit",
         verbose=False,
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 class BubblyMeshPointConnecting_RRT_Domain(DomainProtocol):
@@ -213,7 +211,7 @@ class BubblyMeshPointConnecting_RRT_Domain(DomainProtocol):
     solver_config = OMPLSolverConfig(
         200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
     )
-    mesh_sampler_type = None
+    auto_encoder_project_name = None
 
 
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:

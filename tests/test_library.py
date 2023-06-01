@@ -77,7 +77,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
     problem_type = domain.task_type
     solcon = domain.solver_config
     solver_type = domain.solver_type
-    compat_mesh_sampler_type = domain.mesh_sampler_type
+    aepp = domain.auto_encoder_project_name
     solver = domain.get_multiprocess_batch_solver(2)
     sampler = domain.get_multiprocess_batch_sampler(2)
 
@@ -101,7 +101,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
 
     for device in test_devices:
         ae_model: AutoEncoderBase
-        if compat_mesh_sampler_type is None:
+        if aepp is None:
             ae_model = NullAutoEncoder()
         else:
             ae_model = VoxelAutoEncoder(AutoEncoderConfig())

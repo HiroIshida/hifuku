@@ -7,17 +7,18 @@ from mohou.trainer import TrainCache
 
 from hifuku.domain import DomainProtocol, select_domain
 from hifuku.library import SolutionLibrary
-from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder, VoxelAutoEncoder
+from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder
 
 
 def load_compatible_autoencoder(domain: Union[str, Type[DomainProtocol]]) -> AutoEncoderBase:
     if isinstance(domain, str):
         domain = select_domain(domain)
-    if domain.mesh_sampler_type is None:
+    if domain.auto_encoder_project_name is None:
         ae_model: AutoEncoderBase = NullAutoEncoder()
     else:
-        ae_pp = mohou.file.get_project_path("hifuku-{}".format(domain.mesh_sampler_type.__name__))
-        ae_model = TrainCache.load(ae_pp, VoxelAutoEncoder).best_model
+        ae_pp = mohou.file.get_project_path(domain.auto_encoder_project_name)
+        ae_model = TrainCache.load_all(ae_pp)[0].best_model
+        assert isinstance(ae_model, AutoEncoderBase)
     return ae_model
 
 
