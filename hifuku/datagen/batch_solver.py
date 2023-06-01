@@ -149,10 +149,20 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         init_solutions: Sequence[Optional[Trajectory]],
         cache_dir_path: Path,
         n_process: Optional[int],
+        n_max_call_relax_factor: int = 2,
     ) -> None:
 
         logger.debug("run self.solve_batch")
+
+        # NOTE(DIRTY HACK): set solver config.n_max_call to relaxed one and
+        # restore it to the original one after finishing solve_batch >>
+        n_max_call_original: int = self.config.n_max_call
+        self.config.n_max_call *= n_max_call_relax_factor
+
         results_list = self.solve_batch(problems, init_solutions)
+
+        self.config.n_max_call = n_max_call_original
+        # << finish DIRTY HACK
 
         if n_process is None:
             cpu_count = os.cpu_count()
