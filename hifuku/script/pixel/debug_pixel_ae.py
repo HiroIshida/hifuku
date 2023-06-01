@@ -15,12 +15,11 @@ if __name__ == "__main__":
     ae_model = TrainCache.load_latest(path, PixelAutoEncoder).best_model
 
     pool = TrivialProblemPool(BubblyMeshPointConnectTask, 1).as_predicated()
-    sampler = MultiProcessBatchProblemSampler()
+    sampler = MultiProcessBatchProblemSampler()  # type: ignore[var-annotated]
     problems = sampler.sample_batch(100, pool)
 
     mat_list = []
     for prob in tqdm.tqdm(problems):
-        prob: BubblyMeshPointConnectTask
         gridsdf = prob._gridsdf
         assert gridsdf is not None
         mat = np.expand_dims(gridsdf.values.reshape(gridsdf.grid.sizes).T, axis=0)

@@ -38,23 +38,22 @@ if __name__ == "__main__":
     cache_path = path / "mat_list_cache.pkl"
 
     if use_cache:
-        with cache_path.open(mode="rb") as f:
-            mat_list = pickle.load(f)
+        with cache_path.open(mode="rb") as rf:
+            mat_list = pickle.load(rf)
     else:
         pool = TrivialProblemPool(BubblyMeshPointConnectTask, 1).as_predicated()
-        sampler = MultiProcessBatchProblemSampler()
+        sampler = MultiProcessBatchProblemSampler()  # type: ignore[var-annotated]
         problems = sampler.sample_batch(100000, pool)
 
         mat_list = []
         for prob in tqdm.tqdm(problems):
-            prob: BubblyMeshPointConnectTask
             gridsdf = prob._gridsdf
             assert gridsdf is not None
             mat = np.expand_dims(gridsdf.values.reshape(gridsdf.grid.sizes).T, axis=0)
             mat_list.append(mat)
 
-        with cache_path.open(mode="wb") as f:
-            pickle.dump(mat_list, f)
+        with cache_path.open(mode="wb") as wf:
+            pickle.dump(mat_list, wf)
 
     dataset = MyDataset(mat_list)
     model = PixelAutoEncoder(AutoEncoderConfig())
