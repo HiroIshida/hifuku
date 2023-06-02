@@ -25,10 +25,10 @@ from rpbench.ring import (
 )
 from rpbench.ring import RingObstacleFreePlanningTask as _RingObstacleFreePlanningTask
 from rpbench.two_dimensional.bubbly_world import (
-    BubblyMeshPointConnectTask as _BubblyMeshPointConnectTask,
+    BubblyComplexMeshPointConnectTask as _BubblyComplexMeshPointConnectTask,
 )
 from rpbench.two_dimensional.bubbly_world import (
-    BubblyPointConnectTask as _BubblyPointConnectTask,
+    BubblySimpleMeshPointConnectTask as _BubblySimpleMeshPointConnectTask,
 )
 from rpbench.two_dimensional.maze import MazeSolvingTask as _MazeSolvingTask
 
@@ -77,6 +77,6 @@ class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskB
 class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, PicklableTaskBase): ...  # noqa
 class EightRoomsPlanningTask(_EightRoomsPlanningTask, PicklableTaskBase): ...  # noqa
 class HumanoidTableReachingTask(_HumanoidTableReachingTask, PicklableTaskBase): ...  # noqa
-class BubblyPointConnectTask(_BubblyPointConnectTask, PicklableTaskBase): ...  # noqa
-class BubblyMeshPointConnectTask(_BubblyMeshPointConnectTask, PicklableTaskBase): ...  # noqa
+class BubblySimpleMeshPointConnectTask(_BubblySimpleMeshPointConnectTask, PicklableTaskBase): ...  # noqa
+class BubblyComplexMeshPointConnectTask(_BubblyComplexMeshPointConnectTask, PicklableTaskBase): ...  # noqa
 # fmt: on

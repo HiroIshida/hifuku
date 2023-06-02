@@ -4,7 +4,7 @@ from typing import ClassVar, Optional, Protocol, Type
 
 import tqdm
 from skmp.solver.interface import AbstractScratchSolver, ConfigProtocol
-from skmp.solver.nlp_solver import SQPBasedSolver, SQPBasedSolverConfig
+from skmp.solver.nlp_solver.sqp_based_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 
 from hifuku.datagen.batch_sampler import (
@@ -16,8 +16,7 @@ from hifuku.datagen.batch_solver import (
     MultiProcessBatchProblemSolver,
 )
 from hifuku.rpbench_wrap import (
-    BubblyMeshPointConnectTask,
-    BubblyPointConnectTask,
+    BubblySimpleMeshPointConnectTask,
     EightRoomsPlanningTask,
     HumanoidTableReachingTask,
     KivapodEmptyReachingTask,
@@ -172,8 +171,8 @@ class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
     auto_encoder_project_name = None
 
 
-class BubblyPointConnecting_SQP_Domain(DomainProtocol):
-    task_type = BubblyPointConnectTask
+class BubblySimpleMeshPointConnecting_SQP_Domain(DomainProtocol):
+    task_type = BubblySimpleMeshPointConnectTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
         n_wp=20,
@@ -184,29 +183,8 @@ class BubblyPointConnecting_SQP_Domain(DomainProtocol):
     auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
 
 
-class BubblyPointConnecting_RRT_Domain(DomainProtocol):
-    task_type = BubblyPointConnectTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.5
-    )
-    auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
-
-
-class BubblyMeshPointConnecting_SQP_Domain(DomainProtocol):
-    task_type = BubblyMeshPointConnectTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=20,
-        n_max_call=20,
-        motion_step_satisfaction="implicit",
-        verbose=False,
-    )
-    auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
-
-
-class BubblyMeshPointConnecting_RRT_Domain(DomainProtocol):
-    task_type = BubblyMeshPointConnectTask
+class BubblySimpleMeshPointConnecting_RRT_Domain(DomainProtocol):
+    task_type = BubblySimpleMeshPointConnectTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
         200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
@@ -242,9 +220,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         eight_rooms_sqp = EightRooms_SQP_Domain
         eight_rooms_lt = EightRooms_Lightning_Domain
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
-        bubbly_sqp = BubblyPointConnecting_SQP_Domain
-        bubbly_rrt = BubblyPointConnecting_RRT_Domain
-        bubbly_mesh_sqp = BubblyMeshPointConnecting_SQP_Domain
-        bubbly_mesh_rrt = BubblyMeshPointConnecting_RRT_Domain
+        bubbly_simple_mesh_sqp = BubblySimpleMeshPointConnecting_SQP_Domain
+        bubbly_simple_mesh_rrt = BubblySimpleMeshPointConnecting_RRT_Domain
 
     return DomainCollection[domain_name].value
