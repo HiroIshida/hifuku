@@ -8,13 +8,13 @@ from mohou.trainer import TrainCache
 from hifuku.datagen import MultiProcessBatchProblemSampler
 from hifuku.neuralnet import PixelAutoEncoder
 from hifuku.pool import TrivialProblemPool
-from hifuku.rpbench_wrap import BubblyMeshPointConnectTask
+from hifuku.rpbench_wrap import BubblySimpleMeshPointConnectTask
 
 if __name__ == "__main__":
     path = get_project_path("BubblyMeshPointConnectTask-AutoEncoder")
     ae_model = TrainCache.load_latest(path, PixelAutoEncoder).best_model
 
-    pool = TrivialProblemPool(BubblyMeshPointConnectTask, 1).as_predicated()
+    pool = TrivialProblemPool(BubblySimpleMeshPointConnectTask, 1).as_predicated()
     sampler = MultiProcessBatchProblemSampler()  # type: ignore[var-annotated]
     problems = sampler.sample_batch(100, pool)
 
