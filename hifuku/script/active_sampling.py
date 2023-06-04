@@ -1,5 +1,4 @@
 import argparse
-from typing import Optional
 
 import rpbench
 import selcol
@@ -20,14 +19,12 @@ from hifuku.utils import create_default_logger, filter_warnings
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
-    parser.add_argument("-aepn", type=str, help="auto encoder project name")
     parser.add_argument("--warm", action="store_true", help="warm start")
     parser.add_argument("--lm", action="store_true", help="use light weight nn")
 
     args = parser.parse_args()
     domain_name: str = args.type
     warm_start: bool = args.warm
-    auto_encoder_project_name: Optional[str] = args.aepn
     use_light_model: bool = args.lm
 
     filter_warnings()
