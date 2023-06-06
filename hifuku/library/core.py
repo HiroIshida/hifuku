@@ -202,7 +202,28 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             init_solution_est_list.append(infer_res.init_solution)
 
         logger.info("**compute real values")
-        results = solver.solve_batch(tasks, init_solution_est_list)
+
+        # When pickling-and-depickling, the procedure takes up much more memory than
+        # pickled object size. I'm not sure but according to https://stackoverflow.com/a/38971446/7624196
+        # the RAM usage could be two times bigger than the serialized-object size.
+        # Thus, in the following, we first measure the pickle size, and splits the problem set
+        # and then send the multiple chunk of problems sequentially.
+
+        # TODO: ideally, this splitting and sequential-sending procedure should be
+        # implemented inside http-based datagen class, as that problem happens only
+        # sending serialized problems to server.
+        max_ram_usage = 16 * 10**9
+        serialize_ram_size_each = len(pickle.dumps(tasks[0])) * 2
+        max_size = int(max_ram_usage // serialize_ram_size_each)
+        indices = range(len(tasks))
+        indices_list = np.array_split(indices, np.ceil(len(tasks) / max_size))
+
+        results = []
+        for indices_part in indices_list:
+            tasks_part = [tasks[i] for i in indices_part]
+            init_solution_est_list_part = [init_solution_est_list[i] for i in indices_part]
+            results_part = solver.solve_batch(tasks_part, init_solution_est_list_part)
+            results.extend(results_part)
 
         self.solver_config.n_max_call
         iterval_real_list = [get_clamped_iter(r[0], self.solver_config) for r in results]
