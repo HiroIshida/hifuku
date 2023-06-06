@@ -17,6 +17,7 @@ from hifuku.datagen.batch_solver import (
 )
 from hifuku.rpbench_wrap import (
     BubblySimpleMeshPointConnectTask,
+    BubblySimplePointConnectTask,
     EightRoomsPlanningTask,
     HumanoidTableReachingTask,
     KivapodEmptyReachingTask,
@@ -189,7 +190,16 @@ class BubblySimpleMeshPointConnecting_RRT_Domain(DomainProtocol):
     solver_config = OMPLSolverConfig(
         200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
     )
-    auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
+    auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
+
+
+class BubblySimplePointConnecting_RRT_Domain(DomainProtocol):
+    task_type = BubblySimplePointConnectTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
+    )
+    auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
 
 
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
@@ -222,5 +232,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         bubbly_simple_mesh_sqp = BubblySimpleMeshPointConnecting_SQP_Domain
         bubbly_simple_mesh_rrt = BubblySimpleMeshPointConnecting_RRT_Domain
+        bubbly_simple_rrt = BubblySimplePointConnecting_RRT_Domain
 
     return DomainCollection[domain_name].value
