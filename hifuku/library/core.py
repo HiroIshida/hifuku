@@ -1,4 +1,5 @@
 import copy
+import json
 import logging
 import pickle
 import re
@@ -6,7 +7,7 @@ import shutil
 import time
 import uuid
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, Generic, List, Optional, Tuple, Type
 
@@ -59,6 +60,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     coverage_results: List[Optional[CoverageResult]]
     solvable_threshold_factor: float
     uuidval: str
+    meta_data: Dict
     limit_thread: bool = False
 
     def __post_init__(self):
@@ -79,8 +81,11 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         config,
         ae_model: AutoEncoderBase,
         solvable_threshold_factor: float,
+        meta_data: Optional[Dict] = None,
     ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
         uuidval = str(uuid.uuid4())[-8:]
+        if meta_data is None:
+            meta_data = {}
         return cls(
             task_type,
             solver_type,
@@ -91,6 +96,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             [],
             solvable_threshold_factor,
             uuidval,
+            meta_data,
             True,  # assume that we are gonna build library and not in eval time.
         )
 
@@ -269,6 +275,12 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             pickle.dump(copied, f)
         logger.info("dumped library to {}".format(file_path))
 
+        name = "MetaData-{}-{}.json".format(self.task_type.__name__, self.uuidval)
+        file_path = base_path / name
+        if not file_path.exists():
+            with file_path.open(mode="w") as f:
+                json.dump(self.meta_data, f, indent=4)
+
     @classmethod
     def load(
         cls,
@@ -427,8 +439,14 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         """
         use will be used only if either of solver and sampler is not set
         """
+        meta_data = asdict(config)
         library = SolutionLibrary.initialize(
-            problem_type, solver_t, solver_config, ae_model, config.solvable_threshold_factor
+            problem_type,
+            solver_t,
+            solver_config,
+            ae_model,
+            config.solvable_threshold_factor,
+            meta_data,
         )
 
         # setup solver and sampler
@@ -550,6 +568,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             coverage_results=[None],
             solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
+            meta_data={},
         )
         coverage_result = singleton_library.measure_full_coverage(
             self.problems_validation, self.solver
