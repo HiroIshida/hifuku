@@ -578,8 +578,16 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         with open("/tmp/hifuku_coverage_debug.pkl", "wb") as f:
             pickle.dump(coverage_result, f)
 
-        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
-
+        # determine margin using bootstrap method
+        logger.info("determine margin using bootstrap method")
+        margin_list = []
+        for _ in tqdm.tqdm(range(1000)):
+            coverage_dummy = coverage_result.bootstrap_sampling()
+            margin = coverage_dummy.determine_margin(self.config.acceptable_false_positive_rate)
+            margin_list.append(margin)
+        percentile = 95.0
+        margin = np.percentile(margin_list, percentile)
+        logger.info(margin_list)
         logger.info("margin is set to {}".format(margin))
 
         ignore = margin > self.solver_config.n_max_call and self.config.ignore_useless_traj

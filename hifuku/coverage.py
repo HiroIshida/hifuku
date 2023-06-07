@@ -93,7 +93,7 @@ class CoverageResult:
                 return np.inf
             if rate < acceptable_false_positive_rate:
                 margin_final = margin_cand + eps
-                logger.info("margin is set to {} with fp rate {}".format(margin_final, rate))
+                # logger.info("margin is set to {} with fp rate {}".format(margin_final, rate))
                 return margin_final
         assert False, "final rate {}".format(rate)
 
