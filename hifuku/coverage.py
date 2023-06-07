@@ -1,8 +1,11 @@
+import logging
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -89,7 +92,9 @@ class CoverageResult:
             if rate is None:
                 return np.inf
             if rate < acceptable_false_positive_rate:
-                return margin_cand + eps
+                margin_final = margin_cand + eps
+                logger.info("margin is set to {} with fp rate {}".format(margin_final, rate))
+                return margin_final
         assert False, "final rate {}".format(rate)
 
     def __str__(self) -> str:
