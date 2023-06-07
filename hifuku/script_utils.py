@@ -28,7 +28,7 @@ def get_project_path(domain: Union[str, Type[DomainProtocol]]) -> Path:
         domain = select_domain(domain)
 
     domain_identifier = domain.get_domain_name()
-    pp = mohou.file.get_project_path("tabletop_solution_library-{}".format(domain_identifier))
+    pp = mohou.file.get_project_path("hifuku-{}".format(domain_identifier))
     pp.mkdir(exist_ok=True)
     return pp
 
