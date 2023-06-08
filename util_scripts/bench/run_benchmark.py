@@ -25,7 +25,7 @@ if __name__ == "__main__":
     solver_table = CompatibleSolvers.get_compatible_solvers(task_type.__name__)
 
     # setup proposed solver
-    pp = get_project_path("tabletop_solution_library-{}".format(domain.get_domain_name()))
+    pp = get_project_path("hifuku-{}".format(domain.get_domain_name()))
     libraries = SolutionLibrary.load(pp, domain.task_type, domain.solver_type, torch.device("cpu"))
     lib = libraries[0]
     proposed = LibraryBasedSolver.init(lib)
