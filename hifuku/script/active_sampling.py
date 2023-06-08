@@ -54,6 +54,7 @@ if __name__ == "__main__":
         difficult_threshold_factor=1.0,
         acceptable_false_positive_rate=0.03,
         iterpred_model_config=iterpred_model_config,
+        bootstrap_trial=1000,
     )  # all pass
 
     ae_model = load_compatible_autoencoder(domain_name)

@@ -391,6 +391,8 @@ class LibrarySamplerConfig:
     sample_from_difficult_region: bool = True
     ignore_useless_traj: bool = True
     iterpred_model_config: Optional[Dict] = None
+    bootstrap_trial: int = 0
+    bootstrap_percentile: float = 95.0
 
 
 @dataclass
@@ -582,16 +584,19 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             pickle.dump(coverage_result, f)
 
         # determine margin using bootstrap method
-        logger.info("determine margin using bootstrap method")
-        margin_list = []
-        for _ in tqdm.tqdm(range(1000)):
-            coverage_dummy = coverage_result.bootstrap_sampling()
-            margin = coverage_dummy.determine_margin(self.config.acceptable_false_positive_rate)
-            margin_list.append(margin)
-        percentile = 95.0
-        margin = np.percentile(margin_list, percentile)
-        logger.info(margin_list)
-        logger.info("margin is set to {}".format(margin))
+        if self.config.bootstrap_trial > 0:
+            logger.info("determine margin using bootstrap method")
+            margin_list = []
+            for _ in tqdm.tqdm(range(self.config.bootstrap_trial)):
+                coverage_dummy = coverage_result.bootstrap_sampling()
+                margin = coverage_dummy.determine_margin(self.config.acceptable_false_positive_rate)
+                margin_list.append(margin)
+            margin = float(np.percentile(margin_list, self.config.bootstrap_percentile))
+            logger.info(margin_list)
+            logger.info("margin is set to {}".format(margin))
+        else:
+            logger.info("determine margin without bootstrap method")
+            margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
         # measure the actual coverage (for debug)
         if self.test_false_positive_rate:
