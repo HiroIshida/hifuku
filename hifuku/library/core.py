@@ -403,6 +403,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     problems_validation: List[ProblemT]
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
+    test_false_positive_rate: bool
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -435,6 +436,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
         use_distributed: bool = False,
         reuse_cached_validation_set: bool = False,
+        test_false_positive_rate: bool = False,
     ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -518,6 +520,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             problems_validation,
             solver,
             sampler,
+            test_false_positive_rate,
         )
 
     def _determine_init_solution_init(self) -> Trajectory:
@@ -589,6 +592,15 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         margin = np.percentile(margin_list, percentile)
         logger.info(margin_list)
         logger.info("margin is set to {}".format(margin))
+
+        # measure the actual coverage (for debug)
+        if self.test_false_positive_rate:
+            logger.info("[test] measure the actual coverage again for test dataset")
+            coverage_result = singleton_library.measure_full_coverage(
+                self.problems_validation, self.solver
+            )
+            fp_rate = coverage_result.compute_false_positive_rate(margin)
+            logger.info("[test] computed false positive rate {}".format(fp_rate))
 
         ignore = margin > self.solver_config.n_max_call and self.config.ignore_useless_traj
         if ignore:
