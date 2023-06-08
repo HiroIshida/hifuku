@@ -391,6 +391,8 @@ class LibrarySamplerConfig:
     sample_from_difficult_region: bool = True
     ignore_useless_traj: bool = True
     iterpred_model_config: Optional[Dict] = None
+    bootstrap_trial: int = 0
+    bootstrap_percentile: float = 95.0
 
 
 @dataclass
@@ -403,6 +405,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     problems_validation: List[ProblemT]
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
+    test_false_positive_rate: bool
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -435,6 +438,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
         use_distributed: bool = False,
         reuse_cached_validation_set: bool = False,
+        test_false_positive_rate: bool = False,
     ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -518,6 +522,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             problems_validation,
             solver,
             sampler,
+            test_false_positive_rate,
         )
 
     def _determine_init_solution_init(self) -> Trajectory:
@@ -578,9 +583,29 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         with open("/tmp/hifuku_coverage_debug.pkl", "wb") as f:
             pickle.dump(coverage_result, f)
 
-        margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+        # determine margin using bootstrap method
+        if self.config.bootstrap_trial > 0:
+            logger.info("determine margin using bootstrap method")
+            margin_list = []
+            for _ in tqdm.tqdm(range(self.config.bootstrap_trial)):
+                coverage_dummy = coverage_result.bootstrap_sampling()
+                margin = coverage_dummy.determine_margin(self.config.acceptable_false_positive_rate)
+                margin_list.append(margin)
+            margin = float(np.percentile(margin_list, self.config.bootstrap_percentile))
+            logger.info(margin_list)
+            logger.info("margin is set to {}".format(margin))
+        else:
+            logger.info("determine margin without bootstrap method")
+            margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
 
-        logger.info("margin is set to {}".format(margin))
+        # measure the actual coverage (for debug)
+        if self.test_false_positive_rate:
+            logger.info("[test] measure the actual coverage again for test dataset")
+            coverage_result = singleton_library.measure_full_coverage(
+                self.problems_validation, self.solver
+            )
+            fp_rate = coverage_result.compute_false_positive_rate(margin)
+            logger.info("[test] computed false positive rate {}".format(fp_rate))
 
         ignore = margin > self.solver_config.n_max_call and self.config.ignore_useless_traj
         if ignore:

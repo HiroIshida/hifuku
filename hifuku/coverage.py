@@ -53,6 +53,18 @@ class CoverageResult:
             self.values_ground_truth <= self.threshold, self.values_estimation > self.threshold
         )
 
+    def compute_false_positive_rate(self, margin: float, eps: float = 1e-6) -> Optional[float]:
+        positive_est = self.values_estimation + margin + eps < self.threshold
+        n_positive = np.sum(positive_est)
+        no_positive = n_positive == 0
+        if no_positive:
+            return None
+
+        positive_gt = self.values_ground_truth <= self.threshold
+        tp_rate = np.sum(np.logical_and(positive_gt, positive_est)) / n_positive
+        fp_rate = 1.0 - tp_rate
+        return fp_rate
+
     def determine_margin(self, acceptable_false_positive_rate: float) -> float:
         """
         note that fp rate is defined as fp/(fp + tp)
@@ -62,21 +74,7 @@ class CoverageResult:
         diffs = self.threshold - values_est_fp
         assert np.all(diffs >= 0.0)
 
-        positive_gt = self.values_ground_truth <= self.threshold
-        eps = 1e-6
-
-        def fp_rate(margin: float) -> Optional[float]:
-            positive_est = self.values_estimation + margin + eps < self.threshold
-            n_positive = np.sum(positive_est)
-            no_positive = n_positive == 0
-            if no_positive:
-                return None
-
-            tp_rate = np.sum(np.logical_and(positive_gt, positive_est)) / n_positive
-            fp_rate = 1.0 - tp_rate
-            return fp_rate
-
-        rate = fp_rate(0.0)
+        rate = self.compute_false_positive_rate(0.0)
         if rate is None:
             # make no sense to set margin because no positive est
             return np.inf
@@ -88,12 +86,12 @@ class CoverageResult:
         sorted_diffs = np.sort(diffs)
         for i in range(len(diffs)):
             margin_cand = sorted_diffs[i]
-            rate = fp_rate(margin_cand)
+            rate = self.compute_false_positive_rate(margin_cand)
             if rate is None:
                 return np.inf
             if rate < acceptable_false_positive_rate:
-                margin_final = margin_cand + eps
-                logger.info("margin is set to {} with fp rate {}".format(margin_final, rate))
+                margin_final = margin_cand + 1e-6
+                # logger.info("margin is set to {} with fp rate {}".format(margin_final, rate))
                 return margin_final
         assert False, "final rate {}".format(rate)
 

@@ -21,11 +21,13 @@ if __name__ == "__main__":
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
     parser.add_argument("--warm", action="store_true", help="warm start")
     parser.add_argument("--lm", action="store_true", help="use light weight nn")
+    parser.add_argument("--fptest", action="store_true", help="test false positive rate")
 
     args = parser.parse_args()
     domain_name: str = args.type
     warm_start: bool = args.warm
     use_light_model: bool = args.lm
+    test_fp_rate: bool = args.fptest
 
     filter_warnings()
     domain = select_domain(domain_name)
@@ -52,6 +54,7 @@ if __name__ == "__main__":
         difficult_threshold_factor=1.0,
         acceptable_false_positive_rate=0.03,
         iterpred_model_config=iterpred_model_config,
+        bootstrap_trial=1000,
     )  # all pass
 
     ae_model = load_compatible_autoencoder(domain_name)
@@ -64,6 +67,7 @@ if __name__ == "__main__":
         pool_single=None,
         use_distributed=True,
         reuse_cached_validation_set=warm_start,
+        test_false_positive_rate=test_fp_rate,
     )
 
     if warm_start:
