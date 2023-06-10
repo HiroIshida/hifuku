@@ -310,6 +310,27 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                     libraries.append(lib)
         return libraries  # type: ignore
 
+    def unbundle(self) -> List["SolutionLibrary[ProblemT, ConfigT, ResultT]"]:
+        # split into list of singleton libraries
+        singleton_list = []
+        for predictor, margin in zip(self.predictors, self.margins):
+            assert predictor.initial_solution is not None
+
+            singleton = SolutionLibrary(
+                task_type=self.task_type,
+                solver_type=self.solver_type,
+                solver_config=self.solver_config,
+                ae_model=self.ae_model,
+                predictors=[predictor],
+                margins=[margin],
+                coverage_results=[None],
+                solvable_threshold_factor=self.solvable_threshold_factor,
+                uuidval="dummy",
+                meta_data={},
+            )
+            singleton_list.append(singleton)
+        return singleton_list
+
 
 @dataclass
 class LibraryBasedSolver(
