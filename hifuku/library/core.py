@@ -331,6 +331,28 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             singleton_list.append(singleton)
         return singleton_list
 
+    @classmethod
+    def from_singletons(
+        cls, singletons: List["SolutionLibrary[ProblemT, ConfigT, ResultT]"]
+    ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
+        singleton = singletons[0]
+        predictors = [e.predictors[0] for e in singletons]
+        margins = [e.margins[0] for e in singletons]
+
+        library = SolutionLibrary(
+            task_type=singleton.task_type,
+            solver_type=singleton.solver_type,
+            solver_config=singleton.solver_config,
+            ae_model=singleton.ae_model,
+            predictors=predictors,
+            margins=margins,
+            coverage_results=[None],
+            solvable_threshold_factor=singleton.solvable_threshold_factor,
+            uuidval="dummy",
+            meta_data={},
+        )
+        return library
+
 
 @dataclass
 class LibraryBasedSolver(
