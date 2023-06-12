@@ -9,6 +9,7 @@ install_requires = [
     "mohou",
     "pyclustering",
     "threadpoolctl",
+    "cmaes",
 ]
 
 setup(

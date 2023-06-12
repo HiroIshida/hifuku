@@ -15,6 +15,7 @@ import numpy as np
 import threadpoolctl
 import torch
 import tqdm
+from cmaes import CMA
 from mohou.trainer import TrainCache, TrainConfig, train
 from rpbench.interface import AbstractTaskSolver
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
@@ -40,6 +41,56 @@ from hifuku.types import get_clamped_iter
 from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
+
+
+def determine_margins(
+    predictors: List[IterationPredictor],
+    coverage_results: List[CoverageResult],
+    threshold: float,
+    target_fp_rate: float,
+    cma_sigma: float,
+    margins_guess: Optional[np.ndarray] = None,
+) -> List[float]:
+    def compute_coverage_and_fp(margins: np.ndarray) -> Tuple[float, float]:
+        est_arr_list, real_arr_list = [], []
+        for coverage_result, margin in zip(coverage_results, margins):
+            est_arr_list.append(coverage_result.values_estimation + margin)
+            real_arr_list.append(coverage_result.values_ground_truth)
+        est_mat = np.array(est_arr_list)
+        real_mat = np.array(real_arr_list)
+
+        # find element indices which have smallest est value
+        est_arr = np.min(est_mat, axis=0)
+        element_indices = np.argmin(est_mat, axis=0)
+        real_arr = np.array([real_mat[idx, i] for i, idx in enumerate(element_indices)])
+
+        # compute (true + false) positive values
+        est_bool_arr = est_arr < threshold
+        real_bool_arr = real_arr < threshold
+
+        n_total = len(est_arr)
+        coverage_est = sum(est_bool_arr) / n_total
+
+        # compute false positve rate
+        fp_rate = sum(np.logical_and(est_bool_arr, ~real_bool_arr)) / sum(est_bool_arr)
+
+        return coverage_est, fp_rate
+
+    if margins_guess is None:
+        n_pred = len(predictors)
+        margins_guess = np.zeros(n_pred)
+    optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
+
+    for generation in tqdm.tqdm(range(1000)):
+        solutions = []
+        for _ in range(optimizer.population_size):
+            x = optimizer.ask()
+            coverage_est, fp_rate = compute_coverage_and_fp(x)
+            J = -coverage_est + 1000.0 * max(fp_rate - target_fp_rate, 0) ** 2
+            solutions.append((x, J))
+        optimizer.tell(solutions)
+    logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est, fp_rate))
+    return list(x)
 
 
 @dataclass
@@ -248,16 +299,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             if infer_res.nit < threshold:
                 count += 1
         return count / float(len(tasks))
-
-    def add(
-        self,
-        predictor: IterationPredictor,
-        margin: float,
-        coverage_reuslt: Optional[CoverageResult],
-    ):
-        self.predictors.append(predictor)
-        self.margins.append(margin)
-        self.coverage_results.append(coverage_reuslt)
 
     def dump(self, base_path: Path) -> None:
         cpu_device = torch.device("cpu")
@@ -624,45 +665,33 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         with open("/tmp/hifuku_coverage_debug.pkl", "wb") as f:
             pickle.dump(coverage_result, f)
 
-        # determine margin using bootstrap method
-        if self.config.bootstrap_trial > 0:
-            logger.info("determine margin using bootstrap method")
-            margin_list = []
-            for _ in tqdm.tqdm(range(self.config.bootstrap_trial)):
-                coverage_dummy = coverage_result.bootstrap_sampling()
-                margin = coverage_dummy.determine_margin(self.config.acceptable_false_positive_rate)
-                margin_list.append(margin)
-            margin = float(np.percentile(margin_list, self.config.bootstrap_percentile))
-            logger.info(margin_list)
-            logger.info("margin is set to {}".format(margin))
+        if len(self.library.predictors) > 0:
+            # determine std
+            cma_std = self.solver_config.n_max_call * 0.5
+
+            predictors_new = self.library.predictors + [predictor]
+            coverages_new = self.library.coverage_results + [coverage_result]
+            margins = determine_margins(
+                predictors_new,
+                coverages_new,
+                self.solver_config.n_max_call,
+                self.config.acceptable_false_positive_rate,
+                cma_std,
+            )
         else:
-            logger.info("determine margin without bootstrap method")
             margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+            margins = [margin]
 
-        # measure the actual coverage (for debug)
-        if self.test_false_positive_rate:
-            logger.info("[test] measure the actual coverage again for test dataset")
-            coverage_result = singleton_library.measure_full_coverage(
-                self.problems_validation, self.solver
-            )
-            fp_rate = coverage_result.compute_false_positive_rate(margin)
-            logger.info("[test] computed false positive rate {}".format(fp_rate))
+        # update library
+        self.library.predictors.append(predictor)
+        self.library.margins = margins
+        self.library.coverage_results.append(coverage_result)
+        self.library.dump(self.project_path)
 
-        ignore = margin > self.solver_config.n_max_call and self.config.ignore_useless_traj
-        if ignore:
-            message = (
-                "margin {} is smaller than n_max_call {}. Thus, library is not updated".format(
-                    margin, self.solver_config.n_max_call
-                )
-            )
-            logger.info(message)
-        else:
-            self.library.add(predictor, margin, coverage_result)
+        coverage = self.library.measure_coverage(self.problems_validation)
+        logger.info("current library's coverage estimate: {}".format(coverage))
 
-            coverage = self.library.measure_coverage(self.problems_validation)
-            logger.info("current library's coverage estimate: {}".format(coverage))
-
-            self.library.dump(self.project_path)
+        # # determine margin using bootstrap method
 
     @property
     def difficult_iter_threshold(self) -> float:
