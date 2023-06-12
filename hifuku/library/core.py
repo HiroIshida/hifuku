@@ -447,6 +447,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
     test_false_positive_rate: bool
+    project_path: Path
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -472,6 +473,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         solver_config: ConfigT,
         ae_model: AutoEncoderBase,
         config: LibrarySamplerConfig,
+        project_path: Path,
         pool_single: Optional[ProblemPool[ProblemT]] = None,
         pool_multiple: Optional[ProblemPool[ProblemT]] = None,
         problems_validation: Optional[List[ProblemT]] = None,
@@ -564,6 +566,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             solver,
             sampler,
             test_false_positive_rate,
+            project_path,
         )
 
     def _determine_init_solution_init(self) -> Trajectory:
@@ -587,10 +590,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     def _generate_problem_samples(self) -> List[ProblemT]:
         ...
 
-    def step_active_sampling(
-        self,
-        project_path: Path,
-    ) -> None:
+    def step_active_sampling(self) -> None:
         logger.info("active sampling step")
         self.reset_pool()
 
@@ -601,7 +601,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         else:
             init_solution = self._determine_init_solution_init()
             problems = self._generate_problem_samples_init()
-        predictor = self.learn_predictor(init_solution, project_path, problems)
+        predictor = self.learn_predictor(init_solution, self.project_path, problems)
 
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
@@ -662,7 +662,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             coverage = self.library.measure_coverage(self.problems_validation)
             logger.info("current library's coverage estimate: {}".format(coverage))
 
-            self.library.dump(project_path)
+            self.library.dump(self.project_path)
 
     @property
     def difficult_iter_threshold(self) -> float:

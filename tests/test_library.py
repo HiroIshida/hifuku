@@ -118,14 +118,15 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
                 solcon,
                 ae_model,
                 lconfig,
+                td_path,
                 problems_validation=pool_validation,
                 solver=solver,
                 sampler=sampler,
             )
             # init
-            lib_sampler.step_active_sampling(td_path)
+            lib_sampler.step_active_sampling()
             # active sampling
-            lib_sampler.step_active_sampling(td_path)
+            lib_sampler.step_active_sampling()
 
             # test load
             lib_load = SolutionLibrary.load(td_path, problem_type, SQPBasedSolver)[0]
