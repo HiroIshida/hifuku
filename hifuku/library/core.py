@@ -71,7 +71,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         nit: float
         idx: int  # index of selected solution in the library
         init_solution: Trajectory
-        margin: float
 
     @classmethod
     def initialize(
@@ -186,8 +185,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         for nit, idx in zip(nits_min, indices_min):
             init_solution = self.predictors[idx].initial_solution
             assert init_solution is not None
-            margin = self.margins[idx]
-            res = self.InferenceResult(nit, idx, init_solution, margin)
+            res = self.InferenceResult(nit, idx, init_solution)
             result_list.append(res)
         return result_list
 
