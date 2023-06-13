@@ -50,7 +50,8 @@ def determine_margins(
     target_fp_rate: float,
     cma_sigma: float,
     margins_guess: Optional[np.ndarray] = None,
-) -> List[float]:
+    minimum_coverage: Optional[float] = None,
+) -> Optional[Tuple[np.ndarray, float, float]]:
     def compute_coverage_and_fp(margins: np.ndarray) -> Tuple[float, float]:
         est_arr_list, real_arr_list = [], []
         for coverage_result, margin in zip(coverage_results, margins):
@@ -82,30 +83,36 @@ def determine_margins(
 
     best_score = np.inf
     best_margins = margins_guess
-    coverage_est: Optional[float] = None
-    fp_rate: Optional[float] = None
 
-    optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
-    for generation in tqdm.tqdm(range(1000)):
-        solutions = []
-        for _ in range(optimizer.population_size):
-            x = optimizer.ask()
-            coverage_est, fp_rate = compute_coverage_and_fp(x)
-            J = -coverage_est + 1000.0 * max(fp_rate - target_fp_rate, 0) ** 2
-            solutions.append((x, J))
-        optimizer.tell(solutions)
+    n_trial = 100
+    if minimum_coverage is None:
+        minimum_coverage = 0.0
 
-        xs, values = zip(*solutions)
-        best_index = np.argmin(values)
+    for _ in range(n_trial):
+        # loop until resulting coverage is greater than minimum coverage
+        optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
+        for generation in tqdm.tqdm(range(1000)):
+            solutions = []
+            for _ in range(optimizer.population_size):
+                x = optimizer.ask()
+                coverage_est, fp_rate = compute_coverage_and_fp(x)
+                J = -coverage_est + 1000.0 * max(fp_rate - target_fp_rate, 0) ** 2
+                solutions.append((x, J))
+            optimizer.tell(solutions)
 
-        if values[best_index] < best_score:
-            best_score = values[best_index]
-            best_margins = xs[best_index]
+            xs, values = zip(*solutions)
+            best_index = np.argmin(values)
 
-    assert coverage_est is not None
-    assert fp_rate is not None
-    logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est, fp_rate))
-    return list(best_margins)
+            if values[best_index] < best_score:
+                best_score = values[best_index]
+                best_margins = xs[best_index]
+
+        coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(best_margins)
+        logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
+        if coverage_est_cand > minimum_coverage:
+            return best_margins, coverage_est_cand, fp_rate_cand
+
+    return None
 
 
 @dataclass
@@ -504,6 +511,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     sampler: BatchProblemSampler
     test_false_positive_rate: bool
     project_path: Path
+    coverage_rate_previous: Optional[float] = None
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -686,13 +694,15 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
             predictors_new = self.library.predictors + [predictor]
             coverages_new = self.library.coverage_results + [coverage_result]
-            margins = determine_margins(
+            margins, coverage_rate, fp_rate = determine_margins(
                 predictors_new,
                 coverages_new,
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,
                 cma_std,
+                minimum_coverage=self.coverage_rate_previous,
             )
+            self.coverage_rate_previous = coverage_rate
         else:
             if self.config.bootstrap_trial > 0:
                 logger.info("determine margin using bootstrap method")
