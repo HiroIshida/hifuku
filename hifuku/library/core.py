@@ -679,7 +679,23 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 cma_std,
             )
         else:
-            margin = coverage_result.determine_margin(self.config.acceptable_false_positive_rate)
+            if self.config.bootstrap_trial > 0:
+                logger.info("determine margin using bootstrap method")
+                margin_list = []
+                for _ in tqdm.tqdm(range(self.config.bootstrap_trial)):
+                    coverage_dummy = coverage_result.bootstrap_sampling()
+                    margin = coverage_dummy.determine_margin(
+                        self.config.acceptable_false_positive_rate
+                    )
+                    margin_list.append(margin)
+                margin = float(np.percentile(margin_list, self.config.bootstrap_percentile))
+                logger.info(margin_list)
+                logger.info("margin is set to {}".format(margin))
+            else:
+                logger.info("determine margin without bootstrap method")
+                margin = coverage_result.determine_margin(
+                    self.config.acceptable_false_positive_rate
+                )
             margins = [margin]
 
         # update library
