@@ -79,8 +79,13 @@ def determine_margins(
     if margins_guess is None:
         n_pred = len(predictors)
         margins_guess = np.zeros(n_pred)
-    optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
 
+    best_score = np.inf
+    best_margins = margins_guess
+    coverage_est: Optional[float] = None
+    fp_rate: Optional[float] = None
+
+    optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
     for generation in tqdm.tqdm(range(1000)):
         solutions = []
         for _ in range(optimizer.population_size):
@@ -89,8 +94,18 @@ def determine_margins(
             J = -coverage_est + 1000.0 * max(fp_rate - target_fp_rate, 0) ** 2
             solutions.append((x, J))
         optimizer.tell(solutions)
+
+        xs, values = zip(*solutions)
+        best_index = np.argmin(values)
+
+        if values[best_index] < best_score:
+            best_score = values[best_index]
+            best_margins = xs[best_index]
+
+    assert coverage_est is not None
+    assert fp_rate is not None
     logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est, fp_rate))
-    return list(x)
+    return list(best_margins)
 
 
 @dataclass
