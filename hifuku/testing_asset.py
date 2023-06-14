@@ -2,14 +2,14 @@
 
 from dataclasses import dataclass
 
-from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
+from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
 
 
 @dataclass
 class SimplePredicate:  # because we need non-local object, lambda is not ok
     threshold: float = 0.0
 
-    def __call__(self, problem: TabletopBoxRightArmReachingTask) -> bool:
+    def __call__(self, problem: TabletopOvenRightArmReachingTask) -> bool:
         assert len(problem.descriptions) == 1
         desc = problem.descriptions[0]
         pos = desc[0].worldpos()

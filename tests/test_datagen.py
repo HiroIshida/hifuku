@@ -24,7 +24,7 @@ from hifuku.datagen import (
 )
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
-from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
+from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
 from hifuku.testing_asset import SimplePredicate
 from hifuku.types import RawData
 from hifuku.utils import create_default_logger
@@ -61,7 +61,7 @@ def test_consistency_of_all_batch_sovler(server):
             n_problem_inner = 2
 
             # obtain initial solution using sampling based method
-            task = TabletopBoxRightArmReachingTask.sample(1, standard=True)
+            task = TabletopOvenRightArmReachingTask.sample(1, standard=True)
             solcon_init = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
             solver_init = OMPLSolver.init(solcon_init)
             solver_init.setup(task.export_problems()[0])
@@ -71,7 +71,7 @@ def test_consistency_of_all_batch_sovler(server):
             init_solutions = [result_init.traj] * n_problem
             # set standard = True for testing purpose
             tasks = [
-                TabletopBoxRightArmReachingTask.sample(n_problem_inner) for _ in range(n_problem)
+                TabletopOvenRightArmReachingTask.sample(n_problem_inner) for _ in range(n_problem)
             ]
             batch_solver_list: List[BatchProblemSolver] = []
 
@@ -121,13 +121,13 @@ def test_consistency_of_all_batch_sovler(server):
 def test_consistency_of_all_batch_sampler(server):
     specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
 
-    sampler_list: List[BatchProblemSampler[TabletopBoxRightArmReachingTask]] = []
+    sampler_list: List[BatchProblemSampler[TabletopOvenRightArmReachingTask]] = []
     sampler_list.append(MultiProcessBatchProblemSampler(1))
-    sampler_list.append(DistributeBatchProblemSampler[TabletopBoxRightArmReachingTask](specs))
+    sampler_list.append(DistributeBatchProblemSampler[TabletopOvenRightArmReachingTask](specs))
 
     n_problem_inner = 5
     pool_list: List[PredicatedProblemPool] = []
-    pool_base = TrivialProblemPool(TabletopBoxRightArmReachingTask, n_problem_inner)
+    pool_base = TrivialProblemPool(TabletopOvenRightArmReachingTask, n_problem_inner)
     pool_list.append(pool_base.as_predicated())
     pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
 
@@ -143,7 +143,7 @@ def test_create_dataset():
     n_task = 4
     n_problem_inner = 2
 
-    task = TabletopBoxRightArmReachingTask.sample(1, standard=True)
+    task = TabletopOvenRightArmReachingTask.sample(1, standard=True)
     solcon = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
     solver = OMPLSolver.init(solcon)
     solver.setup(task.export_problems()[0])
@@ -152,7 +152,7 @@ def test_create_dataset():
 
     init_solutions = [result.traj] * n_task
 
-    problems = [TabletopBoxRightArmReachingTask.sample(n_problem_inner) for _ in range(n_task)]
+    problems = [TabletopOvenRightArmReachingTask.sample(n_problem_inner) for _ in range(n_task)]
 
     batch_solver = MultiProcessBatchProblemSolver[OMPLSolverConfig, OMPLSolverResult](
         OMPLSolver, solcon, 2

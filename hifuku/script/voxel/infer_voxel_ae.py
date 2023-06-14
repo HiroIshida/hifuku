@@ -8,12 +8,12 @@ from mohou.trainer import TrainCache
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.neuralnet import VoxelAutoEncoder
-from hifuku.rpbench_wrap import TabletopBoxWorldWrap, TabletopVoxbloxBoxWorldWrap
+from hifuku.rpbench_wrap import TabletopOvenVoxbloxWorldWrap, TabletopOvenWorldWrap
 
 
 class ProblemType(Enum):
-    normal = TabletopBoxWorldWrap
-    voxblox = TabletopVoxbloxBoxWorldWrap
+    normal = TabletopOvenWorldWrap
+    voxblox = TabletopOvenVoxbloxWorldWrap
 
 
 def render(mesh):

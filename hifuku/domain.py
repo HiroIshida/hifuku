@@ -25,8 +25,8 @@ from hifuku.rpbench_wrap import (
     PicklableTaskBase,
     RingObstacleFreeBlockedPlanningTask,
     RingObstacleFreePlanningTask,
-    TabletopBoxDualArmReachingTask,
-    TabletopBoxRightArmReachingTask,
+    TabletopOvenDualArmReachingTask,
+    TabletopOvenRightArmReachingTask,
 )
 
 
@@ -68,7 +68,7 @@ class DomainProtocol(Protocol):
 
 
 class TBRR_RRT_Domain(DomainProtocol):
-    task_type = TabletopBoxRightArmReachingTask
+    task_type = TabletopOvenRightArmReachingTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
         n_max_call=3000,
@@ -76,21 +76,21 @@ class TBRR_RRT_Domain(DomainProtocol):
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.5,
     )
-    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+    auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
 
 
 class TBRR_SQP_Domain(DomainProtocol):
-    task_type = TabletopBoxRightArmReachingTask
+    task_type = TabletopOvenRightArmReachingTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
-    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+    auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
 
 
 class TBDR_SQP_Domain(DomainProtocol):
-    task_type = TabletopBoxDualArmReachingTask
+    task_type = TabletopOvenDualArmReachingTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
-    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+    auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
 
 
 class Kivapod_Empty_RRT_Domain(DomainProtocol):

@@ -8,18 +8,18 @@ from rpbench.pr2.kivapod import KivapodEmptyReachingTask as _KivapodEmptyReachin
 
 # fmt: off
 from rpbench.pr2.tabletop import (
-    TabletopBoxDualArmReachingTask as _TabletopBoxDualArmReachingTask,
+    TabletopOvenDualArmReachingTask as _TabletopOvenDualArmReachingTask,
 )
 from rpbench.pr2.tabletop import (
-    TabletopBoxRightArmReachingTask as _TabletopBoxRightArmReachingTask,
+    TabletopOvenRightArmReachingTask as _TabletopOvenRightArmReachingTask,
 )
 from rpbench.pr2.tabletop import (
-    TabletopBoxVoxbloxRightArmReachingTask as _TabletopBoxVoxbloxRightArmReachingTask,
+    TabletopOvenVoxbloxRightArmReachingTask as _TabletopOvenVoxbloxRightArmReachingTask,
 )
-from rpbench.pr2.tabletop import TabletopBoxWorldWrap as _TabletopBoxWorldWrap
 from rpbench.pr2.tabletop import (
-    TabletopVoxbloxBoxWorldWrap as _TabletopVoxbloxBoxWorldWrap,
+    TabletopOvenVoxbloxWorldWrap as _TabletopOvenVoxbloxWorldWrap,
 )
+from rpbench.pr2.tabletop import TabletopOvenWorldWrap as _TabletopOvenWorldWrap
 from rpbench.ring import (
     RingObstacleFreeBlockedPlanningTask as _RingObstacleFreeBlockedPlanningTask,
 )
@@ -73,11 +73,11 @@ class PicklableTensorExportSamplableBase(PicklableTensorChunkBase, PicklableSamp
 
 # fmt: off
 class KivapodEmptyReachingTask(_KivapodEmptyReachingTask, PicklableTaskBase): ...  # noqa
-class TabletopBoxRightArmReachingTask(_TabletopBoxRightArmReachingTask, PicklableTaskBase): ...  # noqa
-class TabletopBoxDualArmReachingTask(_TabletopBoxDualArmReachingTask, PicklableTaskBase): ...  # noqa
-class TabletopBoxVoxbloxRightArmReachingTask(_TabletopBoxVoxbloxRightArmReachingTask, PicklableTaskBase): ...  # noqa
-class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
-class TabletopVoxbloxBoxWorldWrap(_TabletopVoxbloxBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
+class TabletopOvenRightArmReachingTask(_TabletopOvenRightArmReachingTask, PicklableTaskBase): ...  # noqa
+class TabletopOvenDualArmReachingTask(_TabletopOvenDualArmReachingTask, PicklableTaskBase): ...  # noqa
+class TabletopOvenVoxbloxRightArmReachingTask(_TabletopOvenVoxbloxRightArmReachingTask, PicklableTaskBase): ...  # noqa
+class TabletopOvenWorldWrap(_TabletopOvenWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
+class TabletopOvenVoxbloxWorldWrap(_TabletopOvenVoxbloxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class MazeSolvingTask(_MazeSolvingTask, PicklableTaskBase): ...  # noqa
 class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskBase): ...  # noqa
 class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, PicklableTaskBase): ...  # noqa

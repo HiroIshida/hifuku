@@ -26,13 +26,13 @@ from hifuku.neuralnet import (
     NullAutoEncoder,
     VoxelAutoEncoder,
 )
-from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
+from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
 from hifuku.utils import create_default_logger
 
 
 def _test_compute_real_itervals():
     # compute default solution
-    standard_problem = TabletopBoxRightArmReachingTask.sample(1, True).export_problems()[0]
+    standard_problem = TabletopOvenRightArmReachingTask.sample(1, True).export_problems()[0]
     init_solution: Optional[Trajectory] = None
     solcon = OMPLSolverConfig(n_max_call=3000, n_max_satisfaction_trial=100)
     solver = OMPLSolver.init(solcon)
@@ -45,7 +45,7 @@ def _test_compute_real_itervals():
     assert init_solution is not None
 
     n_problem = 10
-    problems = [TabletopBoxRightArmReachingTask.sample(1) for _ in range(n_problem)]
+    problems = [TabletopOvenRightArmReachingTask.sample(1) for _ in range(n_problem)]
     init_solutions = [init_solution] * n_problem
 
     nlp_solcon = SQPBasedSolverConfig(n_wp=15, n_max_call=10)

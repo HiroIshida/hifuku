@@ -7,13 +7,13 @@ import numpy as np
 from skmp.solver.ompl_solver import OMPLSolverConfig, OMPLSolverResult, TerminateState
 from skmp.trajectory import Trajectory
 
-from hifuku.rpbench_wrap import TabletopBoxRightArmReachingTask
+from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
 from hifuku.types import RawData
 
 
 def test_rawdata_dump_and_load():
     n_desc = 10
-    task = TabletopBoxRightArmReachingTask.sample(n_desc)
+    task = TabletopOvenRightArmReachingTask.sample(n_desc)
     results = [
         OMPLSolverResult(None, 1.0, 10, TerminateState.SUCCESS) for _ in range(n_desc)
     ]  # dummy
@@ -35,7 +35,7 @@ def test_rawdata_dump_and_load():
 
 def test_rawdata_to_tensor():
     n_desc = 10
-    task = TabletopBoxRightArmReachingTask.sample(n_desc)
+    task = TabletopOvenRightArmReachingTask.sample(n_desc)
     traj_dummy = Trajectory([np.zeros(2)])
     results = [
         OMPLSolverResult(None, 1.0, 10, TerminateState.SUCCESS) for _ in range(n_desc)
@@ -50,7 +50,7 @@ def test_rawdata_to_tensor():
 
 
 def test_rawdata_to_tensor_iternum_clamp():
-    task = TabletopBoxRightArmReachingTask.sample(4)
+    task = TabletopOvenRightArmReachingTask.sample(4)
     traj_dummy = Trajectory([np.zeros(2)])
     n_max_call = 5
     results = [
