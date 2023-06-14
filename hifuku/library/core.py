@@ -51,7 +51,7 @@ def determine_margins(
     cma_sigma: float,
     margins_guess: Optional[np.ndarray] = None,
     minimum_coverage: Optional[float] = None,
-) -> Optional[Tuple[np.ndarray, float, float]]:
+) -> Optional[Tuple[List[float], float, float]]:
     def compute_coverage_and_fp(margins: np.ndarray) -> Tuple[float, float]:
         est_arr_list, real_arr_list = [], []
         for coverage_result, margin in zip(coverage_results, margins):
@@ -119,7 +119,7 @@ def determine_margins(
             logger.info(
                 "[cma result final] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand)
             )
-            return best_margins, coverage_est_cand, fp_rate_cand
+            return list(best_margins), coverage_est_cand, fp_rate_cand
 
     return None
 
@@ -139,7 +139,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     ae_model: AutoEncoderBase
     predictors: List[IterationPredictor]
     margins: List[float]
-    coverage_results: List[Optional[CoverageResult]]
+    coverage_results: Optional[List[CoverageResult]]
     solvable_threshold_factor: float
     uuidval: str
     meta_data: Dict
@@ -393,7 +393,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 ae_model=self.ae_model,
                 predictors=[predictor],
                 margins=[margin],
-                coverage_results=[None],
+                coverage_results=None,
                 solvable_threshold_factor=self.solvable_threshold_factor,
                 uuidval="dummy",
                 meta_data={},
@@ -416,7 +416,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             ae_model=singleton.ae_model,
             predictors=predictors,
             margins=margins,
-            coverage_results=[None],
+            coverage_results=None,
             solvable_threshold_factor=singleton.solvable_threshold_factor,
             uuidval="dummy",
             meta_data={},
@@ -684,7 +684,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             ae_model=self.library.ae_model,
             predictors=[predictor],
             margins=[0.0],
-            coverage_results=[None],
+            coverage_results=None,
             solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
             meta_data={},
@@ -696,6 +696,8 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         with open("/tmp/hifuku_coverage_debug.pkl", "wb") as f:
             pickle.dump(coverage_result, f)
+
+        assert self.library.coverage_results is not None
 
         if len(self.library.predictors) > 0:
             # determine std

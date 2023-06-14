@@ -39,9 +39,10 @@ lib = SolutionLibrary(  # FIXME: temp implemented this after deletion of model.i
     ae_model,
     [pred],
     [0.0],
-    [None],
+    None,
     1.0,
     "dummy",
+    {},
 )
 ts = time.time()
 lib.infer(task)
