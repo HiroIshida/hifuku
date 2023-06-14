@@ -82,13 +82,13 @@ def determine_margins(
         margins_guess = np.zeros(n_pred)
 
     best_score = np.inf
-    best_margins = margins_guess
+    best_margins = copy.deepcopy(margins_guess)
 
-    n_trial = 100
+    n_trial = 20
     if minimum_coverage is None:
         minimum_coverage = 0.0
 
-    for _ in range(n_trial):
+    for i_trial in range(n_trial):
         # loop until resulting coverage is greater than minimum coverage
         optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
         for generation in tqdm.tqdm(range(1000)):
@@ -107,9 +107,18 @@ def determine_margins(
                 best_score = values[best_index]
                 best_margins = xs[best_index]
 
+            logger.debug("[generation {}] coverage: {}".format(generation, coverage_est))
+
         coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(best_margins)
-        logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
+        logger.debug(
+            "[cma result after {} trials] coverage: {}, fp: {}".format(
+                i_trial, coverage_est_cand, fp_rate_cand
+            )
+        )
         if coverage_est_cand > minimum_coverage:
+            logger.info(
+                "[cma result final] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand)
+            )
             return best_margins, coverage_est_cand, fp_rate_cand
 
     return None
@@ -694,7 +703,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
             predictors_new = self.library.predictors + [predictor]
             coverages_new = self.library.coverage_results + [coverage_result]
-            margins, coverage_rate, fp_rate = determine_margins(
+            ret = determine_margins(
                 predictors_new,
                 coverages_new,
                 self.solver_config.n_max_call,
@@ -702,6 +711,12 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 cma_std,
                 minimum_coverage=self.coverage_rate_previous,
             )
+
+            if ret is None:
+                logger.info("no improvement by this element")
+                return
+
+            margins, coverage_rate, fp_rate = ret
             self.coverage_rate_previous = coverage_rate
         else:
             if self.config.bootstrap_trial > 0:
@@ -731,8 +746,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         coverage = self.library.measure_coverage(self.problems_validation)
         logger.info("current library's coverage estimate: {}".format(coverage))
-
-        # # determine margin using bootstrap method
 
     @property
     def difficult_iter_threshold(self) -> float:
