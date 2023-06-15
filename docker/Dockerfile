@@ -55,7 +55,6 @@ RUN pip3 install voxbloxpy
 RUN sudo apt-get install libboost-all-dev -y  # ompl
 RUN pip3 install ompl-thin
 
-RUN git clone git@github.com:HiroIshida/selcol.git && pip3 install -e selcol
 RUN git clone git@github.com:HiroIshida/scikit-motionplan.git && pip3 install -e scikit-motionplan
 RUN git clone git@github.com:HiroIshida/rpbench.git && pip3 install -e rpbench
 RUN git clone git@github.com:HiroIshida/hifuku.git && cd hifuku && pip3 install -e .
