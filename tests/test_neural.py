@@ -1,6 +1,6 @@
 import torch
 
-from hifuku.domain import TBRR_SQP_Domain
+from hifuku.domain import TORR_SQP_Domain
 from hifuku.neuralnet import (
     AutoEncoderConfig,
     IterationPredictor,
@@ -32,7 +32,7 @@ def test_network():
     sample = (mesh_encoded, descriptions, nits)
     model.loss(sample)
 
-    TBRR_SQP_Domain.task_type.sample(1)
+    TORR_SQP_Domain.task_type.sample(1)
 
 
 if __name__ == "__main__":

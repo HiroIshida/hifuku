@@ -67,7 +67,7 @@ class DomainProtocol(Protocol):
         return DistributeBatchProblemSampler(*args, **kwargs)
 
 
-class TBRR_RRT_Domain(DomainProtocol):
+class TORR_RRT_Domain(DomainProtocol):
     task_type = TabletopOvenRightArmReachingTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
@@ -79,14 +79,14 @@ class TBRR_RRT_Domain(DomainProtocol):
     auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
 
 
-class TBRR_SQP_Domain(DomainProtocol):
+class TORR_SQP_Domain(DomainProtocol):
     task_type = TabletopOvenRightArmReachingTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
     auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
 
 
-class TBDR_SQP_Domain(DomainProtocol):
+class TODR_SQP_Domain(DomainProtocol):
     task_type = TabletopOvenDualArmReachingTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
@@ -221,9 +221,9 @@ def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> f
 
 def select_domain(domain_name: str) -> Type[DomainProtocol]:
     class DomainCollection(Enum):
-        tbrr_sqp = TBRR_SQP_Domain
-        tbrr_rrt = TBRR_RRT_Domain
-        tbdr_sqp = TBDR_SQP_Domain
+        torr_sqp = TORR_SQP_Domain
+        torr_rrt = TORR_RRT_Domain
+        todr_sqp = TODR_SQP_Domain
         kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
         ring_rrt = RingObstacleFree_RRT_Domain
         ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain

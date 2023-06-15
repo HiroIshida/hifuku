@@ -3,7 +3,7 @@ from mohou.file import get_project_path
 from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train
 
-from hifuku.domain import TBRR_SQP_Domain
+from hifuku.domain import TORR_SQP_Domain
 from hifuku.llazy.dataset import LazyDecomplessDataset
 from hifuku.neuralnet import (
     IterationPredictor,
@@ -13,9 +13,9 @@ from hifuku.neuralnet import (
 from hifuku.script_utils import load_compatible_autoencoder
 from hifuku.types import RawData
 
-ae_model = load_compatible_autoencoder(TBRR_SQP_Domain)
+ae_model = load_compatible_autoencoder(TORR_SQP_Domain)
 
-pp = get_project_path("TBRR_SQP")
+pp = get_project_path("TORR_SQP")
 chunk_dir_path = pp / "cache"
 
 dataset = IterationPredictorDataset.load(chunk_dir_path, ae_model)
