@@ -4,9 +4,9 @@ from mohou.trainer import TrainCache, TrainConfig, train_lower
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.neuralnet import AutoEncoderConfig, VoxelAutoEncoder
-from hifuku.rpbench_wrap import TabletopOvenWorldWrap
+from hifuku.rpbench_wrap import TabletopBoxWorldWrap
 
-problem_type = TabletopOvenWorldWrap
+problem_type = TabletopBoxWorldWrap
 
 pp = get_project_path("hifuku-{}".format(problem_type.__name__))
 cache_base_path = pp / "cache"

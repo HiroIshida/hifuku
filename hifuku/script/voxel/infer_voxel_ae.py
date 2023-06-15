@@ -1,6 +1,3 @@
-import argparse
-from enum import Enum
-
 import numpy as np
 import torch
 from mohou.file import get_project_path
@@ -8,12 +5,7 @@ from mohou.trainer import TrainCache
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.neuralnet import VoxelAutoEncoder
-from hifuku.rpbench_wrap import TabletopOvenVoxbloxWorldWrap, TabletopOvenWorldWrap
-
-
-class ProblemType(Enum):
-    normal = TabletopOvenWorldWrap
-    voxblox = TabletopOvenVoxbloxWorldWrap
+from hifuku.rpbench_wrap import TabletopBoxWorldWrap
 
 
 def render(mesh):
@@ -23,16 +15,11 @@ def render(mesh):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-type", type=str, default="normal", help="")
-    args = parser.parse_args()
-    samplable_type_name: str = args.type
-
-    samplable_type = ProblemType[samplable_type_name].value
+    samplable_type = TabletopBoxWorldWrap
     pp = get_project_path("hifuku-{}".format(samplable_type.__name__))
     best_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
 
-    problem = samplable_type.sample(0)
+    problem = samplable_type.sample(0, standard=False)
     gridsdf = problem._gridsdf
     assert gridsdf is not None
     mesh = gridsdf.values.reshape(*gridsdf.grid.sizes)

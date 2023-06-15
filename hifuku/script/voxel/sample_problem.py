@@ -13,7 +13,11 @@ from mohou.utils import log_package_version_info
 import hifuku
 from hifuku.datagen import MultiProcessBatchProblemSampler
 from hifuku.pool import TrivialProblemPool
-from hifuku.rpbench_wrap import TabletopOvenVoxbloxWorldWrap, TabletopOvenWorldWrap
+from hifuku.rpbench_wrap import (
+    TabletopBoxWorldWrap,
+    TabletopOvenVoxbloxWorldWrap,
+    TabletopOvenWorldWrap,
+)
 from hifuku.utils import create_default_logger
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
@@ -33,7 +37,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     mesh_type_name: str = args.type
 
-    problem_type = ProblemType[mesh_type_name].value  # type: ignore
+    # problem_type = ProblemType[mesh_type_name].value  # type: ignore
+    problem_type = TabletopBoxWorldWrap
+    # problem_type = TabletopOvenWorldWrap
 
     pp = get_project_path("hifuku-{}".format(problem_type.__name__))
     logger = create_default_logger(pp, "mesh_generation")
@@ -42,8 +48,8 @@ if __name__ == "__main__":
     cache_base_path.mkdir(exist_ok=True, parents=True)
     n_cpu: int = os.cpu_count()  # type: ignore
     n_process = int(0.5 * n_cpu)
-    n_problem = 100
-    for _ in range(1):
+    n_problem = 3000
+    for _ in range(100):
         # sampler = DistributeBatchProblemSampler()  # type: ignore
         sampler = MultiProcessBatchProblemSampler()  # type: ignore
         pool = TrivialProblemPool(problem_type, n_problem_inner=0)
