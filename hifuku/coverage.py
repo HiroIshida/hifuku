@@ -87,11 +87,11 @@ class CoverageResult:
         for i in range(len(diffs)):
             margin_cand = sorted_diffs[i]
             rate = self.compute_false_positive_rate(margin_cand)
+            logger.debug("margin_cand: {}, fp_rate: {}".format(margin_cand, rate))
             if rate is None:
                 return np.inf
             if rate < acceptable_false_positive_rate:
                 margin_final = margin_cand + 1e-6
-                # logger.info("margin is set to {} with fp rate {}".format(margin_final, rate))
                 return margin_final
         assert False, "final rate {}".format(rate)
 
