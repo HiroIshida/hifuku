@@ -12,6 +12,7 @@ import pytest
 from ompl import set_ompl_random_seed
 from skmp.solver.nlp_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig, OMPLSolverResult
+from skmp.trajectory import Trajectory
 
 from hifuku.config import ServerSpec
 from hifuku.datagen import (
@@ -51,7 +52,36 @@ def server():
     logger.info("kill servers")
 
 
-def test_consistency_of_all_batch_sovler(server):
+@pytest.fixture(scope="session")
+def TORR_result_traj():
+    task = TabletopOvenRightArmReachingTask.sample(1, standard=True)
+    solcon_init = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
+    solver_init = OMPLSolver.init(solcon_init)
+    solver_init.setup(task.export_problems()[0])
+    result_init = solver_init.solve()
+    assert result_init.traj is not None
+    return result_init.traj
+
+
+def test_batch_solver_init_solutions(TORR_result_traj: Trajectory):
+
+    solcon = SQPBasedSolverConfig(
+        n_wp=20,
+        n_max_call=10,
+        motion_step_satisfaction="debug_ignore",
+        force_deterministic=True,
+    )
+    mp_batch_solver = MultiProcessBatchProblemSolver(SQPBasedSolver, solcon, 2)
+
+    n_task = 5
+    n_inner = 2
+    tasks = [TabletopOvenRightArmReachingTask.sample(n_inner) for _ in range(n_task)]
+    mp_batch_solver.solve_batch(tasks, [None] * n_task)
+    mp_batch_solver.solve_batch(tasks, [TORR_result_traj] * n_task)
+    mp_batch_solver.solve_batch(tasks, [[TORR_result_traj] * n_inner] * n_task)
+
+
+def test_consistency_of_all_batch_sovler(server, TORR_result_traj: Trajectory):
 
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
@@ -60,15 +90,7 @@ def test_consistency_of_all_batch_sovler(server):
         for n_problem in [1, 8]:  # to test edge case
             n_problem_inner = 2
 
-            # obtain initial solution using sampling based method
-            task = TabletopOvenRightArmReachingTask.sample(1, standard=True)
-            solcon_init = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
-            solver_init = OMPLSolver.init(solcon_init)
-            solver_init.setup(task.export_problems()[0])
-            result_init = solver_init.solve()
-            assert result_init.traj is not None
-
-            init_solutions = [result_init.traj] * n_problem
+            init_solutions = [TORR_result_traj] * n_problem
             # set standard = True for testing purpose
             tasks = [
                 TabletopOvenRightArmReachingTask.sample(n_problem_inner) for _ in range(n_problem)

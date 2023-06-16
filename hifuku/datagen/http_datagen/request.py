@@ -4,7 +4,17 @@ import pickle
 import time
 from dataclasses import dataclass
 from http.client import HTTPConnection
-from typing import Generic, List, Optional, Sequence, Tuple, Type, TypeVar, overload
+from typing import (
+    Generic,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
 
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
@@ -61,7 +71,7 @@ class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
     problems: List[ProblemT]
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
-    init_solutions: Sequence[Optional[Trajectory]]
+    init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]]
     n_process: int
 
     def __str__(self) -> str:

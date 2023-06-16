@@ -247,7 +247,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         for pred, margin in zip(self.predictors, self.margins):
             # margin is for correcting the overestimated inference
             itervals, _ = pred.forward((encoded_repeated, desc))
-            itervals = itervals.squeeze(dim=0)
+            itervals = itervals.squeeze(dim=1)
             itervals_np = itervals.detach().cpu().numpy() + margin
             itervals_list.append(itervals_np)
         itervals_arr = np.array(itervals_list)
@@ -280,13 +280,11 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     ) -> CoverageResult:
         logger.info("**compute est values")
         iterval_est_list = []
-        init_solution_est_list = []
+        init_solutions_est_list = []
         for task in tqdm.tqdm(tasks):
-            assert task.n_inner_task == 1
-            infer_res = self.infer(task)[0]
-            iterval_est_list.append(infer_res.nit)
-            init_solution_est_list.append(infer_res.init_solution)
-
+            infer_results = self.infer(task)
+            iterval_est_list.extend([res.nit for res in infer_results])  # NOTE: flatten!
+            init_solutions_est_list.append([res.init_solution for res in infer_results])
         logger.info("**compute real values")
 
         # When pickling-and-depickling, the procedure takes up much more memory than
@@ -304,15 +302,17 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         indices = range(len(tasks))
         indices_list = np.array_split(indices, np.ceil(len(tasks) / max_size))
 
-        results = []
+        resultss = []
         for indices_part in indices_list:
             tasks_part = [tasks[i] for i in indices_part]
-            init_solution_est_list_part = [init_solution_est_list[i] for i in indices_part]
-            results_part = solver.solve_batch(tasks_part, init_solution_est_list_part)
-            results.extend(results_part)
+            init_solutions_est_list_part = [init_solutions_est_list[i] for i in indices_part]
+            results_part = solver.solve_batch(tasks_part, init_solutions_est_list_part)  # type: ignore
+            resultss.extend(results_part)
 
-        self.solver_config.n_max_call
-        iterval_real_list = [get_clamped_iter(r[0], self.solver_config) for r in results]
+        iterval_real_list = []
+        for results in resultss:
+            for result in results:
+                iterval_real_list.append(get_clamped_iter(result, self.solver_config))
 
         success_iter = self.success_iter_threshold()
         coverage_result = CoverageResult(
@@ -323,13 +323,15 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
     def measure_coverage(self, tasks: List[ProblemT]) -> float:
         threshold = self.success_iter_threshold()
-        count = 0
+        total_count = 0
+        success_count = 0
         for task in tasks:
-            assert task.n_inner_task == 1
-            infer_res = self.infer(task)[0]
-            if infer_res.nit < threshold:
-                count += 1
-        return count / float(len(tasks))
+            infer_res_list = self.infer(task)
+            for infer_res in infer_res_list:
+                total_count += 1
+                if infer_res.nit < threshold:
+                    success_count += 1
+        return success_count / total_count
 
     def dump(self, base_path: Path) -> None:
         cpu_device = torch.device("cpu")
@@ -613,7 +615,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             if problems_validation is None:
                 logger.info("start creating validation set")
                 problems_validation = sampler.sample_batch(
-                    10000, TrivialProblemPool(problem_type, 1).as_predicated()
+                    1000, TrivialProblemPool(problem_type, 10).as_predicated()
                 )
                 with validation_cache_path.open(mode="wb") as f:
                     pickle.dump(problems_validation, f)
@@ -623,7 +625,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         assert len(problems_validation) > 0
 
         for prob in problems_validation:
-            assert prob.n_inner_task == 1
             logger.info(
                 "validation set with {} elements is created".format(len(problems_validation))
             )
