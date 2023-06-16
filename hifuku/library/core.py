@@ -738,6 +738,12 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 margin = coverage_result.determine_margin(
                     self.config.acceptable_false_positive_rate
                 )
+
+            if not np.isfinite(margin):
+                message = "margin value {} is invalid. retrun from active_sampling".format(margin)
+                logger.info(message)
+                return
+
             margins = [margin]
 
         # update library
