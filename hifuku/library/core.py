@@ -714,7 +714,8 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 minimum_coverage=self.coverage_rate_previous,
             )
 
-            if ret is None and self.config.ignore_useless_traj:
+            if ret is None:
+                # TODO: we should not ignore when self.config.ignore_useless_traj=False
                 logger.info("no improvement by this element")
                 return
 

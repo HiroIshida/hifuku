@@ -162,6 +162,7 @@ class CachedProblemPool(ProblemPool[SamplableT], Generic[OtherSamplableT, Sampla
             return problem
         elif problem.n_inner_task == 0:
             descs = problem.sample_descriptions(problem.world, self.n_problem_inner)
+            assert descs is not None  # TODO: due to change in rpbench, we must handle this case
             return self.problem_type(problem.world, descs, problem._gridsdf)
         else:
             assert False

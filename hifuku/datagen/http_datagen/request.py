@@ -93,7 +93,7 @@ class SampleProblemResponse(Generic[ProblemT], MainResponse):
         vis_dict = {}
         n_problems = len(self.problems)
         vis_dict["problems"] = "[...({} problems)...]".format(n_problems)
-        vis_dict["elapsed_time"] = self.elapsed_time
+        vis_dict["elapsed_time"] = self.elapsed_time  # type: ignore[assignment]
         return vis_dict.__str__()
 
 

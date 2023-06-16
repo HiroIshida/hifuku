@@ -253,6 +253,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
             # https://stackoverflow.com/questions/24509650/deadlock-with-logging-multiprocess-multithread-python-script
             # https://bugs.python.org/issue6721
             for hn in logger.handlers:
+                assert hn.lock is not None
                 assert not hn.lock.locked()
 
             # NOTE: multiprocessing with shared queue is straightfowrad but
