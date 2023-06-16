@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing import Process
 from pathlib import Path
-from typing import Generic, List, Optional, Sequence, Tuple, Type
+from typing import Generic, List, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
 import threadpoolctl
@@ -31,16 +31,33 @@ from hifuku.utils import filter_warnings, get_random_seed
 logger = logging.getLogger(__name__)
 
 
+def duplicate_init_solution_if_not_list(
+    init_solution: Optional[Union[List[Trajectory], Trajectory]], n_inner_task: int
+) -> Sequence[Optional[Trajectory]]:
+    init_solutions: Sequence[Optional[Trajectory]]
+    if isinstance(init_solution, List):
+        init_solutions = init_solution
+    else:
+        init_solutions = [init_solution] * n_inner_task
+    return init_solutions
+
+
 @dataclass
 class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
     indices: np.ndarray
     problems: List[ProblemT]
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
-    init_solutions: Sequence[Optional[Trajectory]]
+    init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]]
     show_process_bar: bool
     cache_path: Path
     solve_default: bool = False
+    """
+    NOTE: init_solution
+    - is None if solve scratch.
+    - is a Trajectory if same init_solution is used for all inner tasks.
+    - is a List[Trajectory] if different init_solution per inner task is used.
+    """
 
     def __len__(self) -> int:
         return len(self.problems)
@@ -76,13 +93,19 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                 for idx, task, init_solution in zip(
                     self.arg.indices, self.arg.problems, self.arg.init_solutions
                 ):
+
                     solver = self.arg.solver_t.init(self.arg.solver_config)
+                    init_solutions_per_inner = duplicate_init_solution_if_not_list(
+                        init_solution, task.n_inner_task
+                    )
 
                     results = []
                     problems = task.export_problems()
-                    for problem in tqdm.tqdm(problems, disable=disable_tqdm, leave=False):
+                    for problem, init_solution_per_inner in tqdm.tqdm(
+                        zip(problems, init_solutions_per_inner), disable=disable_tqdm, leave=False
+                    ):
                         solver.setup(problem)
-                        result = solver.solve(init_solution)
+                        result = solver.solve(init_solution_per_inner)
                         results.append(result)
                     tupled_results = tuple(results)
 
@@ -214,7 +237,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
     def solve_batch(
         self,
         tasks: List[ProblemT],
-        init_solutions: Sequence[Optional[Trajectory]],
+        init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
     ) -> List[Tuple[ResultT, ...]]:
 
         filter_warnings()
@@ -233,10 +256,14 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
 
             solver = self.solver_t.init(self.config)
             for task, init_solution in zip(tasks, init_solutions):
+                init_solutions_per_inner = duplicate_init_solution_if_not_list(
+                    init_solution, task.n_inner_task
+                )
+                problems = task.export_problems()
                 results: List[ResultT] = []
-                for problem in task.export_problems():
+                for problem, init_solution_per_inner in zip(problems, init_solutions_per_inner):
                     solver.setup(problem)
-                    result = solver.solve(init_solution)
+                    result = solver.solve(init_solution_per_inner)
                     results.append(result)
                 results_list.append(tuple(results))
             return results_list
@@ -328,7 +355,7 @@ class DistributedBatchProblemSolver(
     def solve_batch(
         self,
         problems: List[ProblemT],
-        init_solutions: Sequence[Optional[Trajectory]],
+        init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
     ) -> List[Tuple[ResultT, ...]]:
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
