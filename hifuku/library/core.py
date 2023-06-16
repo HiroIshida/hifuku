@@ -714,7 +714,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 minimum_coverage=self.coverage_rate_previous,
             )
 
-            if ret is None:
+            if ret is None and self.config.ignore_useless_traj:
                 logger.info("no improvement by this element")
                 return
 
@@ -739,7 +739,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                     self.config.acceptable_false_positive_rate
                 )
 
-            if not np.isfinite(margin):
+            if not np.isfinite(margin) and self.config.ignore_useless_traj:
                 message = "margin value {} is invalid. retrun from active_sampling".format(margin)
                 logger.info(message)
                 return
