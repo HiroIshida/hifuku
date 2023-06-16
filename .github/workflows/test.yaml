@@ -48,4 +48,4 @@ jobs:
 
             - name: Run mypy
               run: |
-                  echo "somehow, mypy don't ignore --exclude flags and config inside action ..."
+                  mypy hifuku
