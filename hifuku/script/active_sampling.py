@@ -1,8 +1,11 @@
 import argparse
+from pathlib import Path
+from typing import Dict, Optional
 
 import rpbench
 import selcol
 import skmp
+import yaml
 from mohou.trainer import TrainConfig
 from mohou.utils import log_package_version_info
 
@@ -16,10 +19,19 @@ from hifuku.script_utils import (
 )
 from hifuku.utils import create_default_logger, filter_warnings
 
+
+def parse_config_yaml(dic: Dict) -> LibrarySamplerConfig:
+    train_config = TrainConfig(**dic["train_config"])
+    dic["train_config"] = train_config
+    ls_config = LibrarySamplerConfig(**dic)
+    return ls_config
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
     parser.add_argument("-n", type=int, default=100, help="")
+    parser.add_argument("-conf", type=str)
     parser.add_argument("--warm", action="store_true", help="warm start")
     parser.add_argument("--lm", action="store_true", help="use light weight nn")
     parser.add_argument("--fptest", action="store_true", help="test false positive rate")
@@ -27,9 +39,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     domain_name: str = args.type
     warm_start: bool = args.warm
-    use_light_model: bool = args.lm
     test_fp_rate: bool = args.fptest
     n_step: int = args.n
+    library_sampling_conf_path_str: Optional[str] = args.conf
 
     filter_warnings()
     domain = select_domain(domain_name)
@@ -41,35 +53,13 @@ if __name__ == "__main__":
     log_package_version_info(logger, skmp)
     log_package_version_info(logger, selcol)
 
-    if use_light_model:
-        iterpred_model_config = {"n_layer1_width": 100, "n_layer2_width": 100, "n_layer3_width": 20}
+    if library_sampling_conf_path_str is None:
+        library_sampling_conf_path = project_path / "lsconf.yaml"
     else:
-        iterpred_model_config = None  # type: ignore
-
-    lconfig = LibrarySamplerConfig(
-        n_problem=5000,
-        n_problem_inner=30,
-        train_config=TrainConfig(n_epoch=100),
-        n_solution_candidate=100,
-        n_difficult_problem=300,
-        solvable_threshold_factor=1.0,
-        difficult_threshold_factor=1.0,
-        acceptable_false_positive_rate=0.1,
-        iterpred_model_config=iterpred_model_config,
-        bootstrap_trial=1000,
-    )  # all pass
-    # lconfig = LibrarySamplerConfig(
-    #     n_problem=2000,
-    #     n_problem_inner=20,
-    #     train_config=TrainConfig(n_epoch=30),
-    #     n_solution_candidate=30,
-    #     n_difficult_problem=100,
-    #     solvable_threshold_factor=1.0,
-    #     difficult_threshold_factor=1.0,
-    #     acceptable_false_positive_rate=0.1,
-    #     iterpred_model_config=iterpred_model_config,
-    #     bootstrap_trial=1000,
-    # )  # all pass
+        library_sampling_conf_path = Path(library_sampling_conf_path_str).expanduser()
+    with library_sampling_conf_path.open(mode="r") as f:
+        dic = yaml.safe_load(f)
+        lsconfig = parse_config_yaml(dic)
 
     ae_model = load_compatible_autoencoder(domain_name)
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
@@ -77,7 +67,7 @@ if __name__ == "__main__":
         domain.solver_type,
         domain.solver_config,
         ae_model,
-        lconfig,
+        lsconfig,
         project_path,
         pool_single=None,
         use_distributed=True,
