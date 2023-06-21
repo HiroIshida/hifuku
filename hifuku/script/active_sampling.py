@@ -60,6 +60,7 @@ if __name__ == "__main__":
     with library_sampling_conf_path.open(mode="r") as f:
         dic = yaml.safe_load(f)
         lsconfig = parse_config_yaml(dic)
+    logger.info("lsconfig: {}".format(lsconfig))
 
     ae_model = load_compatible_autoencoder(domain_name)
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
