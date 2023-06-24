@@ -77,6 +77,8 @@ def determine_margins(
 
         return coverage_est, fp_rate
 
+    target_fp_rate_modified = target_fp_rate - 1e-3  # because penalty method is not tight
+
     if margins_guess is None:
         n_pred = len(predictors)
         margins_guess = np.zeros(n_pred)
@@ -96,7 +98,7 @@ def determine_margins(
             for _ in range(optimizer.population_size):
                 x = optimizer.ask()
                 coverage_est, fp_rate = compute_coverage_and_fp(x)
-                J = -coverage_est + 1000.0 * max(fp_rate - target_fp_rate, 0) ** 2
+                J = -coverage_est + 1000.0 * max(fp_rate - target_fp_rate_modified, 0) ** 2
                 solutions.append((x, J))
             optimizer.tell(solutions)
 
