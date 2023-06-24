@@ -78,6 +78,7 @@ def determine_margins(
         return coverage_est, fp_rate
 
     target_fp_rate_modified = target_fp_rate - 1e-3  # because penalty method is not tight
+    logger.debug("target fp_rate modified: {}".format(target_fp_rate_modified))
 
     if margins_guess is None:
         n_pred = len(predictors)
@@ -98,7 +99,7 @@ def determine_margins(
             for _ in range(optimizer.population_size):
                 x = optimizer.ask()
                 coverage_est, fp_rate = compute_coverage_and_fp(x)
-                J = -coverage_est + 1000.0 * max(fp_rate - target_fp_rate_modified, 0) ** 2
+                J = -coverage_est + 1e4 * max(fp_rate - target_fp_rate_modified, 0) ** 2
                 solutions.append((x, J))
             optimizer.tell(solutions)
 
@@ -109,7 +110,11 @@ def determine_margins(
                 best_score = values[best_index]
                 best_margins = xs[best_index]
 
-            logger.debug("[generation {}] coverage: {}".format(generation, coverage_est))
+            logger.debug(
+                "[generation {}] coverage: {}, fp_rate: {}".format(
+                    generation, coverage_est, fp_rate
+                )
+            )
 
         coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(best_margins)
         logger.debug(
@@ -117,7 +122,7 @@ def determine_margins(
                 i_trial, coverage_est_cand, fp_rate_cand
             )
         )
-        if coverage_est_cand > minimum_coverage:
+        if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate_modified:
             logger.info(
                 "[cma result final] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand)
             )
