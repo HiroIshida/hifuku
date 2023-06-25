@@ -20,12 +20,15 @@ from rpbench.interface import AbstractTaskSolver
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
-from hifuku.coverage import CoverageResult, determine_margins
+from hifuku.coverage import CoverageResult
 from hifuku.datagen import (
+    BatchMarginsDeterminant,
     BatchProblemSampler,
     BatchProblemSolver,
+    DistributeBatchMarginsDeterminant,
     DistributeBatchProblemSampler,
     DistributedBatchProblemSolver,
+    MultiProcesBatchMarginsDeterminant,
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
@@ -438,6 +441,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     problems_validation: List[ProblemT]
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
+    determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
     project_path: Path
     coverage_rate_previous: Optional[float] = None
@@ -489,7 +493,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             meta_data,
         )
 
-        # setup solver and sampler
+        # setup solver, sampler, determinant
         if solver is None:
             solver = (
                 DistributedBatchProblemSolver(solver_t, solver_config)
@@ -504,6 +508,11 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 if use_distributed
                 else MultiProcessBatchProblemSampler()
             )
+        determinant = (
+            DistributeBatchMarginsDeterminant()
+            if use_distributed
+            else MultiProcesBatchMarginsDeterminant()
+        )
 
         # setup pools
         if pool_single is None:
@@ -557,6 +566,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             problems_validation,
             solver,
             sampler,
+            determinant,
             test_false_positive_rate,
             project_path,
         )
@@ -623,7 +633,8 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             cma_std = self.solver_config.n_max_call * 0.5
 
             coverages_new = self.library.coverage_results + [coverage_result]
-            ret = determine_margins(
+            results = self.determinant.determine_batch(
+                80,
                 coverages_new,
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,
@@ -631,13 +642,22 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 minimum_coverage=self.coverage_rate_previous,
             )
 
-            if ret is None:
+            best_margins = None
+            max_coverage = -np.inf
+            for result in results:
+                if result is None:
+                    continue
+                if result.coverage > max_coverage:
+                    max_coverage = result.coverage
+                    best_margins = result.best_margins
+
+            if best_margins is None:
                 # TODO: we should not ignore when self.config.ignore_useless_traj=False
                 logger.info("no improvement by this element")
                 return
 
-            margins = ret.best_margins
-            self.coverage_rate_previous = ret.coverage
+            margins = best_margins
+            self.coverage_rate_previous = max_coverage
         else:
             if self.config.bootstrap_trial > 0:
                 logger.info("determine margin using bootstrap method")
