@@ -108,6 +108,13 @@ class CoverageResult:
         return string
 
 
+@dataclass
+class DetermineMarginsResult:
+    best_margins: List[float]
+    coverage: float
+    fprate: float
+
+
 def determine_margins(
     coverage_results: List[CoverageResult],
     threshold: float,
@@ -115,7 +122,7 @@ def determine_margins(
     cma_sigma: float,
     margins_guess: Optional[np.ndarray] = None,
     minimum_coverage: Optional[float] = None,
-) -> Optional[Tuple[List[float], float, float]]:
+) -> Optional[DetermineMarginsResult]:
     def compute_coverage_and_fp(margins: np.ndarray) -> Tuple[float, float]:
         est_arr_list, real_arr_list = [], []
         for coverage_result, margin in zip(coverage_results, margins):
@@ -151,47 +158,38 @@ def determine_margins(
     best_score = np.inf
     best_margins = copy.deepcopy(margins_guess)
 
-    n_trial = 20
     if minimum_coverage is None:
         minimum_coverage = 0.0
 
     coverage_est = -np.inf
     fp_rate = -np.inf
-    for i_trial in range(n_trial):
-        # loop until resulting coverage is greater than minimum coverage
-        optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
-        for generation in tqdm.tqdm(range(1000)):
-            solutions = []
-            for _ in range(optimizer.population_size):
-                x = optimizer.ask()
-                coverage_est, fp_rate = compute_coverage_and_fp(x)
-                J = -coverage_est + 1e4 * max(fp_rate - target_fp_rate_modified, 0) ** 2
-                solutions.append((x, J))
-            optimizer.tell(solutions)
 
-            xs, values = zip(*solutions)
-            best_index = np.argmin(values)
+    optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
+    for generation in tqdm.tqdm(range(500)):
+        solutions = []
+        for _ in range(optimizer.population_size):
+            x = optimizer.ask()
+            coverage_est, fp_rate = compute_coverage_and_fp(x)
+            J = -coverage_est + 1e4 * max(fp_rate - target_fp_rate_modified, 0) ** 2
+            solutions.append((x, J))
+        optimizer.tell(solutions)
 
-            if values[best_index] < best_score:
-                best_score = values[best_index]
-                best_margins = xs[best_index]
+        xs, values = zip(*solutions)
+        best_index = np.argmin(values)
 
-            logger.debug(
-                "[generation {}] coverage: {}, fp_rate: {}".format(
-                    generation, coverage_est, fp_rate
-                )
-            )
+        if values[best_index] < best_score:
+            best_score = values[best_index]
+            best_margins = xs[best_index]
 
-        coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(best_margins)
         logger.debug(
-            "[cma result after {} trials] coverage: {}, fp: {}".format(
-                i_trial, coverage_est_cand, fp_rate_cand
-            )
+            "[generation {}] coverage: {}, fp_rate: {}".format(generation, coverage_est, fp_rate)
         )
-        if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate_modified:
-            logger.info(
-                "[cma result final] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand)
-            )
-            return list(best_margins), coverage_est_cand, fp_rate_cand
 
-    return None
+    coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(best_margins)
+    logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
+    if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate_modified:
+        logger.info("cma result accepted")
+        return DetermineMarginsResult(list(best_margins), coverage_est_cand, fp_rate_cand)
+    else:
+        logger.info("cma result rejected. Returning None")
+        return None

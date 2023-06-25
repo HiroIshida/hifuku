@@ -1,4 +1,4 @@
-emport copy
+import copy
 import json
 import logging
 import pickle
@@ -636,8 +636,8 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 logger.info("no improvement by this element")
                 return
 
-            margins, coverage_rate, fp_rate = ret
-            self.coverage_rate_previous = coverage_rate
+            margins = ret.best_margins
+            self.coverage_rate_previous = ret.coverage
         else:
             if self.config.bootstrap_trial > 0:
                 logger.info("determine margin using bootstrap method")
