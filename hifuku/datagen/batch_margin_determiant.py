@@ -6,6 +6,7 @@ from multiprocessing import Process, Queue, get_context
 from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
+import threadpoolctl
 
 from hifuku.coverage import CoverageResult, DetermineMarginsResult, determine_margins
 from hifuku.datagen.http_datagen.client import ClientBase
@@ -84,16 +85,17 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
         np.random.seed(unique_seed)
         logger.debug("random seed set to {}".format(unique_seed))
 
-        for _ in range(n_sample):
-            ret = determine_margins(
-                coverage_results,
-                threshold,
-                target_fp_rate,
-                cma_sigma,
-                margins_guess,
-                minimum_coverage,
-            )
-            queue.put(ret)
+        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+            for _ in range(n_sample):
+                ret = determine_margins(
+                    coverage_results,
+                    threshold,
+                    target_fp_rate,
+                    cma_sigma,
+                    margins_guess,
+                    minimum_coverage,
+                )
+                queue.put(ret)
 
     def determine_batch(
         self,
