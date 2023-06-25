@@ -16,9 +16,11 @@ from typing import (
     overload,
 )
 
+import numpy as np
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
+from hifuku.coverage import CoverageResult, DetermineMarginsResult
 from hifuku.pool import PredicatedProblemPool, ProblemT
 
 logger = logging.getLogger(__name__)
@@ -105,6 +107,24 @@ class SampleProblemResponse(Generic[ProblemT], MainResponse):
         vis_dict["problems"] = "[...({} problems)...]".format(n_problems)
         vis_dict["elapsed_time"] = self.elapsed_time  # type: ignore[assignment]
         return vis_dict.__str__()
+
+
+@dataclass
+class DetermineMarginsRequest(MainRequest):
+    n_sample: int
+    n_process: int
+    coverage_results: List[CoverageResult]
+    threshold: float
+    target_fp_rate: float
+    cma_sigma: float
+    margins_guess: Optional[np.ndarray] = None
+    minimum_coverage: Optional[float] = None
+
+
+@dataclass
+class DetermineMarginsResponse(MainResponse):
+    results: Sequence[Optional[DetermineMarginsResult]]
+    elapsed_time: float
 
 
 @overload

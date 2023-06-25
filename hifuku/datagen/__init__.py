@@ -1,6 +1,10 @@
 # flake8: noqa
 
-from hifuku.datagen.batch_margin_determiant import MultiProcesBatchMarginDeterminant
+from hifuku.datagen.batch_margin_determiant import (
+    BatchMarginDeterminant,
+    DistributeBatchMarginDeterminant,
+    MultiProcesBatchMarginDeterminant,
+)
 from hifuku.datagen.batch_sampler import (
     BatchProblemSampler,
     DistributeBatchProblemSampler,

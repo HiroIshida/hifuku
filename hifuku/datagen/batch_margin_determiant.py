@@ -2,12 +2,19 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from multiprocessing import Queue, get_context
+from multiprocessing import Process, Queue, get_context
 from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from hifuku.coverage import CoverageResult, DetermineMarginsResult, determine_margins
+from hifuku.datagen.http_datagen.client import ClientBase
+from hifuku.datagen.http_datagen.request import (
+    DetermineMarginsRequest,
+    DetermineMarginsResponse,
+    http_connection,
+    send_request,
+)
 from hifuku.datagen.utils import split_number
 from hifuku.utils import get_random_seed
 
@@ -105,7 +112,6 @@ class MultiProcesBatchMarginDeterminant(BatchMarginDeterminant):
         queue: Queue[Optional[DetermineMarginsResult]] = Queue()
 
         for idx_process, n_sample_part in enumerate(n_sample_list):
-            show_progress = idx_process == 0
             args = (
                 n_sample_part,
                 queue,
@@ -122,6 +128,61 @@ class MultiProcesBatchMarginDeterminant(BatchMarginDeterminant):
 
         # the result is margins, coverage, fprate order
         result_list: List[Optional[DetermineMarginsResult]] = [queue.get() for _ in range(n_sample)]
+        for p in process_list:
+            p.join()
+        return result_list
+
+
+class DistributeBatchMarginDeterminant(ClientBase[DetermineMarginsRequest], BatchMarginDeterminant):
+    @staticmethod  # called only in generate
+    def send_and_recive_and_put(
+        hostport: HostPortPair, request: DetermineMarginsRequest, queue: Queue
+    ) -> None:
+        logger.debug("send_and_recive_and_put called on pid: {}".format(os.getpid()))
+        with http_connection(*hostport) as conn:
+            response: DetermineMarginsResponse = send_request(conn, request)  # type: ignore
+        for result in response.results:
+            queue.put(result)
+        logger.debug("send_and_recive_and_put finished on pid: {}".format(os.getpid()))
+
+    def determine_batch(
+        self,
+        n_sample: int,
+        coverage_results: List[CoverageResult],
+        threshold: float,
+        target_fp_rate: float,
+        cma_sigma: float,
+        margins_guess: Optional[np.ndarray] = None,
+        minimum_coverage: Optional[float] = None,
+    ) -> Sequence[Optional[DetermineMarginsResult]]:
+
+        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
+        n_sample_table = self.create_gen_number_table(None, n_sample)
+
+        queue: Queue[Optional[DetermineMarginsResult]] = Queue()
+        process_list = []
+        for hostport in hostport_pairs:
+            n_sample_part = n_sample_table[hostport]
+            if n_sample_part > 0:
+                n_process = self.hostport_cpuinfo_map[hostport].n_cpu
+                req = DetermineMarginsRequest(
+                    n_sample_part,
+                    n_process,
+                    coverage_results,
+                    threshold,
+                    target_fp_rate,
+                    cma_sigma,
+                    margins_guess,
+                    minimum_coverage,
+                )
+
+                p = Process(target=self.send_and_recive_and_put, args=(hostport, req, queue))
+                p.start()
+                process_list.append(p)
+
+        # the result is margins, coverage, fprate order
+        result_list: List[Optional[DetermineMarginsResult]] = [queue.get() for _ in range(n_sample)]
+
         for p in process_list:
             p.join()
         return result_list
