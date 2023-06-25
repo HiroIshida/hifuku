@@ -10,7 +10,7 @@ from pathlib import Path
 from skmp.solver.interface import ConfigT, ResultT
 
 from hifuku.datagen import (
-    MultiProcesBatchMarginDeterminant,
+    MultiProcesBatchMarginsDeterminant,
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
@@ -99,7 +99,7 @@ class PostHandler(BaseHTTPRequestHandler):
     ) -> DetermineMarginsResponse:
         ts = time.time()
         logging.info("request: {}".format(request))
-        determinant = MultiProcesBatchMarginDeterminant(request.n_process)
+        determinant = MultiProcesBatchMarginsDeterminant(request.n_process)
         results = determinant.determine_batch(
             request.n_sample,
             request.coverage_results,

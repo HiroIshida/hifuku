@@ -24,7 +24,7 @@ HostPortPair = Tuple[str, int]
 
 
 @dataclass
-class BatchMarginDeterminant(ABC):
+class BatchMarginsDeterminant(ABC):
     @abstractmethod
     def determine_batch(
         self,
@@ -39,7 +39,7 @@ class BatchMarginDeterminant(ABC):
         ...
 
 
-class MultiProcesBatchMarginDeterminant(BatchMarginDeterminant):
+class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
     n_process: int
     n_thread: int
 
@@ -133,7 +133,9 @@ class MultiProcesBatchMarginDeterminant(BatchMarginDeterminant):
         return result_list
 
 
-class DistributeBatchMarginDeterminant(ClientBase[DetermineMarginsRequest], BatchMarginDeterminant):
+class DistributeBatchMarginsDeterminant(
+    ClientBase[DetermineMarginsRequest], BatchMarginsDeterminant
+):
     @staticmethod  # called only in generate
     def send_and_recive_and_put(
         hostport: HostPortPair, request: DetermineMarginsRequest, queue: Queue
