@@ -102,8 +102,11 @@ class ClientBase(Generic[MainRequestT]):
             if not force_continue:
                 raise RuntimeError(message)
 
-    def create_gen_number_table(self, request: MainRequestT, n_gen) -> Dict[HostPortPair, int]:
+    def create_gen_number_table(
+        self, request: Optional[MainRequestT], n_gen
+    ) -> Dict[HostPortPair, int]:
         if self.perf_table is None:
+            assert request is not None
             perf_table = self._measure_performance_of_each_server(request)
             logger.info("performance table: {}".format(perf_table))
         else:

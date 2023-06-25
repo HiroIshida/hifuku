@@ -10,10 +10,13 @@ from pathlib import Path
 from skmp.solver.interface import ConfigT, ResultT
 
 from hifuku.datagen import (
+    MultiProcesBatchMarginsDeterminant,
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
 from hifuku.datagen.http_datagen.request import (
+    DetermineMarginsRequest,
+    DetermineMarginsResponse,
     GetCPUInfoRequest,
     GetCPUInfoResponse,
     GetModuleHashValueRequest,
@@ -91,6 +94,25 @@ class PostHandler(BaseHTTPRequestHandler):
         resp = SampleProblemResponse(problems, elapsed_time)
         return resp
 
+    def process_DetermineMarginsRequest(
+        self, request: DetermineMarginsRequest
+    ) -> DetermineMarginsResponse:
+        ts = time.time()
+        logging.info("request: {}".format(request))
+        determinant = MultiProcesBatchMarginsDeterminant(request.n_process)
+        results = determinant.determine_batch(
+            request.n_sample,
+            request.coverage_results,
+            request.threshold,
+            request.target_fp_rate,
+            request.cma_sigma,
+            request.margins_guess,
+            request.minimum_coverage,
+        )
+        elapsed_time = time.time() - ts
+        resp = DetermineMarginsResponse(results, elapsed_time)
+        return resp
+
     def do_POST(self):
         ts = time.time()
 
@@ -109,6 +131,8 @@ class PostHandler(BaseHTTPRequestHandler):
             resp = self.process_SolveProblemRequest(request)
         elif isinstance(request, SampleProblemRequest):
             resp = self.process_SampleProblemRequest(request)
+        elif isinstance(request, DetermineMarginsRequest):
+            resp = self.process_DetermineMarginsRequest(request)
         else:
             assert False, "request {} is not supported".format(type(request))
         self.wfile.write(pickle.dumps(resp))

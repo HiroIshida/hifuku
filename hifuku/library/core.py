@@ -15,7 +15,6 @@ import numpy as np
 import threadpoolctl
 import torch
 import tqdm
-from cmaes import CMA
 from mohou.trainer import TrainCache, TrainConfig, train
 from rpbench.interface import AbstractTaskSolver
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
@@ -23,10 +22,13 @@ from skmp.trajectory import Trajectory
 
 from hifuku.coverage import CoverageResult
 from hifuku.datagen import (
+    BatchMarginsDeterminant,
     BatchProblemSampler,
     BatchProblemSolver,
+    DistributeBatchMarginsDeterminant,
     DistributeBatchProblemSampler,
     DistributedBatchProblemSolver,
+    MultiProcesBatchMarginsDeterminant,
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
@@ -41,93 +43,6 @@ from hifuku.types import get_clamped_iter
 from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
-
-
-def determine_margins(
-    coverage_results: List[CoverageResult],
-    threshold: float,
-    target_fp_rate: float,
-    cma_sigma: float,
-    margins_guess: Optional[np.ndarray] = None,
-    minimum_coverage: Optional[float] = None,
-) -> Optional[Tuple[List[float], float, float]]:
-    def compute_coverage_and_fp(margins: np.ndarray) -> Tuple[float, float]:
-        est_arr_list, real_arr_list = [], []
-        for coverage_result, margin in zip(coverage_results, margins):
-            est_arr_list.append(coverage_result.values_estimation + margin)
-            real_arr_list.append(coverage_result.values_ground_truth)
-        est_mat = np.array(est_arr_list)
-        real_mat = np.array(real_arr_list)
-
-        # find element indices which have smallest est value
-        est_arr = np.min(est_mat, axis=0)
-        element_indices = np.argmin(est_mat, axis=0)
-        real_arr = np.array([real_mat[idx, i] for i, idx in enumerate(element_indices)])
-
-        # compute (true + false) positive values
-        est_bool_arr = est_arr < threshold
-        real_bool_arr = real_arr < threshold
-
-        n_total = len(est_arr)
-        coverage_est = sum(est_bool_arr) / n_total
-
-        # compute false positve rate
-        fp_rate = sum(np.logical_and(est_bool_arr, ~real_bool_arr)) / sum(est_bool_arr)
-
-        return coverage_est, fp_rate
-
-    target_fp_rate_modified = target_fp_rate - 1e-3  # because penalty method is not tight
-    logger.debug("target fp_rate modified: {}".format(target_fp_rate_modified))
-
-    if margins_guess is None:
-        n_pred = len(coverage_results)
-        margins_guess = np.zeros(n_pred)
-
-    best_score = np.inf
-    best_margins = copy.deepcopy(margins_guess)
-
-    n_trial = 20
-    if minimum_coverage is None:
-        minimum_coverage = 0.0
-
-    for i_trial in range(n_trial):
-        # loop until resulting coverage is greater than minimum coverage
-        optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
-        for generation in tqdm.tqdm(range(1000)):
-            solutions = []
-            for _ in range(optimizer.population_size):
-                x = optimizer.ask()
-                coverage_est, fp_rate = compute_coverage_and_fp(x)
-                J = -coverage_est + 1e4 * max(fp_rate - target_fp_rate_modified, 0) ** 2
-                solutions.append((x, J))
-            optimizer.tell(solutions)
-
-            xs, values = zip(*solutions)
-            best_index = np.argmin(values)
-
-            if values[best_index] < best_score:
-                best_score = values[best_index]
-                best_margins = xs[best_index]
-
-            logger.debug(
-                "[generation {}] coverage: {}, fp_rate: {}".format(
-                    generation, coverage_est, fp_rate
-                )
-            )
-
-        coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(best_margins)
-        logger.debug(
-            "[cma result after {} trials] coverage: {}, fp: {}".format(
-                i_trial, coverage_est_cand, fp_rate_cand
-            )
-        )
-        if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate_modified:
-            logger.info(
-                "[cma result final] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand)
-            )
-            return list(best_margins), coverage_est_cand, fp_rate_cand
-
-    return None
 
 
 @dataclass
@@ -526,6 +441,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     problems_validation: List[ProblemT]
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
+    determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
     project_path: Path
     coverage_rate_previous: Optional[float] = None
@@ -577,7 +493,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             meta_data,
         )
 
-        # setup solver and sampler
+        # setup solver, sampler, determinant
         if solver is None:
             solver = (
                 DistributedBatchProblemSolver(solver_t, solver_config)
@@ -592,6 +508,11 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 if use_distributed
                 else MultiProcessBatchProblemSampler()
             )
+        determinant = (
+            DistributeBatchMarginsDeterminant()
+            if use_distributed
+            else MultiProcesBatchMarginsDeterminant()
+        )
 
         # setup pools
         if pool_single is None:
@@ -645,6 +566,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             problems_validation,
             solver,
             sampler,
+            determinant,
             test_false_positive_rate,
             project_path,
         )
@@ -710,9 +632,9 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             # determine std
             cma_std = self.solver_config.n_max_call * 0.5
 
-            predictors_new = self.library.predictors + [predictor]
             coverages_new = self.library.coverage_results + [coverage_result]
-            ret = determine_margins(
+            results = self.determinant.determine_batch(
+                80,
                 coverages_new,
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,
@@ -720,13 +642,22 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 minimum_coverage=self.coverage_rate_previous,
             )
 
-            if ret is None:
+            best_margins = None
+            max_coverage = -np.inf
+            for result in results:
+                if result is None:
+                    continue
+                if result.coverage > max_coverage:
+                    max_coverage = result.coverage
+                    best_margins = result.best_margins
+
+            if best_margins is None:
                 # TODO: we should not ignore when self.config.ignore_useless_traj=False
                 logger.info("no improvement by this element")
                 return
 
-            margins, coverage_rate, fp_rate = ret
-            self.coverage_rate_previous = coverage_rate
+            margins = best_margins
+            self.coverage_rate_previous = max_coverage
         else:
             if self.config.bootstrap_trial > 0:
                 logger.info("determine margin using bootstrap method")
