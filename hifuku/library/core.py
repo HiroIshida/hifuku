@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 
 
 def determine_margins(
-    predictors: List[IterationPredictor],
     coverage_results: List[CoverageResult],
     threshold: float,
     target_fp_rate: float,
@@ -81,7 +80,7 @@ def determine_margins(
     logger.debug("target fp_rate modified: {}".format(target_fp_rate_modified))
 
     if margins_guess is None:
-        n_pred = len(predictors)
+        n_pred = len(coverage_results)
         margins_guess = np.zeros(n_pred)
 
     best_score = np.inf
@@ -714,7 +713,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             predictors_new = self.library.predictors + [predictor]
             coverages_new = self.library.coverage_results + [coverage_result]
             ret = determine_margins(
-                predictors_new,
                 coverages_new,
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,
