@@ -19,9 +19,10 @@ from hifuku.config import ServerSpec
 from hifuku.datagen import (
     BatchProblemSampler,
     BatchProblemSolver,
+    DistributeBatchMarginsDeterminant,
     DistributeBatchProblemSampler,
     DistributedBatchProblemSolver,
-    MultiProcesBatchMarginDeterminant,
+    MultiProcesBatchMarginsDeterminant,
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
@@ -195,14 +196,20 @@ def test_create_dataset():
             pass
 
 
-def test_batch_determinant():
-    determinant = MultiProcesBatchMarginDeterminant(2)
+def test_batch_determinant(server):
     coverage_results_path = Path(__file__).resolve().parent / "data" / "coverage_results.pkl"
     with coverage_results_path.open(mode="rb") as f:
         coverage_results = pickle.load(f)
-    n_sample = 4
-    results = determinant.determine_batch(n_sample, coverage_results, 5, 0.1, 5, None, None)
-    assert len(results) == n_sample
+
+    specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
+    determinant_list = []
+    determinant_list.append(MultiProcesBatchMarginsDeterminant(4))
+    determinant_list.append(DistributeBatchMarginsDeterminant(specs))
+
+    for determinant in determinant_list:
+        n_sample = 8
+        results = determinant.determine_batch(n_sample, coverage_results, 5, 0.1, 5, None, None)
+        assert len(results) == n_sample
 
 
 if __name__ == "__main__":
