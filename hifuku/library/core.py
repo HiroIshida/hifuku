@@ -792,7 +792,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         # if len(problems) > n_tau.
         init_solutions = [init_solution] * self.config.n_problem
 
-        n_tau = 2000  # TODO: should be adaptive according to the data size
+        n_tau = 1000  # TODO: should be adaptive according to the data size
         partial_problems_list = [problems[i : i + n_tau] for i in range(0, len(problems), n_tau)]
         for partial_problems in partial_problems_list:
             self.solver.create_dataset(
