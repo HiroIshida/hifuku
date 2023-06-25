@@ -1,9 +1,12 @@
+import copy
 import logging
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
+import tqdm
+from cmaes import CMA
 
 logger = logging.getLogger(__name__)
 
@@ -103,3 +106,92 @@ class CoverageResult:
         string += "false positive: {}, ".format(sum(self.false_postive_bools))
         string += "false negative: {}".format(sum(self.false_negative_bools))
         return string
+
+
+def determine_margins(
+    coverage_results: List[CoverageResult],
+    threshold: float,
+    target_fp_rate: float,
+    cma_sigma: float,
+    margins_guess: Optional[np.ndarray] = None,
+    minimum_coverage: Optional[float] = None,
+) -> Optional[Tuple[List[float], float, float]]:
+    def compute_coverage_and_fp(margins: np.ndarray) -> Tuple[float, float]:
+        est_arr_list, real_arr_list = [], []
+        for coverage_result, margin in zip(coverage_results, margins):
+            est_arr_list.append(coverage_result.values_estimation + margin)
+            real_arr_list.append(coverage_result.values_ground_truth)
+        est_mat = np.array(est_arr_list)
+        real_mat = np.array(real_arr_list)
+
+        # find element indices which have smallest est value
+        est_arr = np.min(est_mat, axis=0)
+        element_indices = np.argmin(est_mat, axis=0)
+        real_arr = np.array([real_mat[idx, i] for i, idx in enumerate(element_indices)])
+
+        # compute (true + false) positive values
+        est_bool_arr = est_arr < threshold
+        real_bool_arr = real_arr < threshold
+
+        n_total = len(est_arr)
+        coverage_est = sum(est_bool_arr) / n_total
+
+        # compute false positve rate
+        fp_rate = sum(np.logical_and(est_bool_arr, ~real_bool_arr)) / sum(est_bool_arr)
+
+        return coverage_est, fp_rate
+
+    target_fp_rate_modified = target_fp_rate - 1e-3  # because penalty method is not tight
+    logger.debug("target fp_rate modified: {}".format(target_fp_rate_modified))
+
+    if margins_guess is None:
+        n_pred = len(coverage_results)
+        margins_guess = np.zeros(n_pred)
+
+    best_score = np.inf
+    best_margins = copy.deepcopy(margins_guess)
+
+    n_trial = 20
+    if minimum_coverage is None:
+        minimum_coverage = 0.0
+
+    coverage_est = -np.inf
+    fp_rate = -np.inf
+    for i_trial in range(n_trial):
+        # loop until resulting coverage is greater than minimum coverage
+        optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
+        for generation in tqdm.tqdm(range(1000)):
+            solutions = []
+            for _ in range(optimizer.population_size):
+                x = optimizer.ask()
+                coverage_est, fp_rate = compute_coverage_and_fp(x)
+                J = -coverage_est + 1e4 * max(fp_rate - target_fp_rate_modified, 0) ** 2
+                solutions.append((x, J))
+            optimizer.tell(solutions)
+
+            xs, values = zip(*solutions)
+            best_index = np.argmin(values)
+
+            if values[best_index] < best_score:
+                best_score = values[best_index]
+                best_margins = xs[best_index]
+
+            logger.debug(
+                "[generation {}] coverage: {}, fp_rate: {}".format(
+                    generation, coverage_est, fp_rate
+                )
+            )
+
+        coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(best_margins)
+        logger.debug(
+            "[cma result after {} trials] coverage: {}, fp: {}".format(
+                i_trial, coverage_est_cand, fp_rate_cand
+            )
+        )
+        if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate_modified:
+            logger.info(
+                "[cma result final] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand)
+            )
+            return list(best_margins), coverage_est_cand, fp_rate_cand
+
+    return None
