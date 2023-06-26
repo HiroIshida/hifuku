@@ -530,9 +530,8 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         assert pool_multiple.parallelizable()
 
         # create validation problems
-        parent_path = Path("/tmp/hifuku-validatino-set")
-        parent_path.mkdir(exist_ok=True)
-        validation_cache_path = parent_path / "{}-validation_set.pkl".format(problem_type.__name__)
+        project_path.mkdir(exist_ok=True)
+        validation_cache_path = project_path / "{}-validation_set.pkl".format(problem_type.__name__)
 
         if reuse_cached_validation_set:
             assert problems_validation is None
