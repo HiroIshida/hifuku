@@ -846,25 +846,21 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     ) -> Trajectory:
         logger.info("select single solution out of {} candidates".format(len(candidates)))
 
-        score_list = []
+        candidates_repeated = []
+        n_problem = len(problems)
+        n_cand = len(candidates)
+        for cand in candidates:
+            candidates_repeated.extend([cand] * n_problem)
+        problems_repeated = problems * n_cand
+        results = self.solver.solve_batch(problems_repeated, candidates_repeated)
+        assert len(results) == n_problem * n_cand
+        iterval_reals = np.array([get_clamped_iter(r[0], self.solver_config) for r in results])
 
-        for i_cand, candidate in enumerate(candidates):
-            solution_guesses = [candidate] * len(problems)
-            # results = self.solver.solve_batch(problems, solution_guesses)
-            # TODO: make flatten problem and use distributed
-            solver = MultiProcessBatchProblemSolver[ConfigT, ResultT](
-                self.solver_type, self.solver_config
-            )  # distribute here is really slow
-            results = solver.solve_batch(problems, solution_guesses)
-            # consider all problems has n_inner_problem = 1
-            iterval_real_list = [get_clamped_iter(r[0], self.solver_config) for r in results]
-            score = -sum(iterval_real_list)  # must be nagative
-            logger.debug("*score of solution candidate {}: {}".format(i_cand, score))
-            score_list.append(score)
-
-        best_idx = np.argmax(score_list)
+        iterval_reals = iterval_reals.reshape(n_cand, n_problem)
+        cand_scores = -np.sum(iterval_reals, axis=1)
+        best_idx = np.argmax(cand_scores)
         best_solution = candidates[best_idx]
-        logger.debug("best score: {}".format(score_list[best_idx]))
+        logger.debug("best score: {}".format(cand_scores[best_idx]))
         return best_solution
 
 
