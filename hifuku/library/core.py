@@ -65,6 +65,9 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     uuidval: str
     meta_data: Dict
     limit_thread: bool = False
+    _optimal_coverage_estimate: Optional[
+        float
+    ] = None  # the cached optimal coverage after margins optimization
 
     def __post_init__(self):
         assert self.ae_model.trained
@@ -100,6 +103,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             uuidval,
             meta_data,
             True,  # assume that we are gonna build library and not in eval time.
+            None,
         )
 
     def put_on_device(self, device: torch.device):
@@ -444,7 +448,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
     project_path: Path
-    coverage_rate_previous: Optional[float] = None
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -639,7 +642,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,
                 cma_std,
-                minimum_coverage=self.coverage_rate_previous,
+                minimum_coverage=self.library._optimal_coverage_estimate,
             )
 
             best_margins = None
@@ -657,7 +660,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 return
 
             margins = best_margins
-            self.coverage_rate_previous = max_coverage
+            self.library._optimal_coverage_estimate = max_coverage
         else:
             if self.config.bootstrap_trial > 0:
                 logger.info("determine margin using bootstrap method")
