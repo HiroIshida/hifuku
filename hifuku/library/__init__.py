@@ -1,7 +1,8 @@
 # flake8: noqa
 
 from hifuku.library.core import (
-    LibraryBasedSolver,
+    LibraryBasedGuaranteedSolver,
+    LibraryBasedHeuristicSolver,
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,

@@ -7,7 +7,11 @@ from mohou.file import get_project_path
 from rpbench.compatible_solver import CompatibleSolvers
 
 from hifuku.domain import select_domain
-from hifuku.library import LibraryBasedSolver, SolutionLibrary
+from hifuku.library import (
+    LibraryBasedGuaranteedSolver,
+    LibraryBasedHeuristicSolver,
+    SolutionLibrary,
+)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -28,8 +32,11 @@ if __name__ == "__main__":
     pp = get_project_path("hifuku-{}".format(domain.get_domain_name()))
     libraries = SolutionLibrary.load(pp, domain.task_type, domain.solver_type, torch.device("cpu"))
     lib = libraries[0]
-    proposed = LibraryBasedSolver.init(lib)
-    solver_table["proposed"] = proposed
+    proposed = LibraryBasedGuaranteedSolver.init(lib)
+    solver_table["proposed-guaranteed"] = proposed
+
+    proposed = LibraryBasedHeuristicSolver.init(lib)
+    solver_table["proposed-heuristic"] = proposed
 
     results = []
     false_positive_seq = []
