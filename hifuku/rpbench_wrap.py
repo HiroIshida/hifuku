@@ -3,7 +3,6 @@ from rpbench.interface import SamplableBase, TaskBase
 from rpbench.jaxon.below_table import (
     HumanoidTableReachingTask as _HumanoidTableReachingTask,
 )
-from rpbench.multiple_rooms import EightRoomsPlanningTask as _EightRoomsPlanningTask
 from rpbench.pr2.kivapod import KivapodEmptyReachingTask as _KivapodEmptyReachingTask
 
 # fmt: off
@@ -41,6 +40,9 @@ from rpbench.two_dimensional.bubbly_world import (
     BubblySimplePointConnectTask as _BubblySimplePointConnectTask,
 )
 from rpbench.two_dimensional.maze import MazeSolvingTask as _MazeSolvingTask
+from rpbench.two_dimensional.multiple_rooms import (
+    EightRoomsPlanningTask as _EightRoomsPlanningTask,
+)
 
 # fmt: on
 from hifuku.llazy.dataset import PicklableChunkBase, PicklableTensorChunkBase

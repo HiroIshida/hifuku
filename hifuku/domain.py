@@ -172,10 +172,12 @@ class EightRooms_SQP_Domain(DomainProtocol):
     auto_encoder_project_name = None
 
 
-class EightRooms_Lightning_Domain(DomainProtocol):
+class EightRooms_RRT_Domain(DomainProtocol):
     task_type = EightRoomsPlanningTask
     solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(200, 1, simplify=False, expbased_planner_backend="lightning")
+    solver_config = OMPLSolverConfig(
+        300, 1, simplify=False, expbased_planner_backend="ertconnect", ertconnect_eps=0.5
+    )
     auto_encoder_project_name = None
 
 
@@ -252,7 +254,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         ring_rrt = RingObstacleFree_RRT_Domain
         ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
         eight_rooms_sqp = EightRooms_SQP_Domain
-        eight_rooms_lt = EightRooms_Lightning_Domain
+        eight_rooms_rrt = EightRooms_RRT_Domain
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         bubbly_simple_mesh_sqp = BubblySimpleMeshPointConnecting_SQP_Domain
         bubbly_simple_mesh_rrt = BubblySimpleMeshPointConnecting_RRT_Domain
