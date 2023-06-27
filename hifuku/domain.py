@@ -97,7 +97,9 @@ class TODR_SQP_Domain(DomainProtocol):
 class TBDR_SQP_Domain(DomainProtocol):
     task_type = TabletopBoxDualArmReachingTask
     solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
+    solver_config = SQPBasedSolverConfig(
+        n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
+    )
     auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
 
 
@@ -105,10 +107,10 @@ class TBDR_RRT_Domain(DomainProtocol):
     task_type = TabletopBoxDualArmReachingTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
-        n_max_call=2000,
+        n_max_call=1000,
         n_max_satisfaction_trial=1,
         expbased_planner_backend="ertconnect",
-        ertconnect_eps=2.0,
+        ertconnect_eps=0.5,
     )
     auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
 
@@ -201,7 +203,7 @@ class BubblySimpleMeshPointConnecting_SQP_Domain(DomainProtocol):
         motion_step_satisfaction="implicit",
         verbose=False,
     )
-    auto_encoder_project_name = "BubblyMeshPointConnectTask-AutoEncoder"
+    auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
 
 
 class BubblySimpleMeshPointConnecting_RRT_Domain(DomainProtocol):
