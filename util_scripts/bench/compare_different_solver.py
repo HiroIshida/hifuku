@@ -12,9 +12,12 @@ if __name__ == "__main__":
     parser.add_argument("-n", type=int, default=300, help="")
     parser.add_argument("-m", type=int, default=12, help="number of process")
     parser.add_argument("-domain", type=str, default="humanoid_trr_sqp", help="")
+    parser.add_argument("--log", action="store_true", help="log plot")
+    args = parser.parse_args()
 
     args = parser.parse_args()
 
+    log_plot: bool = args.log
     domain_name: str = args.domain
     domain = select_domain(domain_name)
 
@@ -45,7 +48,8 @@ if __name__ == "__main__":
     instance_wise = False
     if instance_wise:
         fig, ax = plt.subplots()
-        ax.set_yscale("log")
+        if log_plot:
+            ax.set_yscale("log")
         for key, value in plot_table_success.items():
             indices, elapsed_times = zip(*value)
             print(key, len(indices))
@@ -64,7 +68,8 @@ if __name__ == "__main__":
         ax1.set_xticks([], minor=False)
 
         ax2 = axes[1]
-        ax2.set_yscale("log")
+        if log_plot:
+            ax2.set_yscale("log")
         ax2.grid()
         ax2.set_ylabel("planning time")
 
