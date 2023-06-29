@@ -479,6 +479,9 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         self.pool_single.reset()
         self.pool_multiple.reset()
 
+    def at_first_iteration(self) -> bool:
+        return len(self.library.predictors) == 0
+
     @classmethod
     def initialize(
         cls,
@@ -612,13 +615,8 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         logger.info("active sampling step")
         self.reset_pool()
 
-        is_initialized = len(self.library.predictors) > 0
-        if is_initialized:
-            init_solution = self._determine_init_solution()
-            problems = self._generate_problem_samples()
-        else:
-            init_solution = self._determine_init_solution_init()
-            problems = self._generate_problem_samples_init()
+        init_solution = self._determine_init_solution()
+        problems = self._generate_problem_samples()
         predictor = self.learn_predictor(init_solution, self.project_path, problems)
 
         logger.info("start measuring coverage")
@@ -782,7 +780,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         assert problem_pool.n_problem_inner == 1
 
-        if self.config.sample_from_difficult_region:
+        if self.config.sample_from_difficult_region and not self.at_first_iteration():
             # because sampling from near-feasible-boundary is effective in most case....
             pred_bit_difficult = DifficultProblemPredicate(
                 problem_pool.problem_type,
@@ -892,8 +890,13 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT, ConfigT, Re
         )
 
         logger.info("sample difficult problems")
-        difficult_problems, _ = self._sample_difficult_problems(
-            self.config.n_difficult_problem, problem_pool
-        )
+        if self.at_first_iteration():
+            difficult_problems = [
+                next(problem_pool) for _ in range(self.config.n_difficult_problem)
+            ]
+        else:
+            difficult_problems, _ = self._sample_difficult_problems(
+                self.config.n_difficult_problem, problem_pool
+            )
         best_solution = self._select_solution_candidates(solution_candidates, difficult_problems)
         return best_solution
