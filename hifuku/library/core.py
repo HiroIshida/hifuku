@@ -461,6 +461,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     sampler: BatchProblemSampler
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
+    adjust_margins: bool
     project_path: Path
 
     @property
@@ -499,6 +500,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         use_distributed: bool = False,
         reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
+        adjust_margins: bool = True,
     ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -587,6 +589,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             sampler,
             determinant,
             test_false_positive_rate,
+            adjust_margins,
             project_path,
         )
 
@@ -642,61 +645,64 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
         assert self.library.coverage_results is not None
 
-        if len(self.library.predictors) > 0:
-            # determine std
-            cma_std = self.solver_config.n_max_call * 0.5
-
-            coverages_new = self.library.coverage_results + [coverage_result]
-            results = self.determinant.determine_batch(
-                80,
-                coverages_new,
-                self.solver_config.n_max_call,
-                self.config.acceptable_false_positive_rate,
-                cma_std,
-                minimum_coverage=self.library._optimal_coverage_estimate,
-            )
-
-            best_margins = None
-            max_coverage = -np.inf
-            for result in results:
-                if result is None:
-                    continue
-                if result.coverage > max_coverage:
-                    max_coverage = result.coverage
-                    best_margins = result.best_margins
-
-            if best_margins is None:
-                # TODO: we should not ignore when self.config.ignore_useless_traj=False
-                logger.info("no improvement by this element")
-                return
-
-            margins = best_margins
-            self.library._optimal_coverage_estimate = max_coverage
+        if not self.adjust_margins:
+            margins = self.library.margins + [0.0]
         else:
-            if self.config.bootstrap_trial > 0:
-                logger.info("determine margin using bootstrap method")
-                margin_list = []
-                for _ in tqdm.tqdm(range(self.config.bootstrap_trial)):
-                    coverage_dummy = coverage_result.bootstrap_sampling()
-                    margin = coverage_dummy.determine_margin(
-                        self.config.acceptable_false_positive_rate
-                    )
-                    margin_list.append(margin)
-                margin = float(np.percentile(margin_list, self.config.bootstrap_percentile))
-                logger.info(margin_list)
-                logger.info("margin is set to {}".format(margin))
-            else:
-                logger.info("determine margin without bootstrap method")
-                margin = coverage_result.determine_margin(
-                    self.config.acceptable_false_positive_rate
+            if len(self.library.predictors) > 0:
+                # determine margin using cmaes
+                cma_std = self.solver_config.n_max_call * 0.5
+                coverages_new = self.library.coverage_results + [coverage_result]
+                results = self.determinant.determine_batch(
+                    80,
+                    coverages_new,
+                    self.solver_config.n_max_call,
+                    self.config.acceptable_false_positive_rate,
+                    cma_std,
+                    minimum_coverage=self.library._optimal_coverage_estimate,
                 )
 
-            if not np.isfinite(margin) and self.config.ignore_useless_traj:
-                message = "margin value {} is invalid. retrun from active_sampling".format(margin)
-                logger.info(message)
-                return
+                best_margins = None
+                max_coverage = -np.inf
+                for result in results:
+                    if result is None:
+                        continue
+                    if result.coverage > max_coverage:
+                        max_coverage = result.coverage
+                        best_margins = result.best_margins
 
-            margins = [margin]
+                if best_margins is None:
+                    # TODO: we should not ignore when self.config.ignore_useless_traj=False
+                    logger.info("no improvement by this element")
+                    return
+
+                margins = best_margins
+                self.library._optimal_coverage_estimate = max_coverage
+            else:
+                if self.config.bootstrap_trial > 0:
+                    logger.info("determine margin using bootstrap method")
+                    margin_list = []
+                    for _ in tqdm.tqdm(range(self.config.bootstrap_trial)):
+                        coverage_dummy = coverage_result.bootstrap_sampling()
+                        margin = coverage_dummy.determine_margin(
+                            self.config.acceptable_false_positive_rate
+                        )
+                        margin_list.append(margin)
+                    margin = float(np.percentile(margin_list, self.config.bootstrap_percentile))
+                    logger.info(margin_list)
+                    logger.info("margin is set to {}".format(margin))
+                else:
+                    logger.info("determine margin without bootstrap method")
+                    margin = coverage_result.determine_margin(
+                        self.config.acceptable_false_positive_rate
+                    )
+
+                if not np.isfinite(margin) and self.config.ignore_useless_traj:
+                    message = "margin value {} is invalid. retrun from active_sampling".format(
+                        margin
+                    )
+                    logger.info(message)
+                    return
+                margins = [margin]
 
         # update library
         self.library.predictors.append(predictor)

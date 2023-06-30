@@ -122,6 +122,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
                 problems_validation=pool_validation,
                 solver=solver,
                 sampler=sampler,
+                adjust_margins=False,
             )
             # init
             lib_sampler.step_active_sampling()
