@@ -1,3 +1,4 @@
+import itertools
 import logging
 import os
 import pickle
@@ -48,7 +49,7 @@ class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
     problems: List[ProblemT]
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
-    init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]]
+    init_solutions: Optional[Sequence[Union[List[Trajectory], Trajectory]]]
     show_process_bar: bool
     cache_path: Path
     solve_default: bool = False
@@ -63,7 +64,8 @@ class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
         return len(self.problems)
 
     def __post_init__(self) -> None:
-        assert len(self.problems) == len(self.init_solutions)
+        if self.init_solutions is not None:
+            assert len(self.problems) == len(self.init_solutions)
 
 
 class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
@@ -86,12 +88,17 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
         np.random.seed(random_seed)
         disable_tqdm = not self.arg.show_process_bar
 
+        init_solutions = self.arg.init_solutions
+        if init_solutions is None:
+            init_solutions = (None for _ in itertools.count())  # type: ignore[assignment]
+            assert init_solutions is not None  # why we need this to suppress mypy error
+
         idx_resulsts_pairs = []
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             # NOTE: because NLP solver and collision detection algrithm may use multithreading
             with tqdm.tqdm(total=len(self.arg), disable=disable_tqdm) as pbar:
                 for idx, task, init_solution in zip(
-                    self.arg.indices, self.arg.problems, self.arg.init_solutions
+                    self.arg.indices, self.arg.problems, init_solutions
                 ):
 
                     solver = self.arg.solver_t.init(self.arg.solver_config)
