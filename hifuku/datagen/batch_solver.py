@@ -253,7 +253,8 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         assert len(tasks) > 0
 
         n_process = min(self.n_process, len(tasks))
-        logger.debug("*n_process: {}".format(n_process))
+        logger.info("*n_process: {}".format(n_process))
+        logger.info("use_default_solver: {}".format(use_default_solver))
 
         is_single_process = n_process == 1
         if is_single_process:
@@ -372,6 +373,7 @@ class DistributedBatchProblemSolver(
         init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
         use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
+        logger.debug("use_default_solver: {}".format(use_default_solver))
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         problems_measure = problems[: self.n_measure_sample]
