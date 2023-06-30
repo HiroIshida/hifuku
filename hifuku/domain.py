@@ -167,7 +167,7 @@ class EightRooms_SQP_Domain(DomainProtocol):
     task_type = EightRoomsPlanningTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
-        n_wp=60, n_max_call=10, motion_step_satisfaction="explicit"
+        n_wp=20, n_max_call=10, motion_step_satisfaction="explicit"
     )
     auto_encoder_project_name = None
 
@@ -176,7 +176,12 @@ class EightRooms_RRT_Domain(DomainProtocol):
     task_type = EightRoomsPlanningTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
-        300, 1, simplify=False, expbased_planner_backend="ertconnect", ertconnect_eps=0.5
+        600,
+        1,
+        ertconnect_eps=0.5,
+        algorithm_range=0.1,
+        simplify=False,
+        expbased_planner_backend="ertconnect",
     )
     auto_encoder_project_name = None
 
