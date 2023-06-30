@@ -2,7 +2,7 @@ import contextlib
 import logging
 import pickle
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from http.client import HTTPConnection
 from typing import (
     Generic,
@@ -26,11 +26,26 @@ from hifuku.pool import PredicatedProblemPool, ProblemT
 logger = logging.getLogger(__name__)
 
 
-class Request:
+class FormatMixin:
+    def ignore_fields(self) -> Tuple[str, ...]:
+        return ()
+
+    def __str__(self) -> str:
+        vis_dict = {}
+        # NOTE: usage of asdict implicitly requires that mixed-ined class is a dataclass
+        for key, val in asdict(self).items():  # type: ignore[call-overload]
+            if key in self.ignore_fields():
+                vis_dict[key] = "????"
+            else:
+                vis_dict[key] = val
+        return vis_dict.__str__()
+
+
+class Request(FormatMixin):
     ...
 
 
-class Response:
+class Response(FormatMixin):
     ...
 
 
@@ -77,8 +92,8 @@ class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
     n_process: int
     use_default_solver: bool
 
-    def __str__(self) -> str:
-        return "[...hogehoge...]"
+    def ignore_fields(self) -> Tuple[str, ...]:
+        return ("problems", "init_solutions")
 
 
 @dataclass
@@ -86,8 +101,8 @@ class SolveProblemResponse(Generic[ResultT], MainResponse):
     results_list: List[Tuple[ResultT, ...]]
     elapsed_time: float
 
-    def __str__(self) -> str:
-        return "[...hogehoge...]"
+    def ignore_fields(self) -> Tuple[str, ...]:
+        return ("results_list", "init_solutions")
 
 
 @dataclass
@@ -96,18 +111,17 @@ class SampleProblemRequest(Generic[ProblemT], MainRequest):
     pool: PredicatedProblemPool[ProblemT]
     n_process: int
 
+    def ignore_fields(self) -> Tuple[str, ...]:
+        return ("pool",)
+
 
 @dataclass
 class SampleProblemResponse(Generic[ProblemT], MainResponse):
     problems: List[ProblemT]
     elapsed_time: float
 
-    def __str__(self) -> str:
-        vis_dict = {}
-        n_problems = len(self.problems)
-        vis_dict["problems"] = "[...({} problems)...]".format(n_problems)
-        vis_dict["elapsed_time"] = self.elapsed_time  # type: ignore[assignment]
-        return vis_dict.__str__()
+    def ignore_fields(self) -> Tuple[str, ...]:
+        return ("problems",)
 
 
 @dataclass
@@ -121,11 +135,17 @@ class DetermineMarginsRequest(MainRequest):
     margins_guess: Optional[np.ndarray] = None
     minimum_coverage: Optional[float] = None
 
+    def ignore_fields(self) -> Tuple[str, ...]:
+        return ("coverage_results",)
+
 
 @dataclass
 class DetermineMarginsResponse(MainResponse):
     results: Sequence[Optional[DetermineMarginsResult]]
     elapsed_time: float
+
+    def ignore_fields(self) -> Tuple[str, ...]:
+        return ("results",)
 
 
 @overload
