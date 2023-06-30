@@ -7,7 +7,6 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from multiprocessing import Process
 from pathlib import Path
 from typing import Generic, List, Optional, Tuple
 
@@ -171,6 +170,10 @@ class DistributeBatchProblemSampler(
         request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1)
         n_sample_table = self.create_gen_number_table(request_for_measure, n_sample)
 
+        # NOTE: after commit 18c664f, process starts hang with forking.
+        # spawn is slower than fork, but number of spawining processes is at most several
+        # in this case, so it's almost no cost
+        ctx = multiprocessing.get_context(method="spawn")
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             process_list = []
@@ -179,8 +182,7 @@ class DistributeBatchProblemSampler(
                 if n_sample_part > 0:
                     n_process = self.hostport_cpuinfo_map[hostport].n_cpu
                     req = SampleProblemRequest(n_sample_part, pool, n_process)
-
-                    p = Process(
+                    p = ctx.Process(
                         target=self.send_and_recive_and_write, args=(hostport, req, td_path)
                     )
                     p.start()
