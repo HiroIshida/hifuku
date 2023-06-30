@@ -51,7 +51,7 @@ class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
     init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]]
     show_process_bar: bool
     cache_path: Path
-    solve_default: bool = False
+    use_default_solver: bool
     """
     NOTE: init_solution
     - is None if solve scratch.
@@ -94,19 +94,24 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                     self.arg.indices, self.arg.problems, self.arg.init_solutions
                 ):
 
-                    solver = self.arg.solver_t.init(self.arg.solver_config)
-                    init_solutions_per_inner = duplicate_init_solution_if_not_list(
-                        init_solution, task.n_inner_task
-                    )
+                    if self.arg.use_default_solver:
+                        results = task.solve_default()
+                    else:
+                        solver = self.arg.solver_t.init(self.arg.solver_config)
+                        init_solutions_per_inner = duplicate_init_solution_if_not_list(
+                            init_solution, task.n_inner_task
+                        )
 
-                    results = []
-                    problems = task.export_problems()
-                    for problem, init_solution_per_inner in tqdm.tqdm(
-                        zip(problems, init_solutions_per_inner), disable=disable_tqdm, leave=False
-                    ):
-                        solver.setup(problem)
-                        result = solver.solve(init_solution_per_inner)
-                        results.append(result)
+                        results = []
+                        problems = task.export_problems()
+                        for problem, init_solution_per_inner in tqdm.tqdm(
+                            zip(problems, init_solutions_per_inner),
+                            disable=disable_tqdm,
+                            leave=False,
+                        ):
+                            solver.setup(problem)
+                            result = solver.solve(init_solution_per_inner)
+                            results.append(result)
                     tupled_results = tuple(results)
 
                     log_with_prefix("solve single task")
@@ -163,6 +168,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         self,
         problems: List[ProblemT],
         init_solutions: Sequence[Optional[Trajectory]],
+        use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
         ...
 
@@ -238,6 +244,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         self,
         tasks: List[ProblemT],
         init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
+        use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
 
         filter_warnings()
@@ -250,23 +257,29 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
 
         is_single_process = n_process == 1
         if is_single_process:
-            results_list: List[Tuple[ResultT, ...]] = []
-            n_max_call = self.config.n_max_call
-            logger.debug("*n_max_call: {}".format(n_max_call))
 
-            solver = self.solver_t.init(self.config)
-            for task, init_solution in zip(tasks, init_solutions):
-                init_solutions_per_inner = duplicate_init_solution_if_not_list(
-                    init_solution, task.n_inner_task
-                )
-                problems = task.export_problems()
-                results: List[ResultT] = []
-                for problem, init_solution_per_inner in zip(problems, init_solutions_per_inner):
-                    solver.setup(problem)
-                    result = solver.solve(init_solution_per_inner)
-                    results.append(result)
-                results_list.append(tuple(results))
-            return results_list
+            if use_default_solver:
+                # NOTE: sovle_default does not return ResultT ...
+                # Maybe we should replace ResultT with ResultProtocol ??
+                return [tuple(task.solve_default()) for task in tasks]  # type: ignore
+            else:
+                results_list: List[Tuple[ResultT, ...]] = []
+                n_max_call = self.config.n_max_call
+                logger.debug("*n_max_call: {}".format(n_max_call))
+
+                solver = self.solver_t.init(self.config)
+                for task, init_solution in zip(tasks, init_solutions):
+                    init_solutions_per_inner = duplicate_init_solution_if_not_list(
+                        init_solution, task.n_inner_task
+                    )
+                    problems = task.export_problems()
+                    results: List[ResultT] = []
+                    for problem, init_solution_per_inner in zip(problems, init_solutions_per_inner):
+                        solver.setup(problem)
+                        result = solver.solve(init_solution_per_inner)
+                        results.append(result)
+                    results_list.append(tuple(results))
+                return results_list
         else:
             indices = np.array(list(range(len(tasks))))
             indices_list_per_worker = np.array_split(indices, n_process)
@@ -300,6 +313,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
                         init_solutions_part,
                         enable_tqdm,
                         td_path,
+                        use_default_solver,
                     )
                     worker = BatchProblemSolverWorker(arg)  # type: ignore
                     process_list.append(worker)
@@ -356,13 +370,19 @@ class DistributedBatchProblemSolver(
         self,
         problems: List[ProblemT],
         init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
+        use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         problems_measure = problems[: self.n_measure_sample]
         init_solutions_measure = init_solutions[: self.n_measure_sample]
         request_for_measure = SolveProblemRequest(
-            problems_measure, self.solver_t, self.config, init_solutions_measure, -1
+            problems_measure,
+            self.solver_t,
+            self.config,
+            init_solutions_measure,
+            -1,
+            use_default_solver,
         )
         n_problem = len(problems)
         n_problem_table = self.create_gen_number_table(request_for_measure, n_problem)
@@ -377,7 +397,12 @@ class DistributedBatchProblemSolver(
                 problems_part = [problems[i] for i in indices]
                 init_solutions_part = [init_solutions[i] for i in indices]
                 req = SolveProblemRequest(
-                    problems_part, self.solver_t, self.config, init_solutions_part, n_process
+                    problems_part,
+                    self.solver_t,
+                    self.config,
+                    init_solutions_part,
+                    n_process,
+                    use_default_solver,
                 )
                 if len(problems_part) > 0:
                     p = Process(

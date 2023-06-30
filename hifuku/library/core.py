@@ -821,7 +821,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             problems = problems1 + problems2
 
             logger.info("{} solve batch".format(prefix))
-            resultss = self.solver.solve_batch(problems, [None] * n_batch)
+            resultss = self.solver.solve_batch(problems, [None] * n_batch, use_default_solver=True)
 
             for results in resultss:
                 result = results[0]

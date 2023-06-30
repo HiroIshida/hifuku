@@ -75,6 +75,7 @@ class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
     config: ConfigT
     init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]]
     n_process: int
+    use_default_solver: bool
 
     def __str__(self) -> str:
         return "[...hogehoge...]"

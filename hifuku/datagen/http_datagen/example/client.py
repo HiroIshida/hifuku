@@ -32,7 +32,12 @@ with http_connection("localhost", 8080) as conn:
     init_solution = Trajectory(list(np.zeros((10, 15))))
     init_solutions = [init_solution] * 3
     req3 = SolveProblemRequest(
-        problems, OMPLSolver, OMPLSolverConfig(), init_solutions, resp2.n_cpu
+        problems,
+        OMPLSolver,
+        OMPLSolverConfig(),
+        init_solutions,
+        resp2.n_cpu,
+        use_default_solver=False,
     )
     resp3 = send_request(conn, req3)
     print(resp3.elapsed_time)

@@ -2,10 +2,8 @@ import argparse
 import logging
 import os
 import pickle
-import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 
 from skmp.solver.interface import ConfigT, ResultT
 
@@ -65,10 +63,9 @@ class PostHandler(BaseHTTPRequestHandler):
         gen = MultiProcessBatchProblemSolver[ConfigT, ResultT](
             request.solver_t, request.config, request.n_process
         )
-
-        with tempfile.TemporaryDirectory() as td:
-            Path(td)
-            results_list = gen.solve_batch(request.problems, request.init_solutions)
+        results_list = gen.solve_batch(
+            request.problems, request.init_solutions, request.use_default_solver
+        )
 
         elapsed_time = time.time() - ts
         resp = SolveProblemResponse(results_list, elapsed_time)
