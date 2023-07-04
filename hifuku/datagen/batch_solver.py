@@ -163,8 +163,33 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         self.solver_t = solver_t
         self.config = config
 
-    @abstractmethod
     def solve_batch(
+        self,
+        problems: List[ProblemT],
+        init_solutions: Sequence[Optional[Trajectory]],
+        use_default_solver: bool = False,
+    ) -> List[Tuple[ResultT, ...]]:
+        # When pickling-and-depickling, the procedure takes up much more memory than
+        # pickled object size. I'm not sure but according to https://stackoverflow.com/a/38971446/7624196
+        # the RAM usage could be two times bigger than the serialized-object size.
+        # Thus, in the following, we first measure the pickle size, and splits the problem set
+        # and then send the multiple chunk of problems sequentially.
+        max_ram_usage = 16 * 10**9
+        serialize_ram_size_each = len(pickle.dumps(problems[0])) * 2
+        max_size = int(max_ram_usage // serialize_ram_size_each)
+        indices = range(len(problems))
+        indices_list = np.array_split(indices, np.ceil(len(problems) / max_size))
+
+        resultss = []
+        for indices_part in indices_list:
+            problems_part = [problems[i] for i in indices_part]
+            init_solutions_est_list_part = [init_solutions[i] for i in indices_part]
+            results_part = self._solve_batch_impl(problems_part, init_solutions_est_list_part)  # type: ignore
+            resultss.extend(results_part)
+        return resultss
+
+    @abstractmethod
+    def _solve_batch_impl(
         self,
         problems: List[ProblemT],
         init_solutions: Sequence[Optional[Trajectory]],
@@ -240,7 +265,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         logger.info("n_process is set to {}".format(n_process))
         self.n_process = n_process
 
-    def solve_batch(
+    def _solve_batch_impl(
         self,
         tasks: List[ProblemT],
         init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
@@ -367,7 +392,7 @@ class DistributedBatchProblemSolver(
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
-    def solve_batch(
+    def _solve_batch_impl(
         self,
         problems: List[ProblemT],
         init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
