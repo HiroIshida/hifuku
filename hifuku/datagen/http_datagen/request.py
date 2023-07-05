@@ -167,6 +167,7 @@ def send_request(conn: HTTPConnection, request: MainRequest) -> MainResponse:
 
 def send_request(conn: HTTPConnection, request):
     headers = {"Content-type": "application/json"}
+    logger.debug("request content: {}".format(request))
 
     ts = time.time()
     serialized = pickle.dumps(request)
