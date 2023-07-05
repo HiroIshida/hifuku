@@ -442,6 +442,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
     adjust_margins: bool
+    remove_dataset_cache: bool
     project_path: Path
 
     @property
@@ -481,6 +482,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
         adjust_margins: bool = True,
+        remove_dataset_cache: bool = False,
     ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -570,6 +572,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             determinant,
             test_false_positive_rate,
             adjust_margins,
+            remove_dataset_cache,
             project_path,
         )
 
@@ -729,7 +732,8 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             )
 
         dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
-        shutil.rmtree(cache_dir_path)
+        if self.remove_dataset_cache:
+            shutil.rmtree(cache_dir_path)
 
         logger.info("start training model")
 
