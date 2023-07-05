@@ -427,6 +427,8 @@ class LibrarySamplerConfig:
     iterpred_model_config: Optional[Dict] = None
     bootstrap_trial: int = 0
     bootstrap_percentile: float = 95.0
+    n_validation: int = 1000
+    n_validation_inner: int = 10
 
 
 @dataclass
@@ -544,9 +546,14 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         else:
             if problems_validation is None:
                 logger.info("start creating validation set")
+                if config.n_problem_inner == 1:
+                    message = "In almost all case (except user's special intension), inner = 1 means that world description perfectly determines the problem. Therefore, setting n_validation_inner>1 is waste of computational time"
+                    assert config.n_validation_inner == 1, message
                 problems_validation = sampler.sample_batch(
-                    1000, TrivialProblemPool(problem_type, 10).as_predicated()
+                    config.n_validation,
+                    TrivialProblemPool(problem_type, config.n_validation_inner).as_predicated(),
                 )
+
                 with validation_cache_path.open(mode="wb") as f:
                     pickle.dump(problems_validation, f)
                 logger.info(
