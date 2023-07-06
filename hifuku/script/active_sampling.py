@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import rpbench
-import selcol
 import skmp
 import yaml
 from mohou.trainer import TrainConfig
@@ -53,7 +52,7 @@ if __name__ == "__main__":
     log_package_version_info(logger, hifuku)
     log_package_version_info(logger, rpbench)
     log_package_version_info(logger, skmp)
-    log_package_version_info(logger, selcol)
+    # log_package_version_info(logger, selcol)
 
     if library_sampling_conf_path_str is None:
         library_sampling_conf_path = project_path / "lsconf.yaml"
