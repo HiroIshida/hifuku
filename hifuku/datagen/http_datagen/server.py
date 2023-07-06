@@ -132,8 +132,9 @@ class PostHandler(BaseHTTPRequestHandler):
             resp = self.process_DetermineMarginsRequest(request)
         else:
             assert False, "request {} is not supported".format(type(request))
+        print("time to process: {}".format(time.time() - ts))
         self.wfile.write(pickle.dumps(resp))
-        print("elapsed time to handle request: {}".format(time.time() - ts))
+        print("elapsed time to handle request (including sending): {}".format(time.time() - ts))
 
 
 def run_server(server_class=HTTPServer, port=8080):
