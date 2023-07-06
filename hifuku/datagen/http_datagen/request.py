@@ -134,9 +134,6 @@ class DetermineMarginsResponse(MainResponse):
     results: Sequence[Optional[DetermineMarginsResult]]
     elapsed_time: float
 
-    def ignore_fields(self) -> Tuple[str, ...]:
-        return ("results",)
-
 
 @overload
 def send_request(conn: HTTPConnection, request: GetCPUInfoRequest) -> GetCPUInfoResponse:
