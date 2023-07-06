@@ -30,9 +30,11 @@ from hifuku.utils import filter_warnings, get_random_seed
 
 logger = logging.getLogger(__name__)
 
+TrajectoryMaybeList = Union[List[Trajectory], Trajectory]
+
 
 def duplicate_init_solution_if_not_list(
-    init_solution: Optional[Union[List[Trajectory], Trajectory]], n_inner_task: int
+    init_solution: Optional[TrajectoryMaybeList], n_inner_task: int
 ) -> Sequence[Optional[Trajectory]]:
     init_solutions: Sequence[Optional[Trajectory]]
     if isinstance(init_solution, List):
@@ -48,7 +50,7 @@ class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
     problems: List[ProblemT]
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
-    init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]]
+    init_solutions: Sequence[TrajectoryMaybeList]
     show_process_bar: bool
     cache_path: Path
     use_default_solver: bool
@@ -166,7 +168,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
     def solve_batch(
         self,
         problems: List[ProblemT],
-        init_solutions: Sequence[Optional[Trajectory]],
+        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
         use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
         # When pickling-and-depickling, the procedure takes up much more memory than
@@ -192,7 +194,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
     def _solve_batch_impl(
         self,
         problems: List[ProblemT],
-        init_solutions: Sequence[Optional[Trajectory]],
+        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
         use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
         ...
@@ -200,7 +202,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
     def create_dataset(
         self,
         problems: List[ProblemT],
-        init_solutions: Sequence[Optional[Trajectory]],
+        init_solutions: Sequence[TrajectoryMaybeList],
         cache_dir_path: Path,
         n_process: Optional[int],
     ) -> None:
@@ -268,7 +270,7 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
     def _solve_batch_impl(
         self,
         tasks: List[ProblemT],
-        init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
+        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
         use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
 
@@ -395,7 +397,7 @@ class DistributedBatchProblemSolver(
     def _solve_batch_impl(
         self,
         problems: List[ProblemT],
-        init_solutions: Sequence[Optional[Union[List[Trajectory], Trajectory]]],
+        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
         use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
         logger.debug("use_default_solver: {}".format(use_default_solver))

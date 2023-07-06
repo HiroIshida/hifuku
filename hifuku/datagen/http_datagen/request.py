@@ -8,7 +8,6 @@ from typing import Generic, List, Optional, Sequence, Tuple, Type, TypeVar, over
 
 import numpy as np
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
-from skmp.trajectory import Trajectory
 
 from hifuku.coverage import CoverageResult, DetermineMarginsResult
 from hifuku.pool import PredicatedProblemPool, ProblemT
@@ -78,7 +77,7 @@ class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
     problems: List[ProblemT]
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
-    init_solutions: Sequence[Optional[Trajectory]]
+    init_solutions: Sequence  # Actually, Sequence[Optional[TrajectoryMaybeList]]
     n_process: int
     use_default_solver: bool
 
