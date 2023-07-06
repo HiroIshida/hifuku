@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -16,6 +17,7 @@ from hifuku.script_utils import (
     get_project_path,
     load_compatible_autoencoder,
     load_library,
+    watch_memmory,
 )
 from hifuku.utils import create_default_logger, filter_warnings
 
@@ -62,6 +64,10 @@ if __name__ == "__main__":
         lsconfig = parse_config_yaml(dic)
     logger.info("lsconfig: {}".format(lsconfig))
 
+    # run memmory watchdog
+    p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0,))
+    p_watchdog.start()
+
     ae_model = load_compatible_autoencoder(domain_name)
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
         domain.task_type,
@@ -82,3 +88,6 @@ if __name__ == "__main__":
     for i in range(n_step):
         print(i)
         lib_sampler.step_active_sampling()
+
+    p_watchdog.terminate()
+    p_watchdog.join()

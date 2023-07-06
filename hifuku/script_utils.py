@@ -1,13 +1,18 @@
+import logging
+import time
 from pathlib import Path
 from typing import Literal, Optional, Type, Union
 
 import mohou.file
+import psutil
 import torch
 from mohou.trainer import TrainCache
 
 from hifuku.domain import DomainProtocol, select_domain
 from hifuku.library import SolutionLibrary
 from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder
+
+logger = logging.getLogger(__name__)
 
 
 def load_compatible_autoencoder(domain: Union[str, Type[DomainProtocol]]) -> AutoEncoderBase:
@@ -50,3 +55,11 @@ def load_library(
     )[0]
     lib.limit_thread = limit_thread
     return lib
+
+
+def watch_memmory(interval: float):
+    while True:
+        ram = psutil.virtual_memory()
+        ram_percent = ram.percent
+        logger.debug("memmory usage: {}%".format(ram_percent))
+        time.sleep(interval)
