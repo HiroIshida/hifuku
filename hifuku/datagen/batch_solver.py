@@ -227,7 +227,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
     ) -> List[Tuple[ResultT, ...]]:
         ...
 
-    def create_dataset(
+    def dump_compressed_dataset_to_cachedir(
         self,
         problems: List[ProblemT],
         init_solutions: Sequence[TrajectoryMaybeList],

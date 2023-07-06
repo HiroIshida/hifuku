@@ -23,4 +23,6 @@ if __name__ == "__main__":
     assert init_solution is not None
     problems = [TORR_SQP_Domain.task_type.sample(50) for _ in range(n_problem)]
     init_solutions = [init_solution] * n_problem
-    batch_solver.create_dataset(problems, init_solutions, cache_base_path, None)
+    batch_solver.dump_compressed_dataset_to_cachedir(
+        problems, init_solutions, cache_base_path, None
+    )
