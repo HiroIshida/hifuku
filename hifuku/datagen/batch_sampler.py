@@ -33,9 +33,7 @@ HostPortPair = Tuple[str, int]
 class BatchProblemSampler(Generic[ProblemT], ABC):
     @abstractmethod
     def sample_batch(
-        self,
-        n_sample: int,
-        pool: PredicatedProblemPool[ProblemT],
+        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], invalidate_gridsdf: bool = False
     ) -> List[ProblemT]:
         ...
 
@@ -74,6 +72,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         pool: PredicatedProblemPool[ProblemT],
         show_progress_bar: bool,
         n_thread: int,
+        invalidate_gridsdf: bool,
         cache_path: Path,
     ) -> None:
 
@@ -95,6 +94,8 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
                     while len(problems) < n_sample:
                         problem = next(pool)
                         if problem is not None:
+                            if invalidate_gridsdf:
+                                problem.invalidate_gridsdf()
                             problems.append(problem)
                             pbar.update(1)
         ts = time.time()
@@ -104,9 +105,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         logger.debug("time to dump {}".format(time.time() - ts))
 
     def sample_batch(
-        self,
-        n_sample: int,
-        pool: PredicatedProblemPool[ProblemT],
+        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], invalidate_gridsdf: bool = False
     ) -> List[ProblemT]:
         assert pool.parallelizable()
         assert n_sample > 0
@@ -123,7 +122,14 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
                 if n_sample_part == 0:
                     continue
                 show_progress = idx_process == 0
-                args = (n_sample_part, pool, show_progress, self.n_thread, td_path)
+                args = (
+                    n_sample_part,
+                    pool,
+                    show_progress,
+                    self.n_thread,
+                    invalidate_gridsdf,
+                    td_path,
+                )
                 p = ctx.Process(target=self.work, args=args)  # type: ignore
                 p.start()
                 process_list.append(p)
@@ -159,15 +165,13 @@ class DistributeBatchProblemSampler(
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
     def sample_batch(
-        self,
-        n_sample: int,
-        pool: PredicatedProblemPool[ProblemT],
+        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], invalidate_gridsdf: bool = False
     ) -> List[ProblemT]:
         assert n_sample > 0
         assert pool.parallelizable()
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
-        request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1)
+        request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1, True)
         n_sample_table = self.create_gen_number_table(request_for_measure, n_sample)
 
         # NOTE: after commit 18c664f, process starts hang with forking.
@@ -181,7 +185,7 @@ class DistributeBatchProblemSampler(
                 n_sample_part = n_sample_table[hostport]
                 if n_sample_part > 0:
                     n_process = self.hostport_cpuinfo_map[hostport].n_cpu
-                    req = SampleProblemRequest(n_sample_part, pool, n_process)
+                    req = SampleProblemRequest(n_sample_part, pool, n_process, invalidate_gridsdf)
                     p = ctx.Process(
                         target=self.send_and_recive_and_write, args=(hostport, req, td_path)
                     )

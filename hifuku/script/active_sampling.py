@@ -79,6 +79,7 @@ if __name__ == "__main__":
         pool_single=None,
         use_distributed=True,
         reuse_cached_validation_set=warm_start,
+        invalidate_gridsdf=True,
         test_false_positive_rate=test_fp_rate,
     )
 

@@ -67,7 +67,6 @@ def TORR_result_traj():
 
 
 def test_batch_solver_init_solutions(TORR_result_traj: Trajectory):
-
     solcon = SQPBasedSolverConfig(
         n_wp=20,
         n_max_call=10,
@@ -162,6 +161,25 @@ def test_consistency_of_all_batch_sampler(server):
                 samples = sampler.sample_batch(n_sample, pool)
                 assert len(samples) == n_sample
                 assert len(samples[0].descriptions) == n_problem_inner
+
+
+def test_batch_sampler_with_invalidate_gridsdf_option(server):
+    specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
+
+    sampler_list: List[BatchProblemSampler[TabletopOvenRightArmReachingTask]] = []
+    sampler_list.append(MultiProcessBatchProblemSampler(2))
+    sampler_list.append(DistributeBatchProblemSampler[TabletopOvenRightArmReachingTask](specs))
+
+    pool = TrivialProblemPool(TabletopOvenRightArmReachingTask, 1).as_predicated()
+
+    for sampler in sampler_list:
+        tasks = sampler.sample_batch(10, pool, False)
+        for task in tasks:
+            assert task._gridsdf is not None
+
+        tasks = sampler.sample_batch(10, pool, True)
+        for task in tasks:
+            assert task._gridsdf is None
 
 
 def test_create_dataset():

@@ -85,7 +85,7 @@ class PostHandler(BaseHTTPRequestHandler):
         ts = time.time()
         logging.info("request: {}".format(request))
         sampler = MultiProcessBatchProblemSampler[ProblemT](request.n_process)
-        problems = sampler.sample_batch(request.n_sample, request.pool)
+        problems = sampler.sample_batch(request.n_sample, request.pool, request.invalidate_gridsdf)
         assert len(problems) > 0
         elapsed_time = time.time() - ts
         resp = SampleProblemResponse(problems, elapsed_time)

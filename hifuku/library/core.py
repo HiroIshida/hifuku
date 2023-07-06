@@ -445,6 +445,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
     test_false_positive_rate: bool
     adjust_margins: bool
     remove_dataset_cache: bool
+    invalidate_gridsdf: bool
     project_path: Path
 
     @property
@@ -485,6 +486,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         test_false_positive_rate: bool = False,
         adjust_margins: bool = True,
         remove_dataset_cache: bool = False,
+        invalidate_gridsdf: bool = False,
     ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -552,6 +554,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 problems_validation = sampler.sample_batch(
                     config.n_validation,
                     TrivialProblemPool(problem_type, config.n_validation_inner).as_predicated(),
+                    invalidate_gridsdf=invalidate_gridsdf,
                 )
 
                 with validation_cache_path.open(mode="wb") as f:
@@ -580,6 +583,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             test_false_positive_rate,
             adjust_margins,
             remove_dataset_cache,
+            invalidate_gridsdf,
             project_path,
         )
 
@@ -593,7 +597,9 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
     def _generate_problem_samples_init(self) -> List[ProblemT]:
         predicated_pool = self.pool_multiple.as_predicated()
-        problems = self.sampler.sample_batch(self.config.n_problem, predicated_pool)
+        problems = self.sampler.sample_batch(
+            self.config.n_problem, predicated_pool, self.invalidate_gridsdf
+        )
         return problems
 
     @abstractmethod

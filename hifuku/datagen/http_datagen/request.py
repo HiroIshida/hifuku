@@ -100,6 +100,7 @@ class SampleProblemRequest(Generic[ProblemT], MainRequest):
     n_sample: int
     pool: PredicatedProblemPool[ProblemT]
     n_process: int
+    invalidate_gridsdf: bool
 
     def ignore_fields(self) -> Tuple[str, ...]:
         return ("pool",)
