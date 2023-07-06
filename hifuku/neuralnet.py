@@ -10,7 +10,7 @@ from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from mohou.utils import detect_device
 from skmp.trajectory import Trajectory
 from torch import Tensor
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, default_collate
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.types import RawData
@@ -75,6 +75,21 @@ class IterationPredictorDataset(Dataset):
     itervals: torch.Tensor
     _problem_per_sample: int
 
+    # TODO: __add__
+    def add(self, other: "IterationPredictorDataset") -> None:
+        if self.mesh_encodeds is not None:
+            assert other.mesh_encodeds is not None
+            mesh_encodeds = torch.vstack([self.mesh_encodeds, other.mesh_encodeds])
+        else:
+            assert other.mesh_encodeds is None
+            mesh_encodeds = None
+        descriptions = torch.vstack([self.descriptions, other.descriptions])
+        itervals = torch.hstack([self.itervals, other.itervals])
+
+        self.mesh_encodeds = mesh_encodeds
+        self.descriptions = descriptions
+        self.itervals = itervals
+
     def __len__(self) -> int:
         return len(self.descriptions)
 
@@ -93,11 +108,29 @@ class IterationPredictorDataset(Dataset):
         )
 
     @classmethod
-    def load(cls, dataset_path: Path, ae_model: AutoEncoderBase):
-        device = detect_device()
-        ae_model.put_on_device(device)
+    def load_from_path(
+        cls, dataset_path: Path, ae_model: AutoEncoderBase
+    ) -> "IterationPredictorDataset":
         dataset = LazyDecomplessDataset.load(dataset_path, RawData, n_worker=-1)
         loader = LazyDecomplessDataLoader(dataset, batch_size=1000, shuffle=False)
+        return cls.construct(loader, ae_model)
+
+    @classmethod
+    def construct_from_tasks_and_resultss(
+        cls, init_solution, tasks, resultss, solver_config, ae_model: AutoEncoderBase
+    ) -> "IterationPredictorDataset":
+        raw_data_list = []
+        for task, results in zip(tasks, resultss):
+            raw_data = RawData(init_solution, task.export_table(), results, solver_config)
+            raw_data_list.append(raw_data)
+        zipped = [raw_data.to_tensors() for raw_data in raw_data_list]
+        sample = default_collate(zipped)
+        return cls.construct([sample], ae_model)
+
+    @classmethod
+    def construct(cls, loader, ae_model: AutoEncoderBase) -> "IterationPredictorDataset":
+        device = detect_device()
+        ae_model.put_on_device(device)
 
         encoded_list = []
         description_list = []

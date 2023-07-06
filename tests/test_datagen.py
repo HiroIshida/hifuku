@@ -203,7 +203,9 @@ def test_create_dataset():
     )
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
-        batch_solver.create_dataset(problems, init_solutions, td_path, n_process=None)
+        batch_solver.dump_compressed_dataset_to_cachedir(
+            problems, init_solutions, td_path, n_process=None
+        )
 
         dataset = LazyDecomplessDataset.load(td_path, RawData)
         assert len(dataset) == n_task

@@ -18,7 +18,7 @@ ae_model = load_compatible_autoencoder(TORR_SQP_Domain)
 pp = get_project_path("TORR_SQP")
 chunk_dir_path = pp / "cache"
 
-dataset = IterationPredictorDataset.load(chunk_dir_path, ae_model)
+dataset = IterationPredictorDataset.load_from_path(chunk_dir_path, ae_model)
 raw_dataset = LazyDecomplessDataset.load(chunk_dir_path, RawData, n_worker=-1)
 rawdata = raw_dataset.get_data(np.array([0]))[0]
 init_solution = rawdata.init_solution

@@ -3,7 +3,6 @@ import json
 import logging
 import pickle
 import re
-import shutil
 import time
 import uuid
 from dataclasses import asdict, dataclass
@@ -458,7 +457,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
     adjust_margins: bool
-    remove_dataset_cache: bool
     invalidate_gridsdf: bool
     project_path: Path
 
@@ -499,7 +497,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
         adjust_margins: bool = True,
-        remove_dataset_cache: bool = False,
         invalidate_gridsdf: bool = False,
         n_limit_batch_solver: Optional[int] = None,
     ) -> "SimpleSolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
@@ -601,7 +598,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             determinant,
             test_false_positive_rate,
             adjust_margins,
-            remove_dataset_cache,
             invalidate_gridsdf,
             project_path,
         )
@@ -731,16 +727,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         problems: List[ProblemT],
     ) -> IterationPredictor:
         pp = project_path
-        cache_dir_base = pp / "dataset_cache"
-        cache_dir_base.mkdir(exist_ok=True, parents=True)
-
-        cache_dir_name = "{}-{}".format(self.problem_type.__name__, str(uuid.uuid4())[-8:])
-        cache_dir_path = cache_dir_base / cache_dir_name
-        assert not cache_dir_path.exists()
-        cache_dir_path.mkdir()
 
         logger.info("start generating dataset")
-
         # create dataset. Dataset creation by a large problem set often causes
         # memory error. To avoid this, we split the batch and process separately
         # if len(problems) > n_tau.
@@ -748,17 +736,27 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         n_tau = 1000  # TODO: should be adaptive according to the data size
         partial_problems_list = [problems[i : i + n_tau] for i in range(0, len(problems), n_tau)]
-        for partial_problems in partial_problems_list:
-            self.solver.create_dataset(
-                partial_problems, init_solutions, cache_dir_path, n_process=None
-            )
 
-        dataset = IterationPredictorDataset.load(cache_dir_path, self.library.ae_model)
-        if self.remove_dataset_cache:
-            shutil.rmtree(cache_dir_path)
+        dataset = None
+        for partial_problems in partial_problems_list:
+            resultss_partial = self.solver.solve_batch(partial_problems, init_solutions)
+            dataset_partial = IterationPredictorDataset.construct_from_tasks_and_resultss(
+                init_solution,
+                partial_problems,
+                resultss_partial,
+                self.solver_config,
+                self.library.ae_model,
+            )
+            # TODO: why don't you just use sum() method??
+            # somehow error occurs: TypeError: unsupported operand type(s) for +: 'int' and 'IterationPredictorDataset'
+            # I dont have time to fix this
+            if dataset is None:
+                dataset = dataset_partial
+            else:
+                dataset.add(dataset_partial)
+        assert dataset is not None
 
         logger.info("start training model")
-
         # determine 1dim tensor dimension by temp creation of a problem
         # TODO: should I implement this as a method?
         problem = self.problem_type.sample(1, standard=True)
