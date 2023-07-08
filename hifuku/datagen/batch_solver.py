@@ -183,7 +183,9 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         # Thus, in the following, we first measure the pickle size, and splits the problem set
         # and then send the multiple chunk of problems sequentially.
         max_ram_usage = 16 * 10**9
-        serialize_ram_size_each = len(pickle.dumps(problems[0])) * 2
+        problem_for_measuring = problems[0]
+        problem_for_measuring.gridsdf  # access gridsdf because it's created lazily
+        serialize_ram_size_each = len(pickle.dumps(problem_for_measuring)) * 2
         max_size = int(max_ram_usage // serialize_ram_size_each)
         indices = range(len(problems))
         indices_list = np.array_split(indices, np.ceil(len(problems) / max_size))
