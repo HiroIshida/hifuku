@@ -95,6 +95,9 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                 for idx, task, init_solution in zip(
                     self.arg.indices, self.arg.problems, self.arg.init_solutions
                 ):
+                    # NOTE: In some memmory-critical situation, _gridsdf is created after post-requirement
+                    # and should be deleted (i.e. set to None) right after the task is solved.
+                    has_none_gridsdf_at_first = task._gridsdf is None
 
                     if self.arg.use_default_solver:
                         results = task.solve_default()
@@ -115,6 +118,9 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                             result = solver.solve(init_solution_per_inner)
                             results.append(result)
                     tupled_results = tuple(results)
+
+                    if has_none_gridsdf_at_first:
+                        task.invalidate_gridsdf()
 
                     log_with_prefix("solve single task")
                     log_with_prefix("success: {}".format([r.traj is not None for r in results]))
