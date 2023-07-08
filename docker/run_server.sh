@@ -15,4 +15,5 @@ docker run --rm -it -p $port:8080 hifuku:latest \
     cd ~/rpbench && git fetch origin && git checkout origin/master && pip3 install -e . ;\
     cd ~/hifuku && git fetch origin && git checkout origin/master && pip3 install -e . ;\
     pip3 freeze ;\
+    export OMP_NUM_THREADS=1 ;\
     python3 -m hifuku.datagen.http_datagen.server'
