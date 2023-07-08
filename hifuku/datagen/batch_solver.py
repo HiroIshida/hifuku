@@ -175,10 +175,17 @@ class DumpDatasetWorker(Generic[ProblemT, ConfigT, ResultT]):
 class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
+    n_limit_batch: Optional[int]
 
-    def __init__(self, solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]], config: ConfigT):
+    def __init__(
+        self,
+        solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
+        config: ConfigT,
+        n_limit_batch: Optional[int] = None,
+    ):
         self.solver_t = solver_t
         self.config = config
+        self.n_limit_batch = n_limit_batch
 
     def solve_batch(
         self,
@@ -191,11 +198,15 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         # the RAM usage could be two times bigger than the serialized-object size.
         # Thus, in the following, we first measure the pickle size, and splits the problem set
         # and then send the multiple chunk of problems sequentially.
-        max_ram_usage = 16 * 10**9
-        problem_for_measuring = problems[0]
-        problem_for_measuring.gridsdf  # access gridsdf because it's created lazily
-        serialize_ram_size_each = len(pickle.dumps(problem_for_measuring)) * 2
-        max_size = int(max_ram_usage // serialize_ram_size_each)
+        if self.n_limit_batch is None:
+            max_ram_usage = 16 * 10**9
+            problem_for_measuring = problems[0]
+            problem_for_measuring.gridsdf  # access gridsdf because it's created lazily
+            serialize_ram_size_each = len(pickle.dumps(problem_for_measuring)) * 2
+            max_size = int(max_ram_usage // serialize_ram_size_each)
+        else:
+            max_size = self.n_limit_batch
+
         indices = range(len(problems))
         indices_list = np.array_split(indices, np.ceil(len(problems) / max_size))
 
@@ -273,9 +284,10 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         self,
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config: ConfigT,
+        n_limit_batch: Optional[int] = None,
         n_process: Optional[int] = None,
     ):
-        super().__init__(solver_t, config)
+        super().__init__(solver_t, config, n_limit_batch)
         if n_process is None:
             logger.info("n_process is not set. automatically determine")
             cpu_num = os.cpu_count()
@@ -387,12 +399,13 @@ class DistributedBatchProblemSolver(
         self,
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config: ConfigT,
+        n_limit_batch: Optional[int] = None,
         server_specs: Optional[Tuple[ServerSpec, ...]] = None,
         use_available_host: bool = False,
         force_continue: bool = False,
         n_measure_sample: int = 40,
     ):
-        BatchProblemSolver.__init__(self, solver_t, config)
+        BatchProblemSolver.__init__(self, solver_t, config, n_limit_batch)
         ClientBase.__init__(
             self, server_specs, use_available_host, force_continue, n_measure_sample
         )

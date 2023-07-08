@@ -487,6 +487,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         adjust_margins: bool = True,
         remove_dataset_cache: bool = False,
         invalidate_gridsdf: bool = False,
+        n_limit_batch_solver: Optional[int] = None,
     ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -504,9 +505,9 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         # setup solver, sampler, determinant
         if solver is None:
             solver = (
-                DistributedBatchProblemSolver(solver_t, solver_config)
+                DistributedBatchProblemSolver(solver_t, solver_config, n_limit_batch_solver)
                 if use_distributed
-                else MultiProcessBatchProblemSolver(solver_t, solver_config)
+                else MultiProcessBatchProblemSolver(solver_t, solver_config, n_limit_batch_solver)
             )
         assert solver.solver_t == solver_t
         assert solver.config == solver_config
