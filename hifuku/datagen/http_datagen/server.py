@@ -1,5 +1,6 @@
 import argparse
 import logging
+import multiprocessing
 import os
 import pickle
 import time
@@ -26,6 +27,7 @@ from hifuku.datagen.http_datagen.request import (
     SolveProblemResponse,
 )
 from hifuku.pool import ProblemT
+from hifuku.script_utils import watch_memmory
 from hifuku.utils import get_module_source_hash
 
 
@@ -141,6 +143,10 @@ def run_server(server_class=HTTPServer, port=8080):
     logging.basicConfig(level=logging.INFO)
     server_address = ("", port)
     httpd = server_class(server_address, PostHandler)
+
+    p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0, False))
+    p_watchdog.start()
+
     logging.info("Starting httpd...\n")
     try:
         httpd.serve_forever()
