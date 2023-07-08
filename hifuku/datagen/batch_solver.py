@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import pickle
@@ -99,6 +100,14 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                     # and should be deleted (i.e. set to None) right after the task is solved.
                     has_none_gridsdf_at_first = task._gridsdf is None
 
+                    if has_none_gridsdf_at_first:
+                        # TODO: I'm not sure about this is required but just due to
+                        # my lack of knowlege for python gc stuff.
+                        # make sure that the lazily-created object is local
+                        task_local = copy.deepcopy(task)
+                    else:
+                        task_local = task
+
                     if self.arg.use_default_solver:
                         results = task.solve_default()
                     else:
@@ -120,7 +129,7 @@ class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
                     tupled_results = tuple(results)
 
                     if has_none_gridsdf_at_first:
-                        task.invalidate_gridsdf()
+                        task_local.invalidate_gridsdf()
 
                     log_with_prefix("solve single task")
                     log_with_prefix("success: {}".format([r.traj is not None for r in results]))
