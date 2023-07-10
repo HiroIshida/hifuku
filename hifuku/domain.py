@@ -26,6 +26,7 @@ from hifuku.rpbench_wrap import (
     RingObstacleFreeBlockedPlanningTask,
     RingObstacleFreePlanningTask,
     TabletopBoxDualArmReachingTask,
+    TabletopBoxRightArmReachingTask,
     TabletopOvenDualArmReachingTask,
     TabletopOvenRightArmReachingTask,
 )
@@ -111,6 +112,15 @@ class TBDR_RRT_Domain(DomainProtocol):
         n_max_satisfaction_trial=1,
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.5,
+    )
+    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+
+
+class TBRR_SQP_Domain(DomainProtocol):
+    task_type = TabletopBoxRightArmReachingTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
     )
     auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
 
@@ -255,6 +265,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         todr_sqp = TODR_SQP_Domain
         tbdr_sqp = TBDR_SQP_Domain
         tbdr_rrt = TBDR_RRT_Domain
+        tbrr_sqp = TBRR_SQP_Domain
         kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
         ring_rrt = RingObstacleFree_RRT_Domain
         ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
