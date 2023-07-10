@@ -9,6 +9,9 @@ from rpbench.pr2.kivapod import KivapodEmptyReachingTask as _KivapodEmptyReachin
 from rpbench.pr2.tabletop import (
     TabletopBoxDualArmReachingTask as _TabletopBoxDualArmReachingTask,
 )
+from rpbench.pr2.tabletop import (
+    TabletopBoxRightArmReachingTask as _TabletopBoxRightArmReachingTask,
+)
 from rpbench.pr2.tabletop import TabletopBoxWorldWrap as _TabletopBoxWorldWrap
 from rpbench.pr2.tabletop import (
     TabletopOvenDualArmReachingTask as _TabletopOvenDualArmReachingTask,
@@ -85,6 +88,7 @@ class TabletopOvenVoxbloxRightArmReachingTask(_TabletopOvenVoxbloxRightArmReachi
 class TabletopOvenWorldWrap(_TabletopOvenWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class TabletopOvenVoxbloxWorldWrap(_TabletopOvenVoxbloxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class TabletopBoxDualArmReachingTask(_TabletopBoxDualArmReachingTask, PicklableTaskBase): ...  # noqa
+class TabletopBoxRightArmReachingTask(_TabletopBoxRightArmReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
 class MazeSolvingTask(_MazeSolvingTask, PicklableTaskBase): ...  # noqa
 class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskBase): ...  # noqa
