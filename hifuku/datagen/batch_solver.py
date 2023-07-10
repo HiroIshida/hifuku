@@ -284,8 +284,8 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         self,
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config: ConfigT,
-        n_limit_batch: Optional[int] = None,
         n_process: Optional[int] = None,
+        n_limit_batch: Optional[int] = None,
     ):
         super().__init__(solver_t, config, n_limit_batch)
         if n_process is None:
@@ -399,11 +399,11 @@ class DistributedBatchProblemSolver(
         self,
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config: ConfigT,
-        n_limit_batch: Optional[int] = None,
         server_specs: Optional[Tuple[ServerSpec, ...]] = None,
         use_available_host: bool = False,
         force_continue: bool = False,
         n_measure_sample: int = 40,
+        n_limit_batch: Optional[int] = None,
     ):
         BatchProblemSolver.__init__(self, solver_t, config, n_limit_batch)
         ClientBase.__init__(

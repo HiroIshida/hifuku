@@ -505,9 +505,13 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         # setup solver, sampler, determinant
         if solver is None:
             solver = (
-                DistributedBatchProblemSolver(solver_t, solver_config, n_limit_batch_solver)
+                DistributedBatchProblemSolver(
+                    solver_t, solver_config, n_limit_batch=n_limit_batch_solver
+                )
                 if use_distributed
-                else MultiProcessBatchProblemSolver(solver_t, solver_config, n_limit_batch_solver)
+                else MultiProcessBatchProblemSolver(
+                    solver_t, solver_config, n_limit_batch=n_limit_batch_solver
+                )
             )
         assert solver.solver_t == solver_t
         assert solver.config == solver_config

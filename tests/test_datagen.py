@@ -106,7 +106,7 @@ def test_consistency_of_all_batch_sovler(server, TORR_result_traj: Trajectory):
                 motion_step_satisfaction="debug_ignore",
                 force_deterministic=True,
             )
-            mp_batch_solver = MultiProcessBatchProblemSolver(SQPBasedSolver, solcon, 2)
+            mp_batch_solver = MultiProcessBatchProblemSolver(SQPBasedSolver, solcon, n_process=2)
             assert mp_batch_solver.n_process == 2
             batch_solver_list.append(mp_batch_solver)
 
