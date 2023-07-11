@@ -653,6 +653,11 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
                 # determine margin using cmaes
                 cma_std = self.solver_config.n_max_call * 0.5
                 coverages_new = self.library.coverage_results + [coverage_result]
+                logger.info(
+                    "optimal coverage estimate is set to {}".format(
+                        self.library._optimal_coverage_estimate
+                    )
+                )
                 results = self.determinant.determine_batch(
                     80,
                     coverages_new,
@@ -678,6 +683,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
                 margins = best_margins
                 self.library._optimal_coverage_estimate = max_coverage
+                logger.info("optimal coverage estimate is set to {}".format(max_coverage))
             else:
                 if self.config.bootstrap_trial > 0:
                     logger.info("determine margin using bootstrap method")
