@@ -182,7 +182,7 @@ class EightRooms_SQP_Domain(DomainProtocol):
     auto_encoder_project_name = None
 
 
-class EightRooms_RRT_Domain(DomainProtocol):
+class EightRooms_ERT_Domain(DomainProtocol):
     task_type = EightRoomsPlanningTask
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
@@ -192,6 +192,19 @@ class EightRooms_RRT_Domain(DomainProtocol):
         algorithm_range=0.1,
         simplify=False,
         expbased_planner_backend="ertconnect",
+    )
+    auto_encoder_project_name = None
+
+
+class EightRooms_LT_Domain(DomainProtocol):
+    task_type = EightRoomsPlanningTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        800,
+        1,
+        algorithm_range=0.1,
+        simplify=False,  # if True, it tries to simplify all the part of the trajectory
+        expbased_planner_backend="lightning",
     )
     auto_encoder_project_name = None
 
@@ -270,7 +283,8 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         ring_rrt = RingObstacleFree_RRT_Domain
         ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
         eight_rooms_sqp = EightRooms_SQP_Domain
-        eight_rooms_rrt = EightRooms_RRT_Domain
+        eight_rooms_ert = EightRooms_ERT_Domain
+        eight_rooms_lt = EightRooms_LT_Domain
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         bubbly_simple_mesh_sqp = BubblySimpleMeshPointConnecting_SQP_Domain
         bubbly_simple_mesh_rrt = BubblySimpleMeshPointConnecting_RRT_Domain
