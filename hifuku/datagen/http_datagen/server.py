@@ -139,13 +139,14 @@ class PostHandler(BaseHTTPRequestHandler):
         print("elapsed time to handle request (including sending): {}".format(time.time() - ts))
 
 
-def run_server(server_class=HTTPServer, port=8080):
+def run_server(server_class=HTTPServer, port=8080, with_memory_watchdog: bool = False):
     logging.basicConfig(level=logging.INFO)
     server_address = ("", port)
     httpd = server_class(server_address, PostHandler)
 
-    p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0, False))
-    p_watchdog.start()
+    if with_memory_watchdog:
+        p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0, False))
+        p_watchdog.start()
 
     logging.info("Starting httpd...\n")
     try:
@@ -159,6 +160,6 @@ def run_server(server_class=HTTPServer, port=8080):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-port", type=int, default=8080, help="port number")
+    parser.add_argument("--wm", action="store_true", help="watch memory")
     args = parser.parse_args()
-    port: int = args.port
-    run_server(port=port)
+    run_server(port=args.port, with_memory_watchdog=args.wm)

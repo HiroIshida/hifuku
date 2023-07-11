@@ -1,7 +1,6 @@
 import logging
 import os
 import pickle
-import signal
 import subprocess
 import tempfile
 import time
@@ -50,9 +49,11 @@ def server():
     time.sleep(5)
     yield
     # https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true/4791612#4791612
-    os.killpg(os.getpgid(p1.pid), signal.SIGTERM)
-    os.killpg(os.getpgid(p2.pid), signal.SIGTERM)
-    logger.info("kill servers")
+    p1.terminate()
+    p2.terminate()
+    p1.wait()
+    p2.wait()
+    logger.info("killed servers")
 
 
 @pytest.fixture(scope="session")
