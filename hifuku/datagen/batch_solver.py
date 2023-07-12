@@ -214,7 +214,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         for indices_part in indices_list:
             problems_part = [problems[i] for i in indices_part]
             init_solutions_est_list_part = [init_solutions[i] for i in indices_part]
-            results_part = self._solve_batch_impl(problems_part, init_solutions_est_list_part)  # type: ignore
+            results_part = self._solve_batch_impl(problems_part, init_solutions_est_list_part, use_default_solver=use_default_solver)  # type: ignore
             resultss.extend(results_part)
         return resultss
 
