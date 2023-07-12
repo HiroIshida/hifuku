@@ -606,7 +606,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             project_path,
         )
 
-    def _generate_problem_samples_init(self) -> List[ProblemT]:
+    def _generate_problem_samples(self) -> List[ProblemT]:
         predicated_pool = self.pool_multiple.as_predicated()
         problems = self.sampler.sample_batch(
             self.config.n_problem, predicated_pool, self.invalidate_gridsdf
@@ -898,9 +898,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 best_cand = candidates[idx_cand]
         logger.info("n_solved_max of candidates: {}".format(n_solved_max))
         return best_cand
-
-    def _generate_problem_samples(self) -> List[ProblemT]:
-        return self._generate_problem_samples_init()
 
     def _determine_init_solution(self) -> Trajectory:
         n_repeat_budget = 2
