@@ -607,14 +607,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             project_path,
         )
 
-    def _determine_init_solution_init(self) -> Trajectory:
-        logger.info("start determine init solution using standard problem")
-        task = self.problem_type.sample(1, standard=True)
-
-        res = task.solve_default()[0]
-        assert res.traj is not None
-        return res.traj
-
     def _generate_problem_samples_init(self) -> List[ProblemT]:
         predicated_pool = self.pool_multiple.as_predicated()
         problems = self.sampler.sample_batch(
