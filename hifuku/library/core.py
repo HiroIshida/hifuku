@@ -6,7 +6,6 @@ import re
 import shutil
 import time
 import uuid
-from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, Generic, List, Optional, Tuple, Type
@@ -447,7 +446,7 @@ class LibrarySamplerConfig:
 
 
 @dataclass
-class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
+class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     problem_type: Type[ProblemT]
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     config: LibrarySamplerConfig
@@ -503,7 +502,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         remove_dataset_cache: bool = False,
         invalidate_gridsdf: bool = False,
         n_limit_batch_solver: Optional[int] = None,
-    ) -> "_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
+    ) -> "SimpleSolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
         """
@@ -613,14 +612,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
             self.config.n_problem, predicated_pool, self.invalidate_gridsdf
         )
         return problems
-
-    @abstractmethod
-    def _determine_init_solution(self) -> Trajectory:
-        ...
-
-    @abstractmethod
-    def _generate_problem_samples(self) -> List[ProblemT]:
-        ...
 
     def step_active_sampling(self) -> None:
         logger.info("active sampling step")
@@ -908,8 +899,6 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         logger.info("n_solved_max of candidates: {}".format(n_solved_max))
         return best_cand
 
-
-class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]):
     def _generate_problem_samples(self) -> List[ProblemT]:
         return self._generate_problem_samples_init()
 
