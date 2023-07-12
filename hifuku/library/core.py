@@ -330,6 +330,21 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         )
         return library
 
+    def get_singleton(self, idx: int) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
+        singleton = SolutionLibrary(
+            task_type=self.task_type,
+            solver_type=self.solver_type,
+            solver_config=self.solver_config,
+            ae_model=self.ae_model,
+            predictors=[self.predictors[idx]],
+            margins=[self.margins[idx]],
+            coverage_results=None,
+            solvable_threshold_factor=self.solvable_threshold_factor,
+            uuidval="dummy",
+            meta_data={},
+        )
+        return singleton
+
 
 @dataclass
 class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
