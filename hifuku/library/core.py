@@ -871,7 +871,7 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
 
     def _select_solution_candidates(
         self, candidates: List[Trajectory], problems: List[ProblemT]
-    ) -> Trajectory:
+    ) -> Optional[Trajectory]:
         logger.info("select single solution out of {} candidates".format(len(candidates)))
 
         candidates_repeated = []
@@ -880,16 +880,26 @@ class _SolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT], ABC):
         for cand in candidates:
             candidates_repeated.extend([cand] * n_problem)
         problems_repeated = problems * n_cand
-        results = self.solver.solve_batch(problems_repeated, candidates_repeated)
-        assert len(results) == n_problem * n_cand
-        iterval_reals = np.array([get_clamped_iter(r[0], self.solver_config) for r in results])
+        resultss = self.solver.solve_batch(problems_repeated, candidates_repeated)
+        assert len(resultss) == n_problem * n_cand
 
-        iterval_reals = iterval_reals.reshape(n_cand, n_problem)
-        cand_scores = -np.sum(iterval_reals, axis=1)
-        best_idx = np.argmax(cand_scores)
-        best_solution = candidates[best_idx]
-        logger.debug("best score: {}".format(cand_scores[best_idx]))
-        return best_solution
+        def split_list(lst, n):
+            return [lst[i : i + n] for i in range(0, len(lst), n)]
+
+        resultss_list = split_list(
+            resultss, n_problem
+        )  # split the result such that each list corresponds to candidate trajectory
+
+        n_solved_max = 0
+        best_cand: Optional[Trajectory] = None
+        for idx_cand, resultss in enumerate(resultss_list):
+            n_solved = sum([results[0].traj is not None for results in resultss])
+            logger.info("cand_idx {}: {}".format(idx_cand, n_solved))
+            if n_solved > n_solved_max:
+                n_solved_max = n_solved
+                best_cand = candidates[idx_cand]
+        logger.info("n_solved_max of candidates: {}".format(n_solved_max))
+        return best_cand
 
 
 class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT, ConfigT, ResultT]):
@@ -897,20 +907,27 @@ class SimpleSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT, ConfigT, Re
         return self._generate_problem_samples_init()
 
     def _determine_init_solution(self) -> Trajectory:
-        logger.info("sample solution candidates")
-        problem_pool = self.pool_single
-        solution_candidates = self._sample_solution_canidates(
-            self.config.n_solution_candidate, problem_pool
-        )
-
-        logger.info("sample difficult problems")
-        if self.at_first_iteration():
-            difficult_problems = [
-                next(problem_pool) for _ in range(self.config.n_difficult_problem)
-            ]
-        else:
-            difficult_problems, _ = self._sample_difficult_problems(
-                self.config.n_difficult_problem, problem_pool
+        n_repeat_budget = 2
+        for i_repeat in range(n_repeat_budget):
+            logger.info("sample solution candidates ({}-th repeat)".format(i_repeat))
+            problem_pool = self.pool_single
+            solution_candidates = self._sample_solution_canidates(
+                self.config.n_solution_candidate, problem_pool
             )
-        best_solution = self._select_solution_candidates(solution_candidates, difficult_problems)
-        return best_solution
+
+            logger.info("sample difficult problems")
+            if self.at_first_iteration():
+                difficult_problems = [
+                    next(problem_pool) for _ in range(self.config.n_difficult_problem)
+                ]
+            else:
+                difficult_problems, _ = self._sample_difficult_problems(
+                    self.config.n_difficult_problem, problem_pool
+                )
+            best_solution = self._select_solution_candidates(
+                solution_candidates, difficult_problems
+            )
+            if best_solution is not None:
+                logger.info("found best solution")
+                return best_solution
+        raise RuntimeError("consumed all repeat budget")

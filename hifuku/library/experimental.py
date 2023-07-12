@@ -266,4 +266,5 @@ class ClusterBasedSolutionLibrarySampler(_SolutionLibrarySampler[ProblemT, Confi
 
         problems_for_eval = problems_in_clf[: self.config.n_difficult_problem]
         best_solution = self._select_solution_candidates(solution_candidates, problems_for_eval)
+        assert best_solution is not None, "TODO: repeat if no best solution found"
         return best_solution
