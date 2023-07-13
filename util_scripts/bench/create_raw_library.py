@@ -1,14 +1,25 @@
 import argparse
+import pickle
+from pathlib import Path
 
-from rpbench.interface import PlanningDataset
-
+from hifuku.datagen.batch_sampler import (
+    DistributeBatchProblemSampler,
+    MultiProcessBatchProblemSampler,
+)
+from hifuku.datagen.batch_solver import (
+    DistributedBatchProblemSolver,
+    MultiProcessBatchProblemSolver,
+)
 from hifuku.domain import select_domain
+from hifuku.pool import TrivialProblemPool
+from hifuku.utils import create_default_logger
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", type=int, default=300, help="")
-    parser.add_argument("-m", type=int, default=12, help="number of process")
+    parser.add_argument("-n", type=int, default=300, help="solved problem number")
     parser.add_argument("-domain", type=str, default="humanoid_trr_sqp", help="")
+    parser.add_argument("-mode", type=str, default="lib", help="")
+    parser.add_argument("--distributed", action="store_true", help="use distributed")
     args = parser.parse_args()
 
     domain_name: str = args.domain
@@ -17,7 +28,35 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     n_data = args.n
-    n_process = args.m
+    use_distributed = args.distributed
+    mode: str = args.mode
+    assert mode in ["lib", "pset"]
 
-    dataset = PlanningDataset.create(task_type, n_data, n_process)
-    dataset.save()
+    logger = create_default_logger(Path("./"), "create_library")
+
+    pool = TrivialProblemPool(task_type, 1)
+    if use_distributed:
+        sampler = DistributeBatchProblemSampler()
+        solver = DistributedBatchProblemSolver(None, None)
+    else:
+        sampler = MultiProcessBatchProblemSampler()
+        solver = MultiProcessBatchProblemSolver(None, None)
+
+    pairs = []
+    while len(pairs) < n_data:
+        logger.info("new loop")
+        n_task_batch = 80
+        tasks = sampler.sample_batch(n_task_batch, pool.as_predicated(), invalidate_gridsdf=True)
+        resultss = solver.solve_batch(tasks, [None] * n_task_batch, use_default_solver=True)
+        for task, results in zip(tasks, resultss):
+            if results[0].traj is not None:
+                pairs.append((task, results))
+        logger.info("num feasible: {}".format(len(pairs)))
+
+    if mode == "lib":
+        p = Path("./raw_library/{}.pkl".format(task_type.__name__))
+    else:
+        p = Path("./problem_set/{}.pkl".format(task_type.__name__))
+
+    with p.open(mode="wb") as f:
+        pickle.dump(pairs, f)
