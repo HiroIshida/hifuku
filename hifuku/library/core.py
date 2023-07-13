@@ -617,7 +617,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("active sampling step")
         self.reset_pool()
 
-        init_solution = self._determine_init_solution()
+        init_solution, covered_problems = self._determine_init_solution()
         problems = self._generate_problem_samples()
         predictor = self.learn_predictor(init_solution, self.project_path, problems)
 
@@ -869,7 +869,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
     def _select_solution_candidates(
         self, candidates: List[Trajectory], problems: List[ProblemT]
-    ) -> Optional[Trajectory]:
+    ) -> Tuple[Optional[Trajectory], List[ProblemT]]:
         logger.info("select single solution out of {} candidates".format(len(candidates)))
 
         candidates_repeated = []
@@ -890,16 +890,25 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         n_solved_max = 0
         best_cand: Optional[Trajectory] = None
+        best_problem_covered: List[ProblemT] = []
         for idx_cand, resultss in enumerate(resultss_list):
-            n_solved = sum([results[0].traj is not None for results in resultss])
+            n_solved = 0
+            problems_covered = []
+            for results, problem in zip(resultss, problems):
+                if results[0].traj is not None:
+                    n_solved += 1
+                    problems_covered.append(problem)
+
             logger.info("cand_idx {}: {}".format(idx_cand, n_solved))
             if n_solved > n_solved_max:
                 n_solved_max = n_solved
                 best_cand = candidates[idx_cand]
-        logger.info("n_solved_max of candidates: {}".format(n_solved_max))
-        return best_cand
+                best_problem_covered = problems_covered
 
-    def _determine_init_solution(self) -> Trajectory:
+        logger.info("n_solved_max of candidates: {}".format(n_solved_max))
+        return best_cand, best_problem_covered
+
+    def _determine_init_solution(self) -> Tuple[Trajectory, List[ProblemT]]:
         n_repeat_budget = 2
         for i_repeat in range(n_repeat_budget):
             logger.info("sample solution candidates ({}-th repeat)".format(i_repeat))
@@ -917,10 +926,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 difficult_problems, _ = self._sample_difficult_problems(
                     self.config.n_difficult_problem, problem_pool
                 )
-            best_solution = self._select_solution_candidates(
+            best_solution, best_covered_problems = self._select_solution_candidates(
                 solution_candidates, difficult_problems
             )
             if best_solution is not None:
                 logger.info("found best solution")
-                return best_solution
+                return best_solution, best_covered_problems
         raise RuntimeError("consumed all repeat budget")
