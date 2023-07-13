@@ -17,14 +17,29 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-domain", type=str, default="humanoid_trr_sqp", help="")
     parser.add_argument("-n", type=int, default=300, help="")
+    parser.add_argument("--feasible", action="store_true", help="use only feasible problem set")
     args = parser.parse_args()
 
     n_sample = args.n
-
+    only_feasible: bool = args.feasible
     domain_name: str = args.domain
     domain = select_domain(domain_name)
     pp = get_project_path(domain_name)
     task_type = domain.task_type
+
+    if only_feasible:
+        print("use feasible problem set")
+        problem_set_path = Path("./problem_set") / (task_type.__name__ + ".pkl")
+        with problem_set_path.open(mode="rb") as f:
+            tmp = pickle.load(f)
+            tasks_full, resultss = zip(*tmp)
+            for task, results in zip(tasks_full, resultss):
+                assert results[0].traj is not None
+        assert n_sample <= len(tasks_full)
+        tasks = tasks_full[:n_sample]
+    else:
+        tasks = [task_type.sample(1) for _ in range(n_sample)]
+    assert tasks[0].n_inner_task == 1
 
     solver_table = CompatibleSolvers.get_compatible_solvers(task_type.__name__)
 
@@ -41,10 +56,8 @@ if __name__ == "__main__":
     results = []
     false_positive_seq = []
 
-    for i in range(n_sample):
+    for i, task in enumerate(tasks):
         print(i)
-
-        task = task_type.sample(1)
 
         result = {}
         for name, solver in solver_table.items():
