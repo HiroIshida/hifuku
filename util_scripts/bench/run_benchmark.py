@@ -31,8 +31,8 @@ if __name__ == "__main__":
         print("use feasible problem set")
         problem_set_path = Path("./problem_set") / (task_type.__name__ + ".pkl")
         with problem_set_path.open(mode="rb") as f:
-            tmp = pickle.load(f)
-            tasks_full, resultss = zip(*tmp)
+            pairs = pickle.load(f)
+            tasks_full, resultss = zip(*pairs)
             for task, results in zip(tasks_full, resultss):
                 assert results[0].traj is not None
         assert n_sample <= len(tasks_full)

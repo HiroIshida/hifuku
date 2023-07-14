@@ -50,7 +50,7 @@ if __name__ == "__main__":
         resultss = solver.solve_batch(tasks, [None] * n_task_batch, use_default_solver=True)
         for task, results in zip(tasks, resultss):
             if results[0].traj is not None:
-                pairs.append((task, results))
+                pairs.append((task, results[0].traj))
         logger.info("num feasible: {}".format(len(pairs)))
 
     if mode == "lib":
@@ -58,5 +58,6 @@ if __name__ == "__main__":
     else:
         p = Path("./problem_set/{}.pkl".format(task_type.__name__))
 
+    logger.info("dump {} pairs to {}".format(len(pairs), p))
     with p.open(mode="wb") as f:
         pickle.dump(pairs, f)
