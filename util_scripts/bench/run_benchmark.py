@@ -1,10 +1,12 @@
 import argparse
 import pickle
+import time
 from pathlib import Path
 
 import torch
+from compatible_solver import CompatibleSolvers
 from mohou.file import get_project_path
-from rpbench.compatible_solver import CompatibleSolvers
+from rpbench.interface import PlanningDataset
 
 from hifuku.domain import select_domain
 from hifuku.library import (
@@ -18,10 +20,12 @@ if __name__ == "__main__":
     parser.add_argument("-domain", type=str, default="humanoid_trr_sqp", help="")
     parser.add_argument("-n", type=int, default=300, help="")
     parser.add_argument("--feasible", action="store_true", help="use only feasible problem set")
+    parser.add_argument("--dataset", action="store_true", help="load dataset")
     args = parser.parse_args()
 
     n_sample = args.n
     only_feasible: bool = args.feasible
+    load_dataset: bool = args.dataset
     domain_name: str = args.domain
     domain = select_domain(domain_name)
     pp = get_project_path(domain_name)
@@ -33,15 +37,25 @@ if __name__ == "__main__":
         with problem_set_path.open(mode="rb") as f:
             pairs = pickle.load(f)
             tasks_full, resultss = zip(*pairs)
-            for task, results in zip(tasks_full, resultss):
-                assert results[0].traj is not None
-        assert n_sample <= len(tasks_full)
+            for task, traj in zip(tasks_full, resultss):
+                assert traj is not None
+        assert n_sample <= len(tasks_full), "available: {}".format(len(tasks_full))
         tasks = tasks_full[:n_sample]
     else:
         tasks = [task_type.sample(1) for _ in range(n_sample)]
     assert tasks[0].n_inner_task == 1
 
-    solver_table = CompatibleSolvers.get_compatible_solvers(task_type.__name__)
+    if load_dataset:
+        pairs_path = Path("./raw_library") / (task_type.__name__ + ".pkl")
+        with pairs_path.open(mode="rb") as f:
+            pairs_tmp = pickle.load(f)
+        pairs = []
+        for task, traj in pairs_tmp:
+            pairs.append((task, traj))
+        dataset = PlanningDataset(pairs, task_type, time.time())
+    else:
+        dataset = None
+    solver_table = CompatibleSolvers.get_compatible_solvers(task_type.__name__, dataset=dataset)
 
     # setup proposed solver
     pp = get_project_path("hifuku-{}".format(domain.get_domain_name()))
