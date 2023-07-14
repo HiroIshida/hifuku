@@ -1,31 +1,37 @@
 import torch
-from rpbench.interface import SamplableBase, TaskBase
-from rpbench.jaxon.below_table import (
+from rpbench.articulated.jaxon.below_table import (
     HumanoidTableReachingTask as _HumanoidTableReachingTask,
 )
-from rpbench.pr2.kivapod import KivapodEmptyReachingTask as _KivapodEmptyReachingTask
+from rpbench.articulated.pr2.kivapod import (
+    KivapodEmptyReachingTask as _KivapodEmptyReachingTask,
+)
 
 # fmt: off
-from rpbench.pr2.tabletop import (
+from rpbench.articulated.pr2.tabletop import (
     TabletopBoxDualArmReachingTask as _TabletopBoxDualArmReachingTask,
 )
-from rpbench.pr2.tabletop import (
+from rpbench.articulated.pr2.tabletop import (
     TabletopBoxRightArmReachingTask as _TabletopBoxRightArmReachingTask,
 )
-from rpbench.pr2.tabletop import TabletopBoxWorldWrap as _TabletopBoxWorldWrap
-from rpbench.pr2.tabletop import (
+from rpbench.articulated.pr2.tabletop import (
+    TabletopBoxWorldWrap as _TabletopBoxWorldWrap,
+)
+from rpbench.articulated.pr2.tabletop import (
     TabletopOvenDualArmReachingTask as _TabletopOvenDualArmReachingTask,
 )
-from rpbench.pr2.tabletop import (
+from rpbench.articulated.pr2.tabletop import (
     TabletopOvenRightArmReachingTask as _TabletopOvenRightArmReachingTask,
 )
-from rpbench.pr2.tabletop import (
+from rpbench.articulated.pr2.tabletop import (
     TabletopOvenVoxbloxRightArmReachingTask as _TabletopOvenVoxbloxRightArmReachingTask,
 )
-from rpbench.pr2.tabletop import (
+from rpbench.articulated.pr2.tabletop import (
     TabletopOvenVoxbloxWorldWrap as _TabletopOvenVoxbloxWorldWrap,
 )
-from rpbench.pr2.tabletop import TabletopOvenWorldWrap as _TabletopOvenWorldWrap
+from rpbench.articulated.pr2.tabletop import (
+    TabletopOvenWorldWrap as _TabletopOvenWorldWrap,
+)
+from rpbench.interface import SamplableBase, TaskBase
 from rpbench.ring import (
     RingObstacleFreeBlockedPlanningTask as _RingObstacleFreeBlockedPlanningTask,
 )
