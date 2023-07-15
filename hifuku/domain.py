@@ -125,6 +125,18 @@ class TBRR_SQP_Domain(DomainProtocol):
     auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
 
 
+class TBRR_RRT_Domain(DomainProtocol):
+    task_type = TabletopBoxRightArmReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=300,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.05,
+    )
+    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+
+
 class Kivapod_Empty_RRT_Domain(DomainProtocol):
     task_type = KivapodEmptyReachingTask
     solver_type = OMPLSolver
@@ -279,6 +291,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         tbdr_sqp = TBDR_SQP_Domain
         tbdr_rrt = TBDR_RRT_Domain
         tbrr_sqp = TBRR_SQP_Domain
+        tbrr_rrt = TBRR_RRT_Domain
         kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
         ring_rrt = RingObstacleFree_RRT_Domain
         ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
