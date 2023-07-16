@@ -2,6 +2,9 @@ import torch
 from rpbench.articulated.jaxon.below_table import (
     HumanoidTableReachingTask as _HumanoidTableReachingTask,
 )
+from rpbench.articulated.jaxon.ground import (
+    HumanoidGroundRarmReachingTask as _HumanoidGroundRarmReachingTask,
+)
 from rpbench.articulated.pr2.kivapod import (
     KivapodEmptyReachingTask as _KivapodEmptyReachingTask,
 )
@@ -101,6 +104,7 @@ class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskB
 class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, PicklableTaskBase): ...  # noqa
 class EightRoomsPlanningTask(_EightRoomsPlanningTask, PicklableTaskBase): ...  # noqa
 class HumanoidTableReachingTask(_HumanoidTableReachingTask, PicklableTaskBase): ...  # noqa
+class HumanoidGroundRarmReachingTask(_HumanoidGroundRarmReachingTask, PicklableTaskBase): ...  # noqa
 class BubblySimpleMeshPointConnectTask(_BubblySimpleMeshPointConnectTask, PicklableTaskBase): ...  # noqa
 class BubblyComplexMeshPointConnectTask(_BubblyComplexMeshPointConnectTask, PicklableTaskBase): ...  # noqa
 class BubblySimplePointConnectTask(_BubblySimplePointConnectTask, PicklableTaskBase): ...  # noqa

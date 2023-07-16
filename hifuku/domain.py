@@ -19,6 +19,7 @@ from hifuku.rpbench_wrap import (
     BubblySimpleMeshPointConnectTask,
     BubblySimplePointConnectTask,
     EightRoomsPlanningTask,
+    HumanoidGroundRarmReachingTask,
     HumanoidTableReachingTask,
     KivapodEmptyReachingTask,
     MazeSolvingTask,
@@ -236,6 +237,21 @@ class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
     auto_encoder_project_name = None
 
 
+class HumanoidGroundRarmReaching_SQP_Domain(DomainProtocol):
+    task_type = HumanoidGroundRarmReachingTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=40,
+        n_max_call=8,
+        motion_step_satisfaction="explicit",
+        verbose=False,
+        ctol_eq=1e-3,
+        ctol_ineq=1e-3,
+        ineq_tighten_coef=0.0,
+    )
+    auto_encoder_project_name = "GroundClutteredWorld-AutoEncoder"
+
+
 class BubblySimpleMeshPointConnecting_SQP_Domain(DomainProtocol):
     task_type = BubblySimpleMeshPointConnectTask
     solver_type = SQPBasedSolver
@@ -299,6 +315,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         eight_rooms_ert = EightRooms_ERT_Domain
         eight_rooms_lt = EightRooms_LT_Domain
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
+        humanoid_grr_sqp = HumanoidGroundRarmReaching_SQP_Domain
         bubbly_simple_mesh_sqp = BubblySimpleMeshPointConnecting_SQP_Domain
         bubbly_simple_mesh_rrt = BubblySimpleMeshPointConnecting_RRT_Domain
         bubbly_simple_rrt = BubblySimplePointConnecting_RRT_Domain
