@@ -380,7 +380,7 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, Res
         seems_infeasible = inference_result.nit > self.library.success_iter_threshold()
         if seems_infeasible:
             result_type = self.solver.get_result_type()
-            return result_type.abnormal(time.time() - ts)
+            return result_type.abnormal()
         solver_result = self.solver.solve(inference_result.init_solution)
         solver_result.time_elapsed = time.time() - ts
 
