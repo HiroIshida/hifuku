@@ -1,4 +1,5 @@
 import copy
+import datetime
 import json
 import logging
 import pickle
@@ -270,19 +271,35 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             else:
                 device = torch.device("cpu")
         libraries = []
+        library_paths = []
         for path in base_path.iterdir():
-            logger.debug("load from path: {}".format(path))
+            # logger.debug("load from path: {}".format(path))
             m = re.match(r"Library-(\w+)-(\w+).pkl", path.name)
             if m is not None and m[1] == task_type.__name__:
-                logger.info("library found at {}".format(path))
-                with path.open(mode="rb") as f:
-                    lib: "SolutionLibrary[ProblemT, ConfigT, ResultT]" = pickle.load(f)
-                    assert lib.device == torch.device("cpu")
-                    lib.put_on_device(device)
-                    # In most case, user will use the library in a single process
-                    # thus we dont need to care about thread stuff.
-                    lib.limit_thread = False  # faster
-                    libraries.append(lib)
+                logger.debug("library found at {}".format(path))
+                library_paths.append(path)
+
+        latest_path = None
+        latest_timestamp = None
+        for path in library_paths:
+            timestamp = path.stat().st_ctime
+
+            readable_timestamp = datetime.datetime.fromtimestamp(timestamp)
+            logger.debug("lib: {}, ts: {}".format(path, readable_timestamp))
+            if latest_timestamp is None or timestamp > latest_timestamp:
+                latest_timestamp = timestamp
+                latest_path = path
+        assert latest_path is not None
+
+        logger.debug("load latest library from {}".format(latest_path))
+        with latest_path.open(mode="rb") as f:
+            lib: "SolutionLibrary[ProblemT, ConfigT, ResultT]" = pickle.load(f)
+            assert lib.device == torch.device("cpu")
+            lib.put_on_device(device)
+            # In most case, user will use the library in a single process
+            # thus we dont need to care about thread stuff.
+            lib.limit_thread = False  # faster
+            libraries.append(lib)
         return libraries  # type: ignore
 
     def unbundle(self) -> List["SolutionLibrary[ProblemT, ConfigT, ResultT]"]:
