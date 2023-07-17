@@ -1,0 +1,10 @@
+n_problem: 2000
+n_problem_inner: 40
+n_solution_candidate: 20
+n_difficult_problem: 100
+solvable_threshold_factor: 1.0
+difficult_threshold_factor: 1.0
+acceptable_false_positive_rate: 0.1
+train_config:
+    n_epoch: 60
+n_determine_batch: 320
