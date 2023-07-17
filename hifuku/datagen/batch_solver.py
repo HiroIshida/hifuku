@@ -1,4 +1,3 @@
-import copy
 import logging
 import os
 import pickle
@@ -6,8 +5,9 @@ import shutil
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from multiprocessing import Process
+from multiprocessing import Process, get_context
 from pathlib import Path
 from typing import Generic, List, Optional, Sequence, Tuple, Type, Union
 
@@ -27,7 +27,7 @@ from hifuku.datagen.http_datagen.request import (
 from hifuku.datagen.utils import split_indices
 from hifuku.pool import ProblemT
 from hifuku.types import RawData
-from hifuku.utils import filter_warnings, get_random_seed
+from hifuku.utils import filter_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -43,106 +43,6 @@ def duplicate_init_solution_if_not_list(
     else:
         init_solutions = [init_solution] * n_inner_task
     return init_solutions
-
-
-@dataclass
-class BatchProblemSolverArg(Generic[ProblemT, ConfigT, ResultT]):
-    indices: np.ndarray
-    problems: List[ProblemT]
-    solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
-    solver_config: ConfigT
-    init_solutions: Sequence[TrajectoryMaybeList]
-    show_process_bar: bool
-    cache_path: Path
-    use_default_solver: bool
-    """
-    NOTE: init_solution
-    - is None if solve scratch.
-    - is a Trajectory if same init_solution is used for all inner tasks.
-    - is a List[Trajectory] if different init_solution per inner task is used.
-    """
-
-    def __len__(self) -> int:
-        return len(self.problems)
-
-    def __post_init__(self) -> None:
-        assert len(self.problems) == len(self.init_solutions)
-
-
-class BatchProblemSolverWorker(Process, Generic[ProblemT, ConfigT, ResultT]):
-    arg: BatchProblemSolverArg[ProblemT, ConfigT, ResultT]
-
-    def __init__(self, arg: BatchProblemSolverArg):
-        self.arg = arg
-        super().__init__()
-
-    def run(self) -> None:
-        prefix = "pid-{}: ".format(os.getpid())
-
-        def log_with_prefix(message):
-            logger.debug("{} {}".format(prefix, message))
-
-        log_with_prefix("batch solver worker run")
-
-        random_seed = get_random_seed()
-        log_with_prefix("random seed set to {}".format(random_seed))
-        np.random.seed(random_seed)
-        disable_tqdm = not self.arg.show_process_bar
-
-        idx_resulsts_pairs = []
-        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
-            # NOTE: because NLP solver and collision detection algrithm may use multithreading
-            with tqdm.tqdm(total=len(self.arg), disable=disable_tqdm) as pbar:
-                for idx, task, init_solution in zip(
-                    self.arg.indices, self.arg.problems, self.arg.init_solutions
-                ):
-                    # NOTE: In some memmory-critical situation, _gridsdf is created after post-requirement
-                    # and should be deleted (i.e. set to None) right after the task is solved.
-                    has_none_gridsdf_at_first = task._gridsdf is None
-
-                    if has_none_gridsdf_at_first:
-                        # TODO: I'm not sure about this is required but just due to
-                        # my lack of knowlege for python gc stuff.
-                        # make sure that the lazily-created object is local
-                        task_local = copy.deepcopy(task)
-                    else:
-                        task_local = task
-
-                    if self.arg.use_default_solver:
-                        results = task.solve_default()
-                    else:
-                        solver = self.arg.solver_t.init(self.arg.solver_config)
-                        init_solutions_per_inner = duplicate_init_solution_if_not_list(
-                            init_solution, task.n_inner_task
-                        )
-
-                        results = []
-                        problems = task.export_problems()
-                        for problem, init_solution_per_inner in tqdm.tqdm(
-                            zip(problems, init_solutions_per_inner),
-                            disable=disable_tqdm,
-                            leave=False,
-                        ):
-                            solver.setup(problem)
-                            result = solver.solve(init_solution_per_inner)
-                            results.append(result)
-                    tupled_results = tuple(results)
-
-                    if has_none_gridsdf_at_first:
-                        task_local.invalidate_gridsdf()
-
-                    log_with_prefix("solve single task")
-                    log_with_prefix("success: {}".format([r.traj is not None for r in results]))
-                    log_with_prefix("iteration: {}".format([r.n_call for r in results]))
-
-                    idx_resulsts_pairs.append((idx, tupled_results))
-
-                    pbar.update(1)
-        log_with_prefix("finish solving all tasks")
-
-        save_path = self.arg.cache_path / str(uuid.uuid4())
-        with save_path.open(mode="wb") as f:
-            pickle.dump(idx_resulsts_pairs, f)
 
 
 @dataclass
@@ -338,13 +238,6 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
                     results_list.append(tuple(results))
                 return results_list
         else:
-            indices = np.array(list(range(len(tasks))))
-            indices_list_per_worker = np.array_split(indices, n_process)
-
-            indices_list_per_worker = np.array_split(indices, n_process)
-
-            process_list = []
-
             # python's known bug when forking process while using logging module
             # https://stackoverflow.com/questions/65080123/python-multiprocessing-pool-some-process-in-deadlock-when-forked-but-runs-when-s
             # https://stackoverflow.com/questions/24509650/deadlock-with-logging-multiprocess-multithread-python-script
@@ -353,40 +246,58 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
                 assert hn.lock is not None
                 assert not hn.lock.locked()
 
-            # NOTE: multiprocessing with shared queue is straightfowrad but
-            # sometimes hangs when handling larger data.
-            # Thus, we use temporarly directory to store the results and load again
-            with tempfile.TemporaryDirectory() as td:
-                td_path = Path(td)
-                for i, indices_part in enumerate(indices_list_per_worker):
-                    enable_tqdm = i == 0
-                    problems_part = [tasks[idx] for idx in indices_part]
-                    init_solutions_part = [init_solutions[idx] for idx in indices_part]
-                    arg = BatchProblemSolverArg(
-                        indices_part,
-                        problems_part,
-                        self.solver_t,
-                        self.config,
-                        init_solutions_part,
-                        enable_tqdm,
-                        td_path,
-                        use_default_solver,
-                    )
-                    worker = BatchProblemSolverWorker(arg)  # type: ignore
-                    process_list.append(worker)
-                    worker.start()
+            args = []
+            for idx in range(len(tasks)):
+                args.append((idx, tasks[idx], init_solutions[idx]))
 
-                for worker in process_list:
-                    worker.join()
-
-                idx_results_pairs = []
-                for file_path in td_path.iterdir():
-                    with file_path.open(mode="rb") as f:
-                        idx_results_pairs.extend(pickle.load(f))
-
+            with ProcessPoolExecutor(
+                n_process,
+                initializer=self._pool_setup,
+                initargs=(self.solver_t, self.config, use_default_solver),
+                mp_context=get_context("fork"),
+            ) as executor:
+                idx_results_pairs = list(
+                    tqdm.tqdm(executor.map(self._pool_solve_single, args), total=len(args))
+                )
             idx_results_pairs_sorted = sorted(idx_results_pairs, key=lambda x: x[0])  # type: ignore
-            _, results = zip(*idx_results_pairs_sorted)
-            return list(results)  # type: ignore
+            _, resultss = zip(*idx_results_pairs_sorted)
+            return list(resultss)
+
+    @staticmethod
+    def _pool_setup(
+        solver_t: Type[AbstractScratchSolver], config: ConfigT, use_default_solver: bool
+    ):
+        # NOTE: this function is used only in process pool
+        # NOTE: a lot of type: ignore due to global variables
+        global solver
+        solver = solver_t.init(config)  # type: ignore
+        global _use_default_solver
+        _use_default_solver = use_default_solver  # type: ignore
+
+    @staticmethod
+    def _pool_solve_single(args):
+        task_idx, task, init_solutions = args
+        # NOTE: this function is used only in process pool
+        # NOTE: a lot of type: ignore due to global variables
+        has_gridsdf = task._gridsdf is not None
+
+        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+            global _use_default_solver
+            if _use_default_solver:  # type: ignore
+                results = task.solve_default()
+            else:
+                init_solutions = duplicate_init_solution_if_not_list(
+                    init_solutions, task.n_inner_task
+                )
+                results = []
+                for problem, init_solution in zip(task.export_problems(), init_solutions):
+                    solver.setup(problem)  # type: ignore
+                    result = solver.solve(init_solution)  # type: ignore
+                    results.append(result)
+
+            if has_gridsdf:
+                task.invalidate_gridsdf()
+        return task_idx, tuple(results)
 
 
 HostPortPair = Tuple[str, int]
