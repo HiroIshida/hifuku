@@ -442,6 +442,7 @@ class LibrarySamplerConfig:
     bootstrap_percentile: float = 95.0
     n_validation: int = 1000
     n_validation_inner: int = 10
+    n_determine_batch: int = 80
 
 
 @dataclass
@@ -653,7 +654,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                     )
                 )
                 results = self.determinant.determine_batch(
-                    80,
+                    self.config.n_determine_batch,
                     coverages_new,
                     self.solver_config.n_max_call,
                     self.config.acceptable_false_positive_rate,
