@@ -250,22 +250,34 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
             for idx in range(len(tasks)):
                 args.append((idx, tasks[idx], init_solutions[idx]))
 
-            with ProcessPoolExecutor(
-                n_process,
-                initializer=self._pool_setup,
-                initargs=(self.solver_t, self.config, use_default_solver),
-                mp_context=get_context("fork"),
-            ) as executor:
-                idx_results_pairs = list(
-                    tqdm.tqdm(executor.map(self._pool_solve_single, args), total=len(args))
-                )
-            idx_results_pairs_sorted = sorted(idx_results_pairs, key=lambda x: x[0])  # type: ignore
-            _, resultss = zip(*idx_results_pairs_sorted)
+            with tempfile.TemporaryDirectory() as td:
+                td_path = Path(td)
+
+                with ProcessPoolExecutor(
+                    n_process,
+                    initializer=self._pool_setup,
+                    initargs=(self.solver_t, self.config, use_default_solver, td_path),
+                    mp_context=get_context("fork"),
+                ) as executor:
+                    mapped = list(
+                        tqdm.tqdm(executor.map(self._pool_solve_single, args), total=len(args))
+                    )
+
+                idx_results_pairs = []
+                for file_path in td_path.iterdir():
+                    with file_path.open(mode="rb") as f:
+                        pair = pickle.load(f)
+                    idx_results_pairs.append(pair)
+                idx_results_pairs_sorted = sorted(idx_results_pairs, key=lambda x: x[0])  # type: ignore
+                _, resultss = zip(*idx_results_pairs_sorted)
             return list(resultss)
 
     @staticmethod
     def _pool_setup(
-        solver_t: Type[AbstractScratchSolver], config: ConfigT, use_default_solver: bool
+        solver_t: Type[AbstractScratchSolver],
+        config: ConfigT,
+        use_default_solver: bool,
+        td_path: Path,
     ):
         # NOTE: this function is used only in process pool
         # NOTE: a lot of type: ignore due to global variables
@@ -273,6 +285,8 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         solver = solver_t.init(config)  # type: ignore
         global _use_default_solver
         _use_default_solver = use_default_solver  # type: ignore
+        global _td_path
+        _td_path = td_path  # type: ignore
 
     @staticmethod
     def _pool_solve_single(args):
@@ -297,7 +311,12 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
 
             if has_gridsdf:
                 task.invalidate_gridsdf()
-        return task_idx, tuple(results)
+
+        global _td_path
+        file_path = _td_path / str(uuid.uuid4())  # type: ignore
+        with file_path.open(mode="wb") as f:
+            pickle.dump((task_idx, tuple(results)), f)
+        return 0
 
 
 HostPortPair = Tuple[str, int]
