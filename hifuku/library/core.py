@@ -494,6 +494,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     def __post_init__(self):
         self.reset_pool()
 
+    @cached_property
+    def debug_data_parent_path(self) -> Path:
+        path = Path("/tmp") / "hifuku-debug-data"
+        shutil.rmtree(path)
+        path.mkdir()
+        return path
+
     def reset_pool(self) -> None:
         logger.info("resetting pool")
         self.pool_single.reset()
@@ -658,7 +665,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         )
         logger.info(coverage_result)
 
-        with open("/tmp/hifuku_coverage_debug.pkl", "wb") as f:
+        debug_file_path = self.debug_data_parent_path / "hifuku_coverage_debug.pkl"
+        with debug_file_path.open(mode="wb") as f:
             pickle.dump(coverage_result, f)
 
         assert self.library.coverage_results is not None
@@ -871,6 +879,15 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 if result.traj is not None:
                     feasible_solutions.append(result.traj)
                     if len(feasible_solutions) == n_sample:
+
+                        # dump feasible solutions for debug
+                        debug_file_path = (
+                            self.debug_data_parent_path
+                            / "feasible_solutions-{}.pkl".format(len(self.library.predictors))
+                        )
+                        with debug_file_path.open(mode="wb") as f:
+                            pickle.dump(feasible_solutions, f)
+
                         return feasible_solutions
             logger.info("{} progress {} / {} ".format(prefix, len(feasible_solutions), n_sample))
 
