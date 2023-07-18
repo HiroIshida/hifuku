@@ -611,11 +611,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 )
         assert len(problems_validation) > 0
 
-        for prob in problems_validation:
-            logger.info(
-                "validation set with {} elements is created".format(len(problems_validation))
-            )
-
         logger.info("library sampler config: {}".format(config))
         return cls(
             problem_type,
