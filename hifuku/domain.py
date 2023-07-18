@@ -3,6 +3,7 @@ from enum import Enum
 from typing import ClassVar, Optional, Protocol, Type
 
 import tqdm
+from rpbench.two_dimensional.dummy import DummyConfig, DummySolver
 from skmp.solver.interface import AbstractScratchSolver, ConfigProtocol
 from skmp.solver.nlp_solver.sqp_based_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
@@ -18,6 +19,7 @@ from hifuku.datagen.batch_solver import (
 from hifuku.rpbench_wrap import (
     BubblySimpleMeshPointConnectTask,
     BubblySimplePointConnectTask,
+    DummyTask,
     EightRoomsPlanningTask,
     HumanoidGroundRarmReachingTask,
     HumanoidTableReachingTask,
@@ -282,6 +284,15 @@ class BubblySimplePointConnecting_RRT_Domain(DomainProtocol):
     auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
 
 
+class DummyDomain(DomainProtocol):
+    task_type = DummyTask
+    solver_type = DummySolver
+    solver_config = DummyConfig(
+        n_max_call=800, random_scale=0.25, random_force_failure_rate=0.0
+    )  # somehow, if 500, classifier is not trained well probably due to the positive-negative sample inbalance
+    auto_encoder_project_name = None
+
+
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
     solver = domain.create_solver()
 
@@ -319,5 +330,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         bubbly_simple_mesh_sqp = BubblySimpleMeshPointConnecting_SQP_Domain
         bubbly_simple_mesh_rrt = BubblySimpleMeshPointConnecting_RRT_Domain
         bubbly_simple_rrt = BubblySimplePointConnecting_RRT_Domain
+        dummy = DummyDomain
 
     return DomainCollection[domain_name].value

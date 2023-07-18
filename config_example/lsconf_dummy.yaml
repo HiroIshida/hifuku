@@ -1,0 +1,18 @@
+n_problem: 80
+n_problem_inner: 100
+n_solution_candidate: 200
+n_difficult_problem: 100
+solvable_threshold_factor: 1.0
+difficult_threshold_factor: 1.0
+acceptable_false_positive_rate: 0.05
+train_config:
+    n_epoch: 60
+n_determine_batch: 320
+n_validation: 1000
+n_validation_inner: 1
+candidate_sample_scale: 3
+iterpred_model_config:
+    n_layer1_width: 40
+    n_layer2_width: 40
+    n_layer3_width: 10
+    dim_description_expand: null

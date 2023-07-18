@@ -51,6 +51,7 @@ from rpbench.two_dimensional.bubbly_world import (
 from rpbench.two_dimensional.bubbly_world import (
     BubblySimplePointConnectTask as _BubblySimplePointConnectTask,
 )
+from rpbench.two_dimensional.dummy import DummyTask as _DummyTask
 from rpbench.two_dimensional.maze import MazeSolvingTask as _MazeSolvingTask
 from rpbench.two_dimensional.multiple_rooms import (
     EightRoomsPlanningTask as _EightRoomsPlanningTask,
@@ -109,4 +110,5 @@ class BubblySimpleMeshPointConnectTask(_BubblySimpleMeshPointConnectTask, Pickla
 class BubblyComplexMeshPointConnectTask(_BubblyComplexMeshPointConnectTask, PicklableTaskBase): ...  # noqa
 class BubblySimplePointConnectTask(_BubblySimplePointConnectTask, PicklableTaskBase): ...  # noqa
 class BubblyComplexPointConnectTask(_BubblyComplexPointConnectTask, PicklableTaskBase): ...  # noqa
+class DummyTask(_DummyTask, PicklableTaskBase): ...  # noqa
 # fmt: on
