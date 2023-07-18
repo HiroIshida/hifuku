@@ -866,6 +866,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             )
             problems2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
             problems = problems1 + problems2
+            for prob in problems:
+                prob.invalidate_gridsdf()
 
             # NOTE: shuffling is required asin the following sectino, for loop is existed
             # as soon as number of candidates exceeds n_sample
