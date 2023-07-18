@@ -846,7 +846,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         # TODO: dont hardcode
         n_batch = n_sample * 20
-        n_batch_little_difficult = int(n_batch * 0.8)
+        n_batch_little_difficult = int(n_batch * 0.5)
         n_batch_difficult = n_batch - n_batch_little_difficult
 
         feasible_solutions: List[Trajectory] = []
