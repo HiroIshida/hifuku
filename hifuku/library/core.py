@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import pickle
+import random
 import re
 import shutil
 import time
@@ -856,6 +857,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             )
             problems2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
             problems = problems1 + problems2
+
+            # NOTE: shuffling is required asin the following sectino, for loop is existed
+            # as soon as number of candidates exceeds n_sample
+            # we need to "mixutre" bit-difficult and difficult problems
+            random.shuffle(problems)
 
             logger.info("{} solve batch".format(prefix))
             resultss = self.solver.solve_batch(problems, [None] * n_batch, use_default_solver=True)
