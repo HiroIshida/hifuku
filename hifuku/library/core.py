@@ -465,6 +465,7 @@ class LibrarySamplerConfig:
     n_validation: int = 1000
     n_validation_inner: int = 10
     n_determine_batch: int = 80
+    candidate_sample_scale: int = 10
 
 
 @dataclass
@@ -853,7 +854,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("{} start sampling solution solved difficult problems".format(prefix))
 
         # TODO: dont hardcode
-        n_batch = n_sample * 20
+        n_batch = n_sample * self.config.candidate_sample_scale
         n_batch_little_difficult = int(n_batch * 0.5)
         n_batch_difficult = n_batch - n_batch_little_difficult
 
