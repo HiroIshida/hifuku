@@ -4,9 +4,11 @@ import json
 import logging
 import pickle
 import re
+import shutil
 import time
 import uuid
 from dataclasses import asdict, dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Dict, Generic, List, Optional, Tuple, Type
 
@@ -64,6 +66,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     uuidval: str
     meta_data: Dict
     limit_thread: bool = False
+    _margins_history: Optional[List[List[float]]] = None
     _optimal_coverage_estimate: Optional[
         float
     ] = None  # the cached optimal coverage after margins optimization
@@ -102,6 +105,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             uuidval,
             meta_data,
             True,  # assume that we are gonna build library and not in eval time.
+            [],
             None,
         )
 
@@ -727,6 +731,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         self.library.predictors.append(predictor)
         self.library.margins = margins
         self.library.coverage_results.append(coverage_result)
+
+        # TODO: margins_history should not be Optional in the first place
+        assert self.library._margins_history is not None
+        self.library._margins_history.append(copy.deepcopy(margins))
+
         self.library.dump(self.project_path)
 
         coverage = self.library.measure_coverage(self.problems_validation)
