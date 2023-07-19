@@ -22,6 +22,7 @@ parser.add_argument("-n", type=int)
 parser.add_argument("-margin", type=str, default="default")
 parser.add_argument("--active", action="store_true")
 parser.add_argument("--legend", action="store_true")
+parser.add_argument("--save", action="store_true")
 args = parser.parse_args()
 n_step: Optional[int] = args.n
 margin_mode: Literal["default", "latest", "all"] = args.margin
@@ -39,13 +40,16 @@ fig, ax = plt.subplots()
 world.visualize((fig, ax))
 
 sdf = world.get_exact_sdf()
-sampled_colors = sample_colors(10)
+sampled_colors = sample_colors(8)
 print(len(lib.predictors))
 
 if n_step > 0:
+
     margins_history = lib._margins_history
     margins_at_time = margins_history[n_step - 1]
     for i in range(n_step):
+        is_latest = i == n_step - 1
+
         pred, margin = lib.predictors[i], margins_at_time[i]
 
         sol = pred.initial_solution
@@ -78,28 +82,35 @@ if n_step > 0:
         iters_main = iters_main.reshape(n_grid, n_grid)
 
         c = sampled_colors[i]
-
-        ax.contourf(X, Y, iters_main, levels=[-np.inf, 0], colors=[c], alpha=0.3)
-        ax.scatter(arr[-1, 0], arr[-1, 1], color="black", label="guiding trajectory")
-
-        CS_main = ax.contour(X, Y, iters_main, levels=[0], colors=["black"])
-        CS_main.collections[0].set_label("translated boundary")
-
-        if margin_mode == "default":
-            continue
-        if margin_mode == "latest" and i != n_step - 1:
-            continue
-
-        iters_raw = iter_preds.cpu().detach().numpy().flatten() - config.n_max_call
-        if domain.task_type.get_dof() == 2:
-            values = -sdf(pts)
+        if is_latest:
+            ax.contourf(X, Y, iters_main, levels=[-np.inf, 0], colors=[c], alpha=0.9)
+            CS_main = ax.contour(X, Y, iters_main, levels=[0], colors=["black"], linewidths=2.5)
+            CS_main.collections[0].set_label("translated (latest)")
+            ax.scatter(arr[-1, 0], arr[-1, 1], color="black", label="guiding trajectory")
         else:
-            values = -sdf(pts[:, 2:])
-        iters_raw = np.maximum(values, iters_raw)
-        iters_raw = iters_raw.reshape(n_grid, n_grid)
+            ax.contourf(X, Y, iters_main, levels=[-np.inf, 0], colors=[c], alpha=0.2)
+            CS_main = ax.contour(X, Y, iters_main, levels=[0], colors=["black"])
+            CS_main.collections[0].set_label("translated")
+            ax.scatter(arr[-1, 0], arr[-1, 1], color="gray", label="guiding trajectory")
 
-        CS_raw = ax.contour(X, Y, iters_raw, levels=[0], colors=["red"])
-        CS_raw.collections[0].set_label("raw")
+        # plot raw boundary
+        if (margin_mode == "all") or (margin_mode == "latest" and is_latest):
+            iters_raw = iter_preds.cpu().detach().numpy().flatten() - config.n_max_call
+            if domain.task_type.get_dof() == 2:
+                values = -sdf(pts)
+            else:
+                values = -sdf(pts[:, 2:])
+            iters_raw = np.maximum(values, iters_raw)
+            iters_raw = iters_raw.reshape(n_grid, n_grid)
+
+            if is_latest:
+                CS_raw = ax.contour(X, Y, iters_raw, levels=[0], colors=["red"], linewidths=2.5)
+                CS_raw.collections[0].set_label("raw (latest)")
+            else:
+                CS_raw = ax.contour(
+                    X, Y, iters_raw, levels=[0], colors=["red"], linestyles="dashed"
+                )
+                CS_raw.collections[0].set_label("raw")
 
 if show_active_sampling:
     p = Path("/tmp/hifuku-debug-data/feasible_solutions-{}.pkl".format(n_step))
@@ -110,17 +121,22 @@ if show_active_sampling:
         for traj in solutions:
             pts.append(traj.numpy()[-1])
         pts = np.array(pts)
-        ax.scatter(pts[:, 0], pts[:, 1], c="b", marker="x", s=5, label="candidates")
+        ax.scatter(pts[:, 0], pts[:, 1], c="b", s=1, label="candidates")
     if n_step < len(lib.predictors):
         p_selected = lib.predictors[n_step].initial_solution.numpy()[-1]
-        ax.scatter(p_selected[0], p_selected[1], c="orange", label="selected")
+        ax.scatter(p_selected[0], p_selected[1], c="orange", marker="*", s=70, label="selected")
 
 ax.set_xlim(-1.0, 2.2)
 ax.set_ylim(-1.8, 1.6)
 if args.legend:
     legend = ax.legend()
     legend.get_frame().set_alpha(1.0)
-    plt.savefig("./figs/caption-algo-expl-seq-{}.png".format(n_step), dpi=300)
+    if args.save:
+        plt.savefig("./figs/caption-algo-expl-seq-{}.png".format(n_step), dpi=300)
+    else:
+        plt.show()
 else:
-    plt.savefig("./figs/algo-expl-seq-{}.png".format(n_step), dpi=300)
-# plt.show()
+    if args.save:
+        plt.savefig("./figs/algo-expl-seq-{}.png".format(n_step), dpi=300)
+    else:
+        plt.show()
