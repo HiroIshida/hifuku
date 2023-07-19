@@ -498,7 +498,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     @cached_property
     def debug_data_parent_path(self) -> Path:
         path = Path("/tmp") / "hifuku-debug-data"
-        shutil.rmtree(path)
+        if path.exists():
+            shutil.rmtree(path)
         path.mkdir()
         return path
 
