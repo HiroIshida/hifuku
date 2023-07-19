@@ -1,10 +1,6 @@
-parallel ::: \
-"python3 visualize_2dtask_result.py --save -n 1 -margin all --active --legend" \
-"python3 visualize_2dtask_result.py --save -n 0 -margin all --active" \
-"python3 visualize_2dtask_result.py --save -n 1 -margin all --active" \
-"python3 visualize_2dtask_result.py --save -n 2 -margin all --active" \
-"python3 visualize_2dtask_result.py --save -n 3 -margin all --active" \
-"python3 visualize_2dtask_result.py --save -n 4 -margin all --active" \
-"python3 visualize_2dtask_result.py --save -n 5 -margin all --active" \
-"python3 visualize_2dtask_result.py --save -n 6 -margin all --active" \
-"python3 visualize_2dtask_result.py --save -n 7 -margin all --active" \
+n_grid=600
+echo -e "step1\nstep2\nstep3" | parallel python3 visualize_2dtask_result.py --save -n 0 -mode {} -grid $n_grid
+for ((i=1; i<=7; i++))
+do
+    echo -e "step0\nstep1\nstep2\nstep3" | parallel python3 visualize_2dtask_result.py --save -n $i -mode {} -grid $n_grid
+done
