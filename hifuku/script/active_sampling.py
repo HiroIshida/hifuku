@@ -34,14 +34,15 @@ if __name__ == "__main__":
     parser.add_argument("-n", type=int, default=100, help="")
     parser.add_argument("-conf", type=str)
     parser.add_argument("--warm", action="store_true", help="warm start")
-    parser.add_argument("--lm", action="store_true", help="use light weight nn")
     parser.add_argument("--fptest", action="store_true", help="test false positive rate")
+    parser.add_argument("--local", action="store_true", help="don't use distributed computers")
 
     args = parser.parse_args()
     domain_name: str = args.type
     warm_start: bool = args.warm
     test_fp_rate: bool = args.fptest
     n_step: int = args.n
+    use_distributed: bool = not args.local
     library_sampling_conf_path_str: Optional[str] = args.conf
 
     filter_warnings()
@@ -76,7 +77,7 @@ if __name__ == "__main__":
         lsconfig,
         project_path,
         pool_single=None,
-        use_distributed=True,
+        use_distributed=use_distributed,
         reuse_cached_validation_set=warm_start,
         invalidate_gridsdf=True,
         test_false_positive_rate=test_fp_rate,
