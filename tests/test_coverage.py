@@ -1,8 +1,9 @@
 from math import floor
+from typing import List, Tuple
 
 import numpy as np
 
-from hifuku.coverage import CoverageResult
+from hifuku.coverage import CoverageResult, compute_coverage_and_fp
 
 
 def test_coverage_result():
@@ -63,5 +64,68 @@ def test_coverage_result_int_case():
     assert n_sum == n_sample
 
 
+def compute_coverage_and_fp_naive(
+    margins: np.ndarray, coverage_results: List[CoverageResult], threshold: float
+) -> Tuple[float, float]:
+    # naive (non-vectorized) coverage and fp computation
+    coverage_count = 0
+    fp_count = 0
+    n_data = len(coverage_results[0])
+    for i in range(n_data):
+        # simualte inference
+        best_est = np.inf
+        best_idx = None
+
+        for idx, cr in enumerate(coverage_results):
+            est = cr.values_estimation[i] + margins[idx]
+            if est < best_est:
+                best_est = est
+                best_idx = idx
+        assert best_idx is not None
+        detected_solvable = best_est < threshold
+        actually_solvable = coverage_results[best_idx].values_ground_truth[i] < threshold
+
+        if detected_solvable:
+            coverage_count += 1
+            if not actually_solvable:
+                fp_count += 1
+
+    coverage_rate = coverage_count / n_data
+    fp_rate = fp_count / coverage_count
+    return coverage_rate, fp_rate
+
+
+def test_compute_coverage_and_fp():
+    def est_model(c, x):
+        n_call = int(np.linalg.norm(c - x) * 1000)
+        return n_call
+
+    def actual_model(c, x):
+        n_call_tmp = est_model(c, x)
+        tmp = n_call_tmp + np.random.randint(n_call_tmp) * 0.5 + 50
+        return int(tmp)
+
+    # setup dummy data
+    threshold = 500
+    n_data = 1000
+    X = np.random.rand(n_data, 2)
+    centers = np.array([[0, 0], [0, 1], [1, 0], [1, 1], [0.5, 0.0]])
+
+    cr_list: List[CoverageResult] = []
+    for c in centers:
+        est_values = np.array([est_model(c, x) for x in X])
+        real_values = np.array([actual_model(c, x) for x in X])
+        cr = CoverageResult(real_values, est_values, threshold)
+        cr_list.append(cr)
+
+    # test main
+    margins = np.array([10, 100, 20, 40, 200])
+    coverage, fp_rate = compute_coverage_and_fp(margins, cr_list, threshold)
+
+    coverage_rate_truth, fp_rate_truth = compute_coverage_and_fp_naive(margins, cr_list, threshold)
+    np.testing.assert_almost_equal(coverage, coverage_rate_truth)
+    np.testing.assert_almost_equal(fp_rate, fp_rate_truth)
+
+
 if __name__ == "__main__":
-    test_coverage_result()
+    test_compute_coverage_and_fp()
