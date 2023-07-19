@@ -68,6 +68,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     meta_data: Dict
     limit_thread: bool = False
     _margins_history: Optional[List[List[float]]] = None
+    _candidates_history: Optional[List[List[Trajectory]]] = None
     _optimal_coverage_estimate: Optional[
         float
     ] = None  # the cached optimal coverage after margins optimization
@@ -106,6 +107,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             uuidval,
             meta_data,
             True,  # assume that we are gonna build library and not in eval time.
+            [],
             [],
             None,
         )
@@ -900,15 +902,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 if result.traj is not None:
                     feasible_solutions.append(result.traj)
                     if len(feasible_solutions) == n_sample:
-
-                        # dump feasible solutions for debug
-                        debug_file_path = (
-                            self.debug_data_parent_path
-                            / "feasible_solutions-{}.pkl".format(len(self.library.predictors))
-                        )
-                        with debug_file_path.open(mode="wb") as f:
-                            pickle.dump(feasible_solutions, f)
-
                         return feasible_solutions
             logger.info("{} progress {} / {} ".format(prefix, len(feasible_solutions), n_sample))
 
@@ -976,6 +969,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             solution_candidates = self._sample_solution_canidates(
                 self.config.n_solution_candidate, problem_pool
             )
+            assert (
+                self.library._candidates_history is not None
+            )  # FIXME: this never be None so this shouldnt be Optional
+            self.library._candidates_history.append(solution_candidates)
 
             logger.info("sample difficult problems")
             if self.at_first_iteration():
