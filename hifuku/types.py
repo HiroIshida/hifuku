@@ -15,12 +15,16 @@ from hifuku.llazy.dataset import TensorChunkBase
 ResultT = TypeVar("ResultT", bound=ResultProtocol)
 
 
+CLAMP_FACTOR = 2.0
+
+
 def get_clamped_iter(result: ResultProtocol, config: ConfigProtocol) -> int:
     # set n_call to larget value if result.traj is not None
     # (failure case)
+    global CLAMP_FACTOR
 
     if result.traj is None:
-        return int(config.n_max_call * 2)
+        return int(config.n_max_call * CLAMP_FACTOR)  # type: ignore
     return result.n_call
 
 
