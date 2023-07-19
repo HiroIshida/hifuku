@@ -652,7 +652,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 predicate = DifficultProblemPredicate(
                     self.problem_type, self.library, interval[0], interval[1]
                 )
-                predicated_pool = self.pool_multiple.make_predicated(predicate, 40)
+                predicated_pool = self.pool_multiple.make_predicated(predicate, 10)
                 problems_part = self.sampler.sample_batch(
                     n_problem, predicated_pool, self.invalidate_gridsdf
                 )
