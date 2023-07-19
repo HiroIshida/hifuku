@@ -13,7 +13,7 @@ from datetime import datetime
 from hashlib import md5
 from logging import Logger
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import torch
 
@@ -99,6 +99,11 @@ def filter_warnings():
         "ignore",
         message="undefined symbol: _ZNK3c1010TensorImpl36is_contiguous_nondefault_policy_implENS_12MemoryFormatE",
     )
+
+
+def split_number(n: int, k: int) -> List[int]:
+    quotient, remainder = divmod(n, k)
+    return [quotient + (i < remainder) for i in range(k)]
 
 
 warnings.filterwarnings(

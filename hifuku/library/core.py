@@ -42,7 +42,7 @@ from hifuku.neuralnet import (
 )
 from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
 from hifuku.types import get_clamped_iter
-from hifuku.utils import num_torch_thread
+from hifuku.utils import num_torch_thread, split_number
 
 logger = logging.getLogger(__name__)
 
@@ -457,7 +457,9 @@ class LibrarySamplerConfig:
     solvable_threshold_factor: float = 0.8
     difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
     acceptable_false_positive_rate: float = 0.005
-    sample_from_difficult_region: bool = True
+    sample_from_difficult_region: bool = (
+        True  # In test, classifier cannot be wel trained. So this should be False
+    )
     ignore_useless_traj: bool = True
     iterpred_model_config: Optional[Dict] = None
     bootstrap_trial: int = 0
@@ -630,10 +632,30 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         )
 
     def _generate_problem_samples(self) -> List[ProblemT]:
-        predicated_pool = self.pool_multiple.as_predicated()
-        problems = self.sampler.sample_batch(
-            self.config.n_problem, predicated_pool, self.invalidate_gridsdf
-        )
+        if self.at_first_iteration() or not self.config.sample_from_difficult_region:
+            predicated_pool = self.pool_multiple.as_predicated()
+            problems = self.sampler.sample_batch(
+                self.config.n_problem, predicated_pool, self.invalidate_gridsdf
+            )
+        else:
+            logger.info("use stratified sampling to generate problem set")
+            # stratified sampling
+            th = self.difficult_iter_threshold
+            interval_list = [(0, th), (th, th * 1.2), (th * 1.2, None)]
+            n_problem_list = split_number(self.config.n_problem, len(interval_list))
+
+            problems = []
+            for interval, n_problem in zip(interval_list, n_problem_list):
+                logger.info("interval: {}, n_problem: {}".format(interval, n_problem))
+                predicate = DifficultProblemPredicate(
+                    self.problem_type, self.library, interval[0], interval[1]
+                )
+                predicated_pool = self.pool_multiple.make_predicated(predicate, 40)
+                problems_part = self.sampler.sample_batch(
+                    n_problem, predicated_pool, self.invalidate_gridsdf
+                )
+                problems.extend(problems_part)
+            assert len(problems) == self.config.n_problem
         return problems
 
     def step_active_sampling(self) -> None:
