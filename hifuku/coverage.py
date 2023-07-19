@@ -115,6 +115,35 @@ class DetermineMarginsResult:
     fprate: float
 
 
+def compute_coverage_and_fp(
+    margins: np.ndarray, coverage_results: List[CoverageResult], threshold: float
+) -> Tuple[float, float]:
+
+    est_arr_list, real_arr_list = [], []
+    for coverage_result, margin in zip(coverage_results, margins):
+        est_arr_list.append(coverage_result.values_estimation + margin)
+        real_arr_list.append(coverage_result.values_ground_truth)
+    est_mat = np.array(est_arr_list)
+    real_mat = np.array(real_arr_list)
+
+    # find element indices which have smallest est value
+    est_arr = np.min(est_mat, axis=0)
+    element_indices = np.argmin(est_mat, axis=0)
+    real_arr = np.array([real_mat[idx, i] for i, idx in enumerate(element_indices)])
+
+    # compute (true + false) positive values
+    est_bool_arr = est_arr < threshold
+    real_bool_arr = real_arr < threshold
+
+    n_total = len(est_arr)
+    coverage_est = sum(est_bool_arr) / n_total
+
+    # compute false positve rate
+    fp_rate = sum(np.logical_and(est_bool_arr, ~real_bool_arr)) / sum(est_bool_arr)
+
+    return coverage_est, fp_rate
+
+
 def determine_margins(
     coverage_results: List[CoverageResult],
     threshold: float,
@@ -123,30 +152,6 @@ def determine_margins(
     margins_guess: Optional[np.ndarray] = None,
     minimum_coverage: Optional[float] = None,
 ) -> Optional[DetermineMarginsResult]:
-    def compute_coverage_and_fp(margins: np.ndarray) -> Tuple[float, float]:
-        est_arr_list, real_arr_list = [], []
-        for coverage_result, margin in zip(coverage_results, margins):
-            est_arr_list.append(coverage_result.values_estimation + margin)
-            real_arr_list.append(coverage_result.values_ground_truth)
-        est_mat = np.array(est_arr_list)
-        real_mat = np.array(real_arr_list)
-
-        # find element indices which have smallest est value
-        est_arr = np.min(est_mat, axis=0)
-        element_indices = np.argmin(est_mat, axis=0)
-        real_arr = np.array([real_mat[idx, i] for i, idx in enumerate(element_indices)])
-
-        # compute (true + false) positive values
-        est_bool_arr = est_arr < threshold
-        real_bool_arr = real_arr < threshold
-
-        n_total = len(est_arr)
-        coverage_est = sum(est_bool_arr) / n_total
-
-        # compute false positve rate
-        fp_rate = sum(np.logical_and(est_bool_arr, ~real_bool_arr)) / sum(est_bool_arr)
-
-        return coverage_est, fp_rate
 
     target_fp_rate_modified = target_fp_rate - 1e-3  # because penalty method is not tight
     logger.debug("target fp_rate modified: {}".format(target_fp_rate_modified))
@@ -169,7 +174,7 @@ def determine_margins(
         solutions = []
         for _ in range(optimizer.population_size):
             x = optimizer.ask()
-            coverage_est, fp_rate = compute_coverage_and_fp(x)
+            coverage_est, fp_rate = compute_coverage_and_fp(x, coverage_results, threshold)
             J = -coverage_est + 1e4 * max(fp_rate - target_fp_rate_modified, 0) ** 2
             solutions.append((x, J))
         optimizer.tell(solutions)
@@ -185,7 +190,9 @@ def determine_margins(
             "[generation {}] coverage: {}, fp_rate: {}".format(generation, coverage_est, fp_rate)
         )
 
-    coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(best_margins)
+    coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(
+        best_margins, coverage_results, threshold
+    )
     logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
     if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate_modified:
         logger.info("cma result accepted")
