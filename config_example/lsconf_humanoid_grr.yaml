@@ -1,7 +1,7 @@
-n_problem: 4000
-n_problem_inner: 80
-n_solution_candidate: 20
-n_difficult_problem: 100
+n_problem: 10000
+n_problem_inner: 40
+n_solution_candidate: 40
+n_difficult_problem: 200
 solvable_threshold_factor: 1.0
 difficult_threshold_factor: 1.0
 acceptable_false_positive_rate: 0.1
