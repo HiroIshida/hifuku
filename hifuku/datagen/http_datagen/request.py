@@ -39,7 +39,7 @@ class Response(FormatMixin):
 
 
 class MainRequest(Request):
-    n_process: int
+    n_process: Optional[int]
 
 
 class MainResponse(Response):
@@ -78,7 +78,7 @@ class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
     init_solutions: Sequence  # Actually, Sequence[Optional[TrajectoryMaybeList]]
-    n_process: int
+    n_process: Optional[int]
     use_default_solver: bool
 
     def ignore_fields(self) -> Tuple[str, ...]:

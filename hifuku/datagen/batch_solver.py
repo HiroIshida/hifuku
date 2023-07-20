@@ -306,6 +306,8 @@ HostPortPair = Tuple[str, int]
 class DistributedBatchProblemSolver(
     ClientBase[SolveProblemRequest], BatchProblemSolver[ConfigT, ResultT]
 ):
+    n_process_per_server: Optional[int]
+
     def __init__(
         self,
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
@@ -314,12 +316,14 @@ class DistributedBatchProblemSolver(
         use_available_host: bool = False,
         force_continue: bool = False,
         n_measure_sample: int = 40,
+        n_process_per_server: Optional[int] = None,
         n_limit_batch: Optional[int] = None,
     ):
         BatchProblemSolver.__init__(self, solver_t, config, n_limit_batch)
         ClientBase.__init__(
             self, server_specs, use_available_host, force_continue, n_measure_sample
         )
+        self.n_process_per_server = n_process_per_server
 
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
@@ -363,7 +367,10 @@ class DistributedBatchProblemSolver(
             td_path = Path(td)
             process_list = []
             for hostport, indices in zip(hostport_pairs, indices_list):
-                n_process = self.hostport_cpuinfo_map[hostport].n_cpu
+                if self.n_process_per_server is None:
+                    n_process = self.hostport_cpuinfo_map[hostport].n_cpu
+                else:
+                    n_process = self.n_process_per_server
                 problems_part = [problems[i] for i in indices]
                 init_solutions_part = [init_solutions[i] for i in indices]
                 req = SolveProblemRequest(
