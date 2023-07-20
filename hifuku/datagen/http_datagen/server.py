@@ -3,6 +3,7 @@ import logging
 import multiprocessing
 import os
 import pickle
+import platform
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -44,7 +45,13 @@ class PostHandler(BaseHTTPRequestHandler):
     def process_GetCPUInfoRequest(self, request: GetCPUInfoRequest) -> GetCPUInfoResponse:
         n_cpu = os.cpu_count()
         assert n_cpu is not None
-        cpu_count = int(n_cpu * 0.5)
+        if platform.machine() == "aarch64":
+            cpu_count = n_cpu - 2  # 2 is a magick number
+        else:
+            # because in hyperthreading, chache is shared.
+            # so we must count only the physical cores
+            cpu_count = int(n_cpu * 0.5)
+
         logging.info("cpu count: {}".format(cpu_count))
         resp = GetCPUInfoResponse(cpu_count)
         return resp
