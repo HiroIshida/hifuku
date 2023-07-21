@@ -104,7 +104,6 @@ if __name__ == "__main__":
 
     singletons = lib.unbundle()
     plotters = [SingleLibraryPlotter(s, n_grid=args.grid) for s in singletons]
-    candidates = lib._candidates_history[n_step]  # not n_step - 1
 
     fig, ax = plt.subplots()
     world.visualize((fig, ax))
@@ -112,10 +111,14 @@ if __name__ == "__main__":
     if mode == "step0":
         latest_margins = lib._margins_history[n_step - 1]
         assert n_step > 0
-        for i in range(n_step):
+        for i in range(n_step - 1):
             margin = latest_margins[i]
             plotters[i].visualize((fig, ax), margin, {}, {}, {})
+        plotters[n_step - 1].visualize(
+            (fig, ax), latest_margins[n_step - 1], {"colors": ["red"]}, {}, {}
+        )
     elif mode == "step1":
+        candidates = lib._candidates_history[n_step]  # not n_step - 1
         latest_margins = lib._margins_history[n_step - 1]
         for i in range(n_step):
             margin = latest_margins[i]
@@ -163,6 +166,11 @@ if __name__ == "__main__":
             file_name = "./figs/legend-algo-expl-seq-{}.png".format(n_step)
         else:
             file_name = "./figs/algo-{}-{}.png".format(n_step, mode)
+
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.tick_params(axis="both", which="both", length=0)
+        plt.tight_layout(pad=0)
         plt.savefig(file_name, dpi=300)
     else:
         plt.show()
