@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -180,6 +180,7 @@ class IterationPredictorConfig(ModelConfigBase):
     n_layer1_width: int = 500
     n_layer2_width: int = 100
     n_layer3_width: int = 50
+    layers: Optional[List[int]] = None
     dim_description_expand: Optional[int] = 300
     use_solution_pred: bool = False
 
@@ -203,15 +204,24 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             self.description_expand_linears = None
             n_input = config.dim_conv_bottleneck + config.dim_problem_descriptor
 
-        self.linears = nn.Sequential(
-            nn.Linear(n_input, config.n_layer1_width),
-            nn.ReLU(),
-            nn.Linear(config.n_layer1_width, config.n_layer2_width),
-            nn.ReLU(),
-            nn.Linear(config.n_layer2_width, config.n_layer3_width),
-            nn.ReLU(),
-            nn.Linear(config.n_layer3_width, 1),
-        )
+        if config.layers is None:
+            self.linears = nn.Sequential(
+                nn.Linear(n_input, config.n_layer1_width),
+                nn.ReLU(),
+                nn.Linear(config.n_layer1_width, config.n_layer2_width),
+                nn.ReLU(),
+                nn.Linear(config.n_layer2_width, config.n_layer3_width),
+                nn.ReLU(),
+                nn.Linear(config.n_layer3_width, 1),
+            )
+        else:
+            width_list = [n_input] + config.layers
+            layers: List[Any] = []
+            for i in range(len(width_list) - 1):
+                layers.append(nn.Linear(width_list[i], width_list[i + 1]))
+                layers.append(nn.ReLU())
+            layers.append(nn.Linear(config.layers[-1], 1))
+            self.linears = nn.Sequential(*layers)
 
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
         mesh_features, descriptor = sample

@@ -1,6 +1,5 @@
 import torch
 
-from hifuku.domain import TORR_SQP_Domain
 from hifuku.neuralnet import (
     AutoEncoderConfig,
     IterationPredictor,
@@ -16,23 +15,27 @@ def test_network():
     ae = VoxelAutoEncoder(ae_config, device=device)
 
     # test iteration predictor
-    n_sol_dim = 10
-    model_conf = IterationPredictorConfig(
-        12, ae_config.dim_bottleneck, n_sol_dim, use_solution_pred=False
+    conf = IterationPredictorConfig(
+        12, ae_config.dim_bottleneck, 10, 10, 10, use_solution_pred=False
     )
-    model = IterationPredictor(model_conf, device=device)
+    model1 = IterationPredictor(conf, device=device)
+    assert len(model1.linears) == 7
 
-    n_batch = 10
+    conf = IterationPredictorConfig(
+        12, ae_config.dim_bottleneck, layers=[5, 5, 5, 5], use_solution_pred=False
+    )
+    model2 = IterationPredictor(conf, device=device)
+    assert len(model2.linears) == 9
 
-    mesh = torch.zeros(n_batch, 1, 56, 56, 28)
-    mesh_encoded = ae.encoder(mesh)
-    descriptions = torch.zeros(n_batch, 12)
-    nits = torch.zeros(n_batch, 1)
+    for model in [model1, model2]:
+        n_batch = 10
+        mesh = torch.zeros(n_batch, 1, 56, 56, 28)
+        mesh_encoded = ae.encoder(mesh)
+        descriptions = torch.zeros(n_batch, 12)
+        nits = torch.zeros(n_batch, 1)
 
-    sample = (mesh_encoded, descriptions, nits)
-    model.loss(sample)
-
-    TORR_SQP_Domain.task_type.sample(1)
+        sample = (mesh_encoded, descriptions, nits)
+        model.loss(sample)
 
 
 if __name__ == "__main__":
