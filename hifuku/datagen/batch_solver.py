@@ -270,7 +270,8 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         # NOTE: this function is used only in process pool
         # NOTE: a lot of type: ignore due to global variables
         global solver
-        solver = solver_t.init(config)  # type: ignore
+        if not use_default_solver:
+            solver = solver_t.init(config)  # type: ignore
         global _use_default_solver
         _use_default_solver = use_default_solver  # type: ignore
 
