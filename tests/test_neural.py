@@ -85,9 +85,14 @@ def test_dataset(sol_tasks_and_resultss):
     dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
         sol.traj, tasks, resultss, domain.solver_config, ae
     )
-
-    # check dataset size
     assert len(dataset) == n_data
+    mesh, desc, it = dataset[0]
+    assert len(mesh.shape) == 1
+    assert len(desc.shape) == 1
+    assert len(it.shape) == 0
+
+    dataset.add(dataset)
+    assert len(dataset) == n_data * 2
     mesh, desc, it = dataset[0]
     assert len(mesh.shape) == 1
     assert len(desc.shape) == 1
@@ -97,9 +102,14 @@ def test_dataset(sol_tasks_and_resultss):
     dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
         sol.traj, tasks, resultss, domain.solver_config, None
     )
-
-    # check dataset size
     assert len(dataset) == n_data
+    mesh, desc, it = dataset[0]
+    assert len(mesh.shape) == 3
+    assert len(desc.shape) == 1
+    assert len(it.shape) == 0
+
+    dataset.add(dataset)
+    assert len(dataset) == n_data * 2
     mesh, desc, it = dataset[0]
     assert len(mesh.shape) == 3
     assert len(desc.shape) == 1
