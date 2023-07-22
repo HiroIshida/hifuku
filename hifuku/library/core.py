@@ -904,11 +904,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         if self.train_pred_with_encoder:
             assert self.ae_model_pretrained is not None
             iterpred_model = IterationPredictor(iterpred_model_conf)
-            self.ae_model_pretrained.put_on_device(iterpred_model.device)
-            assert not isinstance(self.ae_model_pretrained, NullAutoEncoder)
+            ae_model_pretrained = copy.deepcopy(self.ae_model_pretrained)
+            ae_model_pretrained.put_on_device(iterpred_model.device)
+            assert not isinstance(ae_model_pretrained, NullAutoEncoder)
             # the right above assertion ensure that ae_model_pretrained has a device...
-            assert iterpred_model.device == self.ae_model_pretrained.device  # type: ignore[attr-defined]
-            conf = IterationPredictorWithEncoderConfig(iterpred_model, self.ae_model_pretrained)
+            assert iterpred_model.device == ae_model_pretrained.device  # type: ignore[attr-defined]
+            conf = IterationPredictorWithEncoderConfig(iterpred_model, ae_model_pretrained)
             model: Union[
                 IterationPredictorWithEncoder, IterationPredictor
             ] = IterationPredictorWithEncoder(conf)
