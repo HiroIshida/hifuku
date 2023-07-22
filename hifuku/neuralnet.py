@@ -422,9 +422,22 @@ class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfi
     iterpred_model: IterationPredictor
     ae_model: AutoEncoderBase
 
+    def put_on_device(self, device: Optional[torch.device] = None):
+        super().put_on_device(device)
+        self.iterpred_model.put_on_device(device)
+        self.ae_model.put_on_device(device)
+
     def _setup_from_config(self, config: IterationPredictorWithEncoderConfig) -> None:
         self.iterpred_model = config.iterpred_model
         self.ae_model = config.ae_model
+
+    def forward_multi_inner(self, mesh: Tensor, descs: Tensor) -> Tensor:
+        # descs shares the same mesh
+        n_inner, _ = descs.shape
+        encoded = self.ae_model.encode(mesh)
+        encoded_repeated = encoded.repeat((n_inner, 1))
+        iters_pred, _ = self.iterpred_model.forward((encoded_repeated, descs))
+        return iters_pred
 
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tensor:
         meshes, descs = sample
