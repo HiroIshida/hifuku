@@ -41,6 +41,7 @@ from hifuku.neuralnet import (
     IterationPredictorDataset,
     IterationPredictorWithEncoder,
     IterationPredictorWithEncoderConfig,
+    NullAutoEncoder,
 )
 from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
 from hifuku.types import get_clamped_iter
@@ -167,8 +168,9 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         # these lines copied from _infer_iteration_num_with_shared_ae
         itervals_list = []
         for pred, margin in zip(self.predictors, self.margins):
+            assert isinstance(pred, IterationPredictorWithEncoder)
             # margin is for correcting the overestimated inference
-            itervals = pred.forward_multi_inner(mesh_torch, descs_torch)
+            itervals = pred.forward_multi_inner(mesh_torch, descs_torch)  # type: ignore
             itervals = itervals.squeeze(dim=1)
             itervals_np = itervals.detach().cpu().numpy() + margin
             itervals_list.append(itervals_np)
@@ -845,7 +847,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         init_solution: Trajectory,
         project_path: Path,
         problems: List[ProblemT],
-    ) -> IterationPredictor:
+    ) -> Union[IterationPredictorWithEncoder, IterationPredictor]:
         pp = project_path
 
         logger.info("start generating dataset")
@@ -903,9 +905,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             assert self.ae_model_pretrained is not None
             iterpred_model = IterationPredictor(iterpred_model_conf)
             self.ae_model_pretrained.put_on_device(iterpred_model.device)
-            assert iterpred_model.device == self.ae_model_pretrained.device
+            assert not isinstance(self.ae_model_pretrained, NullAutoEncoder)
+            # the right above assertion ensure that ae_model_pretrained has a device...
+            assert iterpred_model.device == self.ae_model_pretrained.device  # type: ignore[attr-defined]
             conf = IterationPredictorWithEncoderConfig(iterpred_model, self.ae_model_pretrained)
-            model = IterationPredictorWithEncoder(conf)
+            model: Union[
+                IterationPredictorWithEncoder, IterationPredictor
+            ] = IterationPredictorWithEncoder(conf)
         else:
             model = IterationPredictor(iterpred_model_conf)
 

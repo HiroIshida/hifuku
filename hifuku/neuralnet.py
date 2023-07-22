@@ -417,6 +417,9 @@ class IterationPredictorWithEncoderConfig(ModelConfigBase):
     iterpred_model: IterationPredictor
     ae_model: AutoEncoderBase
 
+    def __post_init__(self):
+        assert not isinstance(self.ae_model, NullAutoEncoder)
+
 
 class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfig]):
     iterpred_model: IterationPredictor
@@ -425,7 +428,9 @@ class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfi
     def put_on_device(self, device: Optional[torch.device] = None):
         super().put_on_device(device)
         self.iterpred_model.put_on_device(device)
-        self.ae_model.put_on_device(device)
+
+        # NOTE: ae_model cannot be nullautoencoder thus we put type-ignore
+        self.ae_model.put_on_device(device)  # type: ignore
 
     def _setup_from_config(self, config: IterationPredictorWithEncoderConfig) -> None:
         self.iterpred_model = config.iterpred_model
