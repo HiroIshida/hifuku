@@ -14,7 +14,7 @@ from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 from skmp.trajectory import Trajectory
 
 from hifuku.datagen import MultiProcessBatchProblemSolver
-from hifuku.domain import DomainProtocol, TORR_RRT_Domain
+from hifuku.domain import BubblySimpleMeshPointConnecting_RRT_Domain, DomainProtocol
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
@@ -24,7 +24,7 @@ from hifuku.neuralnet import (
     AutoEncoderBase,
     AutoEncoderConfig,
     NullAutoEncoder,
-    VoxelAutoEncoder,
+    PixelAutoEncoder,
 )
 from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
 from hifuku.utils import create_default_logger
@@ -73,7 +73,7 @@ def _test_compute_real_itervals():
     assert n_mismatch < 3
 
 
-def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
+def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encoder: bool):
     problem_type = domain.task_type
     solcon = domain.solver_config
     solver_type = domain.solver_type
@@ -93,6 +93,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
         acceptable_false_positive_rate=1.0,
         sample_from_difficult_region=False,
         ignore_useless_traj=False,
+        train_with_encoder=train_with_encoder,
     )  # all pass
 
     test_devices = [torch.device("cpu")]
@@ -104,7 +105,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
         if aepp is None:
             ae_model = NullAutoEncoder()
         else:
-            ae_model = VoxelAutoEncoder(AutoEncoderConfig())
+            ae_model = PixelAutoEncoder(AutoEncoderConfig())
             ae_model.loss_called = True  # mock that model is already trained
             ae_model.put_on_device(device)
         pool_validation = [problem_type.sample(1) for _ in range(10)]
@@ -141,9 +142,9 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol]):
 
 
 def test_SolutionLibrarySampler():
-    # _test_SolutionLibrarySampler(RingObstacleFree_RRT_Domain)
-    _test_SolutionLibrarySampler(TORR_RRT_Domain)
+    _test_SolutionLibrarySampler(BubblySimpleMeshPointConnecting_RRT_Domain, False)
+    _test_SolutionLibrarySampler(BubblySimpleMeshPointConnecting_RRT_Domain, True)
 
 
 if __name__ == "__main__":
-    _test_SolutionLibrarySampler(TORR_RRT_Domain)
+    _test_SolutionLibrarySampler(BubblySimpleMeshPointConnecting_RRT_Domain, True)

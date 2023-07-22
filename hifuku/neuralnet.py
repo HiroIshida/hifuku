@@ -73,7 +73,8 @@ class IterationPredictorDataset(Dataset):
     mesh_encodeds: Optional[torch.Tensor]
     descriptions: torch.Tensor
     itervals: torch.Tensor
-    _problem_per_sample: int
+    problem_per_sample: int
+    encoded: bool
 
     # TODO: __add__
     def add(self, other: "IterationPredictorDataset") -> None:
@@ -97,7 +98,7 @@ class IterationPredictorDataset(Dataset):
         if self.mesh_encodeds is None:
             mesh_encoded_here = torch.empty(0)
         else:
-            mesh_encoded_here = self.mesh_encodeds[idx // self._problem_per_sample]
+            mesh_encoded_here = self.mesh_encodeds[idx // self.problem_per_sample]
         # Note: mesh_encoded is (n_sample, size) shape, though
         # otheres have shape of (n_sample * n_problem, size).
         # Thus we must devide the dix by n_problem
@@ -109,7 +110,7 @@ class IterationPredictorDataset(Dataset):
 
     @classmethod
     def load_from_path(
-        cls, dataset_path: Path, ae_model: AutoEncoderBase
+        cls, dataset_path: Path, ae_model: Optional[AutoEncoderBase] = None
     ) -> "IterationPredictorDataset":
         dataset = LazyDecomplessDataset.load(dataset_path, RawData, n_worker=-1)
         loader = LazyDecomplessDataLoader(dataset, batch_size=1000, shuffle=False)
@@ -117,7 +118,12 @@ class IterationPredictorDataset(Dataset):
 
     @classmethod
     def construct_from_tasks_and_resultss(
-        cls, init_solution, tasks, resultss, solver_config, ae_model: AutoEncoderBase
+        cls,
+        init_solution,
+        tasks,
+        resultss,
+        solver_config,
+        ae_model: Optional[AutoEncoderBase] = None,
     ) -> "IterationPredictorDataset":
         raw_data_list = []
         for task, results in zip(tasks, resultss):
@@ -128,7 +134,39 @@ class IterationPredictorDataset(Dataset):
         return cls.construct([sample], ae_model)
 
     @classmethod
-    def construct(cls, loader, ae_model: AutoEncoderBase) -> "IterationPredictorDataset":
+    def construct(
+        cls, loader, ae_model: Optional[AutoEncoderBase] = None
+    ) -> "IterationPredictorDataset":
+        if ae_model is None:
+            return cls.construct_keeping_mesh(loader)
+        else:
+            return cls.construct_by_encoding(loader, ae_model)
+
+    @classmethod
+    def construct_keeping_mesh(cls, loader) -> "IterationPredictorDataset":
+        meshes_list = []
+        descriptions_stacked_list = []
+        iterval_stacked_list = []
+
+        for sample in tqdm.tqdm(loader):
+            meshes, descriptionss, itervals = sample
+            meshes_list.append(meshes)
+            descriptions_stacked_list.append(descriptionss.reshape((-1, descriptionss.shape[-1])))
+            iterval_stacked_list.append(itervals.flatten())
+
+        _, n_inner = descriptions_stacked_list[0].shape
+        return cls(
+            torch.concat(meshes_list),
+            torch.concat(descriptions_stacked_list),
+            torch.hstack(iterval_stacked_list),
+            n_inner,
+            False,
+        )
+
+    @classmethod
+    def construct_by_encoding(
+        cls, loader, ae_model: AutoEncoderBase
+    ) -> "IterationPredictorDataset":
         device = detect_device()
         ae_model.put_on_device(device)
 
@@ -170,7 +208,7 @@ class IterationPredictorDataset(Dataset):
 
         n_data = len(descriptions_concat)
         assert len(itervals_concat) == n_data
-        return cls(mesh_encodeds_concat, descriptions_concat, itervals_concat, n_problem)
+        return cls(mesh_encodeds_concat, descriptions_concat, itervals_concat, n_problem, True)
 
 
 @dataclass
@@ -371,3 +409,51 @@ class PixelAutoEncoder(NeuralAutoEncoderBase):
             nn.ConvTranspose2d(8, n_channel, 4, stride=2, padding=1),
         ]
         self.decoder = nn.Sequential(*decoder_layers)
+
+
+@dataclass
+class IterationPredictorWithEncoderConfig(ModelConfigBase):
+    # A very bad design. but I don't have time. hahhahaha...
+    iterpred_model: IterationPredictor
+    ae_model: AutoEncoderBase
+
+    def __post_init__(self):
+        assert not isinstance(self.ae_model, NullAutoEncoder)
+
+
+class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfig]):
+    iterpred_model: IterationPredictor
+    ae_model: AutoEncoderBase
+
+    def put_on_device(self, device: Optional[torch.device] = None):
+        super().put_on_device(device)
+        self.iterpred_model.put_on_device(device)
+
+        # NOTE: ae_model cannot be nullautoencoder thus we put type-ignore
+        self.ae_model.put_on_device(device)  # type: ignore
+
+    def _setup_from_config(self, config: IterationPredictorWithEncoderConfig) -> None:
+        self.iterpred_model = config.iterpred_model
+        self.ae_model = config.ae_model
+
+    def forward_multi_inner(self, mesh: Tensor, descs: Tensor) -> Tensor:
+        # descs shares the same mesh
+        n_inner, _ = descs.shape
+        encoded = self.ae_model.encode(mesh)
+        encoded_repeated = encoded.repeat((n_inner, 1))
+        iters_pred, _ = self.iterpred_model.forward((encoded_repeated, descs))
+        return iters_pred
+
+    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tensor:
+        meshes, descs = sample
+        encoded = self.ae_model.encode(meshes)
+        iters_pred, _ = self.iterpred_model.forward((encoded, descs))
+        iters_pred = iters_pred.flatten()
+        return iters_pred
+
+    def loss(self, sample: Tuple[Tensor, Tensor, Tensor]) -> LossDict:
+        meshes, descs, iters = sample
+        iters_pred = self.forward((meshes, descs))
+        iter_loss = nn.MSELoss()(iters_pred, iters)
+        dic = {"iter": iter_loss}
+        return LossDict(dic)

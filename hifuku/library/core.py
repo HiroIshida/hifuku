@@ -11,7 +11,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Dict, Generic, List, Optional, Tuple, Type
+from typing import Dict, Generic, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import threadpoolctl
@@ -39,6 +39,9 @@ from hifuku.neuralnet import (
     IterationPredictor,
     IterationPredictorConfig,
     IterationPredictorDataset,
+    IterationPredictorWithEncoder,
+    IterationPredictorWithEncoderConfig,
+    NullAutoEncoder,
 )
 from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
 from hifuku.types import get_clamped_iter
@@ -59,8 +62,10 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     task_type: Type[ProblemT]
     solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
-    ae_model: AutoEncoderBase
-    predictors: List[IterationPredictor]
+    ae_model_shared: Optional[
+        AutoEncoderBase
+    ]  # if None, when each predictor does not share autoencoder
+    predictors: List[Union[IterationPredictor, IterationPredictorWithEncoder]]
     margins: List[float]
     coverage_results: Optional[List[CoverageResult]]
     solvable_threshold_factor: float
@@ -74,7 +79,13 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     ] = None  # the cached optimal coverage after margins optimization
 
     def __post_init__(self):
-        assert self.ae_model.trained
+        if self.ae_model_shared is not None:
+            assert self.ae_model_shared.trained
+            for pred in self.predictors:
+                assert isinstance(pred, IterationPredictor)
+        else:
+            for pred in self.predictors:
+                assert isinstance(pred, IterationPredictorWithEncoder)
 
     @dataclass
     class InferenceResult:
@@ -88,7 +99,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         task_type: Type[ProblemT],
         solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config,
-        ae_model: AutoEncoderBase,
+        ae_model: Optional[AutoEncoderBase],
         solvable_threshold_factor: float,
         meta_data: Optional[Dict] = None,
     ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
@@ -113,19 +124,64 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         )
 
     def put_on_device(self, device: torch.device):
-        self.ae_model.put_on_device(device)
+        if self.ae_model_shared is not None:
+            self.ae_model_shared.put_on_device(device)
         for pred in self.predictors:
             pred.put_on_device(device)
 
     @property
     def device(self) -> torch.device:
-        return self.ae_model.get_device()
+        if self.ae_model_shared is not None:
+            return self.ae_model_shared.get_device()
+        else:
+            pred: IterationPredictorWithEncoder = self.predictors[0]  # type: ignore[assignment]
+            return pred.device
 
     def _infer_iteration_num(self, task: ProblemT) -> np.ndarray:
+        assert len(self.predictors) > 0
+        has_shared_ae = self.ae_model_shared is not None
+        if has_shared_ae:
+            return self._infer_iteration_num_with_shared_ae(task)
+        else:
+            return self._infer_iteration_num_combined(task)
+
+    def _infer_iteration_num_combined(self, task: ProblemT) -> np.ndarray:
+        if self.limit_thread:
+            with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+                with num_torch_thread(1):
+                    desc_table = task.export_table()
+                    mesh_np = desc_table.get_mesh()
+                    assert mesh_np is not None
+                    mesh_np = np.expand_dims(mesh_np, axis=(0, 1))
+                    descs_np = np.array(desc_table.get_vector_descs())
+                    mesh_torch = torch.from_numpy(mesh_np).float().to(self.device)
+                    descs_torch = torch.from_numpy(descs_np).float().to(self.device)
+        else:
+            desc_table = task.export_table()
+            mesh_np = desc_table.get_mesh()
+            assert mesh_np is not None
+            mesh_np = np.expand_dims(mesh_np, axis=(0, 1))
+            descs_np = np.array(desc_table.get_vector_descs())
+            mesh_torch = torch.from_numpy(mesh_np).float().to(self.device)
+            descs_torch = torch.from_numpy(descs_np).float().to(self.device)
+
+        # these lines copied from _infer_iteration_num_with_shared_ae
+        itervals_list = []
+        for pred, margin in zip(self.predictors, self.margins):
+            assert isinstance(pred, IterationPredictorWithEncoder)
+            # margin is for correcting the overestimated inference
+            itervals = pred.forward_multi_inner(mesh_torch, descs_torch)  # type: ignore
+            itervals = itervals.squeeze(dim=1)
+            itervals_np = itervals.detach().cpu().numpy() + margin
+            itervals_list.append(itervals_np)
+        itervals_arr = np.array(itervals_list)
+        return itervals_arr
+
+    def _infer_iteration_num_with_shared_ae(self, task: ProblemT) -> np.ndarray:
         """
         itervals_arr: R^{n_solution, n_desc_inner}
         """
-        assert len(self.predictors) > 0
+        assert self.ae_model_shared is not None
 
         if self.limit_thread:
             # FIXME: maybe threadpool_limits and num_torch_thread scope can be
@@ -171,7 +227,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
         n_batch, _ = desc_np.shape
 
-        encoded: torch.Tensor = self.ae_model.encode(mesh)
+        encoded: torch.Tensor = self.ae_model_shared.encode(mesh)
         encoded_repeated = encoded.repeat(n_batch, 1)
 
         itervals_list = []
@@ -248,7 +304,8 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         cpu_device = torch.device("cpu")
         copied = copy.deepcopy(self)
 
-        copied.ae_model.put_on_device(cpu_device)
+        if copied.ae_model_shared is not None:
+            copied.ae_model_shared.put_on_device(cpu_device)
         for pred in copied.predictors:
             pred.put_on_device(cpu_device)
 
@@ -319,7 +376,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 task_type=self.task_type,
                 solver_type=self.solver_type,
                 solver_config=self.solver_config,
-                ae_model=self.ae_model,
+                ae_model_shared=self.ae_model_shared,
                 predictors=[predictor],
                 margins=[margin],
                 coverage_results=None,
@@ -342,7 +399,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             task_type=singleton.task_type,
             solver_type=singleton.solver_type,
             solver_config=singleton.solver_config,
-            ae_model=singleton.ae_model,
+            ae_model_shared=singleton.ae_model_shared,
             predictors=predictors,
             margins=margins,
             coverage_results=None,
@@ -357,7 +414,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             task_type=self.task_type,
             solver_type=self.solver_type,
             solver_config=self.solver_config,
-            ae_model=self.ae_model,
+            ae_model_shared=self.ae_model_shared,
             predictors=[self.predictors[idx]],
             margins=[self.margins[idx]],
             coverage_results=None,
@@ -470,6 +527,7 @@ class LibrarySamplerConfig:
     n_validation_inner: int = 10
     n_determine_batch: int = 80
     candidate_sample_scale: int = 10
+    train_with_encoder: bool = False
 
 
 @dataclass
@@ -487,6 +545,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     adjust_margins: bool
     invalidate_gridsdf: bool
     project_path: Path
+    ae_model_pretrained: Optional[
+        AutoEncoderBase
+    ] = None  # train iteration predctor combined with encoder. Thus ae will no be shared.
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -498,6 +559,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
     def __post_init__(self):
         self.reset_pool()
+
+    @property
+    def train_pred_with_encoder(self) -> bool:
+        return self.ae_model_pretrained is not None
 
     @cached_property
     def debug_data_parent_path(self) -> Path:
@@ -539,12 +604,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         """
         use will be used only if either of solver and sampler is not set
         """
+
         meta_data = asdict(config)
         library = SolutionLibrary.initialize(
             problem_type,
             solver_t,
             solver_config,
-            ae_model,
+            None if config.train_with_encoder else ae_model,
             config.solvable_threshold_factor,
             meta_data,
         )
@@ -631,6 +697,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             adjust_margins,
             invalidate_gridsdf,
             project_path,
+            ae_model if config.train_with_encoder else None,
         )
 
     def _generate_problem_samples(self) -> List[ProblemT]:
@@ -671,7 +738,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             task_type=self.problem_type,
             solver_type=self.solver_type,
             solver_config=self.solver_config,
-            ae_model=self.library.ae_model,
+            ae_model_shared=self.library.ae_model_shared,
             predictors=[predictor],
             margins=[0.0],
             coverage_results=None,
@@ -780,7 +847,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         init_solution: Trajectory,
         project_path: Path,
         problems: List[ProblemT],
-    ) -> IterationPredictor:
+    ) -> Union[IterationPredictorWithEncoder, IterationPredictor]:
         pp = project_path
 
         logger.info("start generating dataset")
@@ -800,7 +867,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 partial_problems,
                 resultss_partial,
                 self.solver_config,
-                self.library.ae_model,
+                self.library.ae_model_shared,
             )
             # TODO: why don't you just use sum() method??
             # somehow error occurs: TypeError: unsupported operand type(s) for +: 'int' and 'IterationPredictorDataset'
@@ -820,18 +887,34 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         n_dim_vector_description = vector_desc.shape[0]
 
         # train
+        if self.train_pred_with_encoder:
+            assert self.ae_model_pretrained is not None
+            n_bottleneck = self.ae_model_pretrained.n_bottleneck
+        else:
+            assert self.library.ae_model_shared is not None
+            n_bottleneck = self.library.ae_model_shared.n_bottleneck
+
         if self.config.iterpred_model_config is not None:
-            model_conf = IterationPredictorConfig(
-                n_dim_vector_description,
-                self.library.ae_model.n_bottleneck,
-                **self.config.iterpred_model_config
+            iterpred_model_conf = IterationPredictorConfig(
+                n_dim_vector_description, n_bottleneck, **self.config.iterpred_model_config
             )
         else:
-            model_conf = IterationPredictorConfig(
-                n_dim_vector_description, self.library.ae_model.n_bottleneck
-            )
+            iterpred_model_conf = IterationPredictorConfig(n_dim_vector_description, n_bottleneck)
 
-        model = IterationPredictor(model_conf)
+        if self.train_pred_with_encoder:
+            assert self.ae_model_pretrained is not None
+            iterpred_model = IterationPredictor(iterpred_model_conf)
+            self.ae_model_pretrained.put_on_device(iterpred_model.device)
+            assert not isinstance(self.ae_model_pretrained, NullAutoEncoder)
+            # the right above assertion ensure that ae_model_pretrained has a device...
+            assert iterpred_model.device == self.ae_model_pretrained.device  # type: ignore[attr-defined]
+            conf = IterationPredictorWithEncoderConfig(iterpred_model, self.ae_model_pretrained)
+            model: Union[
+                IterationPredictorWithEncoder, IterationPredictor
+            ] = IterationPredictorWithEncoder(conf)
+        else:
+            model = IterationPredictor(iterpred_model_conf)
+
         model.initial_solution = init_solution
         tcache = TrainCache.from_model(model)
         train(pp, tcache, dataset, self.config.train_config)
