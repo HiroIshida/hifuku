@@ -148,13 +148,16 @@ class IterationPredictorDataset(Dataset):
         descriptions_stacked_list = []
         iterval_stacked_list = []
 
+        n_inner = None
         for sample in tqdm.tqdm(loader):
             meshes, descriptionss, itervals = sample
             meshes_list.append(meshes)
             descriptions_stacked_list.append(descriptionss.reshape((-1, descriptionss.shape[-1])))
             iterval_stacked_list.append(itervals.flatten())
 
-        _, n_inner = descriptions_stacked_list[0].shape
+            n_inner = len(descriptionss[0])
+        assert n_inner is not None
+
         return cls(
             torch.concat(meshes_list),
             torch.concat(descriptions_stacked_list),
