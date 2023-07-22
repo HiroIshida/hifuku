@@ -145,20 +145,20 @@ class IterationPredictorDataset(Dataset):
     @classmethod
     def construct_keeping_mesh(cls, loader) -> "IterationPredictorDataset":
         meshes_list = []
-        descriptionss_list = []
-        itervals_list = []
+        descriptions_stacked_list = []
+        iterval_stacked_list = []
 
         for sample in tqdm.tqdm(loader):
             meshes, descriptionss, itervals = sample
             meshes_list.append(meshes)
-            descriptionss_list.append(descriptionss)
-            itervals_list.append(itervals)
+            descriptions_stacked_list.append(descriptionss.reshape((-1, descriptionss.shape[-1])))
+            iterval_stacked_list.append(itervals.flatten())
 
-        _, n_inner = descriptionss_list[0].shape
+        _, n_inner = descriptions_stacked_list[0].shape
         return cls(
             torch.concat(meshes_list),
-            torch.concat(descriptionss_list),
-            torch.concat(itervals_list),
+            torch.concat(descriptions_stacked_list),
+            torch.hstack(iterval_stacked_list),
             n_inner,
             False,
         )
@@ -409,3 +409,33 @@ class PixelAutoEncoder(NeuralAutoEncoderBase):
             nn.ConvTranspose2d(8, n_channel, 4, stride=2, padding=1),
         ]
         self.decoder = nn.Sequential(*decoder_layers)
+
+
+@dataclass
+class IterationPredictorWithEncoderConfig(ModelConfigBase):
+    # A very bad design. but I don't have time. hahhahaha...
+    iterpred_model: IterationPredictor
+    ae_model: AutoEncoderBase
+
+
+class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfig]):
+    iterpred_model: IterationPredictor
+    ae_model: AutoEncoderBase
+
+    def _setup_from_config(self, config: IterationPredictorWithEncoderConfig) -> None:
+        self.iterpred_model = config.iterpred_model
+        self.ae_model = config.ae_model
+
+    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tensor:
+        meshes, descs = sample
+        encoded = self.ae_model.encode(meshes)
+        iters_pred, _ = self.iterpred_model.forward((encoded, descs))
+        iters_pred = iters_pred.flatten()
+        return iters_pred
+
+    def loss(self, sample: Tuple[Tensor, Tensor, Tensor]) -> LossDict:
+        meshes, descs, iters = sample
+        iters_pred = self.forward((meshes, descs))
+        iter_loss = nn.MSELoss()(iters_pred, iters)
+        dic = {"iter": iter_loss}
+        return LossDict(dic)
