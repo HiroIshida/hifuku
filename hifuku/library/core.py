@@ -813,6 +813,21 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                         self.library._optimal_coverage_estimate
                     )
                 )
+
+                # save the problem desciptors for debugging
+                data = {
+                    "coverages": coverages_new,
+                    "threshold": self.solver_config.n_max_call,
+                    "fprate": self.config.acceptable_false_positive_rate,
+                    "cma_std": cma_std,
+                    "minimum_coverage": self.library._optimal_coverage_estimate,
+                }
+                fp = self.debug_data_parent_path / "debug_margin_determination.pkl"
+                with fp.open(mode="wb") as f:
+                    pickle.dump(data, f)
+                logger.debug("saved debug data to {}".format(fp))
+
+                # main
                 acceptable_results: List[DetermineMarginsResult] = []
                 while len(acceptable_results) < self.config.n_margins_candidate:
                     logger.info("current acceptable result N: {}".format(len(acceptable_results)))
