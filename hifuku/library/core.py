@@ -928,7 +928,16 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         model.initial_solution = init_solution
         tcache = TrainCache.from_model(model)
-        train(pp, tcache, dataset, self.config.train_config)
+
+        def is_stoppable(tcache: TrainCache) -> bool:
+            valid_losses = tcache.reduce_to_lossseq(tcache.validate_lossseq_table)
+            n_step = len(valid_losses)
+            idx_min = np.argmin(valid_losses)
+            t_acceptable = 10
+            no_improvement_for_long = bool((n_step - idx_min) > t_acceptable)
+            return no_improvement_for_long
+
+        train(pp, tcache, dataset, self.config.train_config, is_stoppable=is_stoppable)
         return model
 
     def _sample_solution_canidates(
