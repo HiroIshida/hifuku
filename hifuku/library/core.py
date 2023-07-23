@@ -78,6 +78,16 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         float
     ] = None  # the cached optimal coverage after margins optimization
 
+    def __setstate__(self, state):
+        # NOTE: for backward compatibility
+        is_old_version = "ae_model" in state
+        if is_old_version:
+            assert "ae_model_shared" not in state
+            state["ae_model_shared"] = state["ae_model"]
+            del state["ae_model"]
+            assert "ae_model" not in state
+        self.__dict__.update(state)
+
     def __post_init__(self):
         if self.ae_model_shared is not None:
             assert self.ae_model_shared.trained
