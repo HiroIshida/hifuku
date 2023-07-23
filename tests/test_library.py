@@ -94,6 +94,10 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
         sample_from_difficult_region=False,
         ignore_useless_traj=False,
         train_with_encoder=train_with_encoder,
+        n_validation=50,
+        n_validation_inner=2,
+        n_determine_batch=10,
+        candidate_sample_scale=5,
     )  # all pass
 
     test_devices = [torch.device("cpu")]
