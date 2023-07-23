@@ -743,8 +743,39 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         init_solution = self._determine_init_solution()
         problems = self._generate_problem_samples()
-        predictor = self.learn_predictor(init_solution, self.project_path, problems)
+        predictor = self._learn_predictor(init_solution, self.project_path, problems)
+        ret = self._determine_margins(predictor)
+        if ret is None:
+            logger.info("active sampling fail with known reasons")
+            return None
+        margins, coverage_result = ret
 
+        # update library
+        self.library.predictors.append(predictor)
+        self.library.margins = margins
+        assert (
+            self.library.coverage_results is not None
+        )  # TODO: we should remove Optional from the definition in the first place
+        self.library.coverage_results.append(coverage_result)
+
+        # TODO: margins_history should not be Optional in the first place
+        assert self.library._margins_history is not None
+        self.library._margins_history.append(copy.deepcopy(margins))
+
+        self.library.dump(self.project_path)
+
+        coverage = self.library.measure_coverage(self.problems_validation)
+        logger.info("current library's coverage estimate: {}".format(coverage))
+
+    @property
+    def difficult_iter_threshold(self) -> float:
+        maxiter = self.library.solver_config.n_max_call
+        difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
+        return difficult_iter_threshold
+
+    def _determine_margins(
+        self, predictor: Union[IterationPredictorWithEncoder, IterationPredictor]
+    ) -> Optional[Tuple[List[float], CoverageResult]]:
         # TODO: move this whole "adjusting" operation to a different method
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
@@ -809,7 +840,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 if best_margins is None:
                     # TODO: we should not ignore when self.config.ignore_useless_traj=False
                     logger.info("no improvement by this element")
-                    return
+                    return None
 
                 margins = best_margins
                 self.library._optimal_coverage_estimate = max_coverage
@@ -838,30 +869,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                         margin
                     )
                     logger.info(message)
-                    return
+                    return None
                 margins = [margin]
+        return margins, coverage_result
 
-        # update library
-        self.library.predictors.append(predictor)
-        self.library.margins = margins
-        self.library.coverage_results.append(coverage_result)
-
-        # TODO: margins_history should not be Optional in the first place
-        assert self.library._margins_history is not None
-        self.library._margins_history.append(copy.deepcopy(margins))
-
-        self.library.dump(self.project_path)
-
-        coverage = self.library.measure_coverage(self.problems_validation)
-        logger.info("current library's coverage estimate: {}".format(coverage))
-
-    @property
-    def difficult_iter_threshold(self) -> float:
-        maxiter = self.library.solver_config.n_max_call
-        difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
-        return difficult_iter_threshold
-
-    def learn_predictor(
+    def _learn_predictor(
         self,
         init_solution: Trajectory,
         project_path: Path,
