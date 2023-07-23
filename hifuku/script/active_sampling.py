@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing
+import resource
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -54,6 +55,14 @@ if __name__ == "__main__":
     log_package_version_info(logger, rpbench)
     log_package_version_info(logger, skmp)
     # log_package_version_info(logger, selcol)
+
+    # set file open limit to large
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    logger.info("current NOFILE value: (soft: {}, hard: {})".format(soft, hard))
+    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+    logger.info("set NOFILE to {}".format(hard))
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    logger.info("current NOFILE value: (soft: {}, hard: {})".format(soft, hard))
 
     if library_sampling_conf_path_str is None:
         library_sampling_conf_path = project_path / "lsconf.yaml"
