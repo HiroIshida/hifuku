@@ -86,7 +86,7 @@ def test_dataset(sol_tasks_and_resultss):
         sol.traj, tasks, resultss, domain.solver_config, ae
     )
     assert len(dataset) == n_data
-    assert dataset.problem_per_sample == 3
+    assert dataset.n_inner == 3
     mesh, desc, it = dataset[0]
     assert len(mesh.shape) == 1
     assert len(desc.shape) == 1
@@ -104,7 +104,7 @@ def test_dataset(sol_tasks_and_resultss):
         sol.traj, tasks, resultss, domain.solver_config, None
     )
     assert len(dataset) == n_data
-    assert dataset.problem_per_sample == 3
+    assert dataset.n_inner == 3
     mesh, desc, it = dataset[0]
     assert len(mesh.shape) == 3
     assert len(desc.shape) == 1

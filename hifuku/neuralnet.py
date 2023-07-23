@@ -70,24 +70,28 @@ class NullAutoEncoder(AutoEncoderBase):
 
 @dataclass
 class IterationPredictorDataset(Dataset):
-    mesh_encodeds: Optional[torch.Tensor]
+    mesh_likes: Optional[torch.Tensor]
     descriptions: torch.Tensor
     itervals: torch.Tensor
-    problem_per_sample: int
+    n_inner: int
     encoded: bool
+    """
+    mesh_likes can be either a of stack of feature vectors (n_elem, n_feature)
+    or stack of meshes (n_elem, ...) depending on `encoded".
+    """
 
     # TODO: __add__
     def add(self, other: "IterationPredictorDataset") -> None:
-        if self.mesh_encodeds is not None:
-            assert other.mesh_encodeds is not None
-            mesh_encodeds = torch.vstack([self.mesh_encodeds, other.mesh_encodeds])
+        if self.mesh_likes is not None:
+            assert other.mesh_likes is not None
+            mesh_likes = torch.vstack([self.mesh_likes, other.mesh_likes])
         else:
-            assert other.mesh_encodeds is None
-            mesh_encodeds = None
+            assert other.mesh_likes is None
+            mesh_likes = None
         descriptions = torch.vstack([self.descriptions, other.descriptions])
         itervals = torch.hstack([self.itervals, other.itervals])
 
-        self.mesh_encodeds = mesh_encodeds
+        self.mesh_likes = mesh_likes
         self.descriptions = descriptions
         self.itervals = itervals
 
@@ -95,15 +99,16 @@ class IterationPredictorDataset(Dataset):
         return len(self.descriptions)
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor, ...]:
-        if self.mesh_encodeds is None:
-            mesh_encoded_here = torch.empty(0)
+
+        if self.mesh_likes is None:
+            mesh_like_here = torch.empty(0)
         else:
-            mesh_encoded_here = self.mesh_encodeds[idx // self.problem_per_sample]
-        # Note: mesh_encoded is (n_sample, size) shape, though
-        # otheres have shape of (n_sample * n_problem, size).
-        # Thus we must devide the dix by n_problem
+            # Note: len(mesh_likes) * n_inner = len(descriptions)
+            # because n_inner descriptions share a single mesh.
+            # Thus we must devide the dix by n_inner
+            mesh_like_here = self.mesh_likes[idx // self.n_inner]
         return (
-            mesh_encoded_here,
+            mesh_like_here,
             self.descriptions[idx],
             self.itervals[idx],
         )
@@ -135,21 +140,21 @@ class IterationPredictorDataset(Dataset):
 
     @classmethod
     def construct(
-        cls, loader, ae_model: Optional[AutoEncoderBase] = None
+        cls, loader_like, ae_model: Optional[AutoEncoderBase] = None
     ) -> "IterationPredictorDataset":
         if ae_model is None:
-            return cls.construct_keeping_mesh(loader)
+            return cls.construct_keeping_mesh(loader_like)
         else:
-            return cls.construct_by_encoding(loader, ae_model)
+            return cls.construct_by_encoding(loader_like, ae_model)
 
     @classmethod
-    def construct_keeping_mesh(cls, loader) -> "IterationPredictorDataset":
+    def construct_keeping_mesh(cls, loader_like) -> "IterationPredictorDataset":
         meshes_list = []
         descriptions_stacked_list = []
         iterval_stacked_list = []
 
         n_inner = None
-        for sample in tqdm.tqdm(loader):
+        for sample in tqdm.tqdm(loader_like):
             meshes, descriptionss, itervals = sample
             meshes_list.append(meshes)
             descriptions_stacked_list.append(descriptionss.reshape((-1, descriptionss.shape[-1])))
@@ -168,7 +173,7 @@ class IterationPredictorDataset(Dataset):
 
     @classmethod
     def construct_by_encoding(
-        cls, loader, ae_model: AutoEncoderBase
+        cls, loader_like, ae_model: AutoEncoderBase
     ) -> "IterationPredictorDataset":
         device = detect_device()
         ae_model.put_on_device(device)
@@ -181,7 +186,7 @@ class IterationPredictorDataset(Dataset):
         n_problem: int = 0
         mesh_used: bool = False  # dirty. set in the for loop
 
-        for sample in tqdm.tqdm(loader):
+        for sample in tqdm.tqdm(loader_like):
             mesh, description, iterval = sample
 
             mesh_used = mesh is not None
