@@ -34,6 +34,7 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
+from hifuku.datagen.batch_margin_determiant import DetermineMarginsResult
 from hifuku.neuralnet import (
     AutoEncoderBase,
     IterationPredictor,
@@ -536,6 +537,7 @@ class LibrarySamplerConfig:
     n_validation: int = 1000
     n_validation_inner: int = 10
     n_determine_batch: int = 80
+    n_margins_candidate: int = 10
     candidate_sample_scale: int = 10
     train_with_encoder: bool = False
 
@@ -743,6 +745,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         problems = self._generate_problem_samples()
         predictor = self.learn_predictor(init_solution, self.project_path, problems)
 
+        # TODO: move this whole "adjusting" operation to a different method
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
             task_type=self.problem_type,
@@ -779,18 +782,24 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                         self.library._optimal_coverage_estimate
                     )
                 )
-                results = self.determinant.determine_batch(
-                    self.config.n_determine_batch,
-                    coverages_new,
-                    self.solver_config.n_max_call,
-                    self.config.acceptable_false_positive_rate,
-                    cma_std,
-                    minimum_coverage=self.library._optimal_coverage_estimate,
-                )
+                acceptable_results: List[DetermineMarginsResult] = []
+                while len(acceptable_results) < self.config.n_margins_candidate:
+                    logger.info("current acceptable result N: {}".format(len(acceptable_results)))
+                    results = self.determinant.determine_batch(
+                        self.config.n_determine_batch,
+                        coverages_new,
+                        self.solver_config.n_max_call,
+                        self.config.acceptable_false_positive_rate,
+                        cma_std,
+                        minimum_coverage=self.library._optimal_coverage_estimate,
+                    )
+                    for result in results:
+                        if result is not None:
+                            acceptable_results.append(result)
 
                 best_margins = None
                 max_coverage = -np.inf
-                for result in results:
+                for result in acceptable_results:
                     if result is None:
                         continue
                     if result.coverage > max_coverage:
