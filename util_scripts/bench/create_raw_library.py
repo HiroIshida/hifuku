@@ -45,7 +45,7 @@ if __name__ == "__main__":
     pairs = []
     while len(pairs) < n_data:
         logger.info("new loop")
-        n_task_batch = 80
+        n_task_batch = 400
         tasks = sampler.sample_batch(n_task_batch, pool.as_predicated(), invalidate_gridsdf=True)
         resultss = solver.solve_batch(tasks, [None] * n_task_batch, use_default_solver=True)
         for task, results in zip(tasks, resultss):

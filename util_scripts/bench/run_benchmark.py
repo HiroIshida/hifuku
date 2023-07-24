@@ -9,11 +9,7 @@ from mohou.file import get_project_path
 from rpbench.interface import PlanningDataset
 
 from hifuku.domain import select_domain
-from hifuku.library import (
-    LibraryBasedGuaranteedSolver,
-    LibraryBasedHeuristicSolver,
-    SolutionLibrary,
-)
+from hifuku.library import LibraryBasedGuaranteedSolver, SolutionLibrary
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -56,6 +52,7 @@ if __name__ == "__main__":
     else:
         dataset = None
     solver_table = CompatibleSolvers.get_compatible_solvers(task_type.__name__, dataset=dataset)
+    # solver_table = {}
 
     # setup proposed solver
     pp = get_project_path("hifuku-{}".format(domain.get_domain_name()))
@@ -64,8 +61,8 @@ if __name__ == "__main__":
     proposed = LibraryBasedGuaranteedSolver.init(lib)
     solver_table["proposed-guaranteed"] = proposed
 
-    proposed = LibraryBasedHeuristicSolver.init(lib)
-    solver_table["proposed-heuristic"] = proposed
+    # proposed = LibraryBasedHeuristicSolver.init(lib)
+    # solver_table["proposed-heuristic"] = proposed
 
     results = []
     false_positive_seq = []
@@ -81,7 +78,7 @@ if __name__ == "__main__":
             solver.setup(task)
 
             print("start solving")
-            res = solver.solve()
+            res = solver.solve(timeout=10)
             print("solved?: {}, time: {}".format(res.traj is not None, res.time_elapsed))
 
             result[name] = res

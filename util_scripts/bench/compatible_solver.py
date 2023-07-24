@@ -1,14 +1,15 @@
 from typing import Dict, Optional
 
+from rpbench.articulated.jaxon.below_table import HumanoidTableReachingTask
+from rpbench.articulated.jaxon.ground import HumanoidGroundRarmReachingTask
+from rpbench.articulated.pr2.kivapod import KivapodEmptyReachingTask
+from rpbench.articulated.pr2.tabletop import TabletopBoxRightArmReachingTask
 from rpbench.interface import (
     AbstractTaskSolver,
     DatadrivenTaskSolver,
     PlanningDataset,
     SkmpTaskSolver,
 )
-from rpbench.jaxon.below_table import HumanoidTableReachingTask
-from rpbench.pr2.kivapod import KivapodEmptyReachingTask
-from rpbench.pr2.tabletop import TabletopBoxRightArmReachingTask
 from rpbench.two_dimensional.bubbly_world import BubblyComplexMeshPointConnectTask
 from rpbench.two_dimensional.multiple_rooms import EightRoomsPlanningTask
 from skmp.satisfy import SatisfactionConfig
@@ -16,6 +17,8 @@ from skmp.solver.myrrt_solver import MyRRTConfig, MyRRTConnectSolver
 from skmp.solver.nlp_solver.memmo import NnMemmoSolver
 from skmp.solver.nlp_solver.sqp_based_solver import SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
+
+from hifuku.domain import HumanoidGroundRarmReaching_SQP_Domain
 
 
 class CompatibleSolvers:
@@ -98,6 +101,34 @@ class CompatibleSolvers:
 
         assert dataset is not None
         for n_experience in [50, 100, 200, 400, 800, 1600]:
+            compat_solvers["memmo_nn{}".format(n_experience)] = DatadrivenTaskSolver.init(
+                NnMemmoSolver,
+                sqp_config,
+                dataset,
+                n_data_use=n_experience,
+            )
+        return compat_solvers
+
+    @staticmethod
+    def _HumanoidGroundRarmReachingTask(
+        dataset: Optional[PlanningDataset],
+    ) -> Dict[str, AbstractTaskSolver]:
+        pass
+
+        compat_solvers: Dict[str, AbstractTaskSolver] = {}
+
+        myrrt_config = MyRRTConfig(10000, satisfaction_conf=SatisfactionConfig(n_max_eval=30))
+        myrrt = MyRRTConnectSolver.init(myrrt_config)
+
+        task_type = HumanoidGroundRarmReachingTask
+        compat_solvers["rrtconnect"] = SkmpTaskSolver.init(myrrt, task_type)
+
+        # same as domain but increase the budget
+        sqp_config = HumanoidGroundRarmReaching_SQP_Domain.solver_config
+        sqp_config.n_max_call = 30
+
+        assert dataset is not None
+        for n_experience in [50, 100, 200]:
             compat_solvers["memmo_nn{}".format(n_experience)] = DatadrivenTaskSolver.init(
                 NnMemmoSolver,
                 sqp_config,
