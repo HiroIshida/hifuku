@@ -5,6 +5,9 @@ from rpbench.articulated.jaxon.below_table import (
 from rpbench.articulated.jaxon.ground import (
     HumanoidGroundRarmReachingTask as _HumanoidGroundRarmReachingTask,
 )
+from rpbench.articulated.jaxon.ground import (
+    HumanoidGroundTableRarmReachingTask as _HumanoidGroundTableRarmReachingTask,
+)
 from rpbench.articulated.pr2.kivapod import (
     KivapodEmptyReachingTask as _KivapodEmptyReachingTask,
 )
@@ -106,6 +109,7 @@ class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, 
 class EightRoomsPlanningTask(_EightRoomsPlanningTask, PicklableTaskBase): ...  # noqa
 class HumanoidTableReachingTask(_HumanoidTableReachingTask, PicklableTaskBase): ...  # noqa
 class HumanoidGroundRarmReachingTask(_HumanoidGroundRarmReachingTask, PicklableTaskBase): ...  # noqa
+class HumanoidGroundTableRarmReachingTask(_HumanoidGroundTableRarmReachingTask, PicklableTaskBase): ...  # noqa
 class BubblySimpleMeshPointConnectTask(_BubblySimpleMeshPointConnectTask, PicklableTaskBase): ...  # noqa
 class BubblyComplexMeshPointConnectTask(_BubblyComplexMeshPointConnectTask, PicklableTaskBase): ...  # noqa
 class BubblySimplePointConnectTask(_BubblySimplePointConnectTask, PicklableTaskBase): ...  # noqa
