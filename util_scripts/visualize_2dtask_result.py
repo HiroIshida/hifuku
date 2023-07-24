@@ -127,7 +127,7 @@ if __name__ == "__main__":
         pts = np.array([traj.numpy()[-1] for traj in candidates])
         ax.scatter(pts[:, 0], pts[:, 1], c="b", s=1, label="candidates")
         selected = lib.predictors[n_step].initial_solution.numpy()[-1]
-        ax.scatter(selected[0], selected[1], c="orange", marker="*", s=70, label="selected")
+        ax.scatter(selected[0], selected[1], c="orange", marker="*", s=300, label="selected")
 
     elif mode == "step2":
         latest_margins = lib._margins_history[n_step - 1]
