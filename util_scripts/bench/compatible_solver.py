@@ -138,6 +138,31 @@ class CompatibleSolvers:
         return compat_solvers
 
     @staticmethod
+    def _HumanoidGroundTableRarmReachingTask(
+        dataset: Optional[PlanningDataset],
+    ) -> Dict[str, AbstractTaskSolver]:
+        pass
+
+        compat_solvers: Dict[str, AbstractTaskSolver] = {}
+
+        myrrt_config = MyRRTConfig(
+            100000, timeout=10, satisfaction_conf=SatisfactionConfig(n_max_eval=10000000)
+        )
+        myrrt = MyRRTConnectSolver.init(myrrt_config)
+
+        task_type = HumanoidGroundRarmReachingTask
+        compat_solvers["rrtconnect"] = SkmpTaskSolver.init(myrrt, task_type)
+
+        for n_experience in [1000]:
+            compat_solvers["memmo_nn{}".format(n_experience)] = DatadrivenTaskSolver.init(
+                NnMemmoSolver,
+                sqp_config,
+                dataset,
+                n_data_use=n_experience,
+            )
+        return compat_solvers
+
+    @staticmethod
     def _BubblySimpleMeshPointConnectTask(
         dataset: Optional[PlanningDataset],
     ) -> Dict[str, AbstractTaskSolver]:
