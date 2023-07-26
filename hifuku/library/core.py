@@ -459,7 +459,7 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
 
 @dataclass
 class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, ResultT]):
-    def solve(self, timeout: Optional[int] = None) -> ResultT:
+    def solve(self) -> ResultT:
         self.previous_false_positive = None
 
         ts = time.time()
@@ -472,7 +472,7 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, Res
         if seems_infeasible:
             result_type = self.solver.get_result_type()
             return result_type.abnormal()
-        solver_result = self.solver.solve(inference_result.init_solution, timeout=timeout)
+        solver_result = self.solver.solve(inference_result.init_solution)
         solver_result.time_elapsed = time.time() - ts
 
         self.previous_false_positive = solver_result.traj is None
@@ -481,13 +481,13 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, Res
 
 @dataclass
 class LibraryBasedHeuristicSolver(LibraryBasedSolverBase[ProblemT, ConfigT, ResultT]):
-    def solve(self, timeout: Optional[int] = None) -> ResultT:
+    def solve(self) -> ResultT:
         ts = time.time()
         assert self.task is not None
         inference_results = self.library.infer(self.task)
         assert len(inference_results) == 1
         inference_result = inference_results[0]
-        solver_result = self.solver.solve(inference_result.init_solution, timeout=timeout)
+        solver_result = self.solver.solve(inference_result.init_solution)
         solver_result.time_elapsed = time.time() - ts
         return solver_result
 
