@@ -17,6 +17,7 @@ from hifuku.utils import create_default_logger
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", type=int, default=300, help="solved problem number")
+    parser.add_argument("-batch", type=int, default=400, help="solved problem number")
     parser.add_argument("-domain", type=str, default="humanoid_trr_sqp", help="")
     parser.add_argument("-mode", type=str, default="lib", help="")
     parser.add_argument("--distributed", action="store_true", help="use distributed")
@@ -43,15 +44,18 @@ if __name__ == "__main__":
         solver = MultiProcessBatchProblemSolver(None, None)
 
     pairs = []
+    n_task_batch = args.batch
+    n_sample_count = 0
     while len(pairs) < n_data:
         logger.info("new loop")
-        n_task_batch = 400
         tasks = sampler.sample_batch(n_task_batch, pool.as_predicated(), invalidate_gridsdf=True)
         resultss = solver.solve_batch(tasks, [None] * n_task_batch, use_default_solver=True)
         for task, results in zip(tasks, resultss):
             if results[0].traj is not None:
                 pairs.append((task, results[0].traj))
+        n_sample_count += n_task_batch
         logger.info("num feasible: {}".format(len(pairs)))
+        logger.info("feasible rate: {}".format(len(pairs) / n_sample_count))
 
     if mode == "lib":
         p = Path("./raw_library/{}.pkl".format(task_type.__name__))
