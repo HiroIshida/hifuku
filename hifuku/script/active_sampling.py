@@ -35,6 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", type=int, default=100, help="")
     parser.add_argument("-conf", type=str)
     parser.add_argument("--warm", action="store_true", help="warm start")
+    parser.add_argument("--untrained", action="store_true", help="use untrained autoencoder")
     parser.add_argument("--fptest", action="store_true", help="test false positive rate")
     parser.add_argument("--local", action="store_true", help="don't use distributed computers")
 
@@ -44,6 +45,7 @@ if __name__ == "__main__":
     test_fp_rate: bool = args.fptest
     n_step: int = args.n
     use_distributed: bool = not args.local
+    use_pretrained_ae: bool = not args.untrained
     library_sampling_conf_path_str: Optional[str] = args.conf
 
     filter_warnings()
@@ -77,7 +79,7 @@ if __name__ == "__main__":
     p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0,))
     p_watchdog.start()
 
-    ae_model = load_compatible_autoencoder(domain_name)
+    ae_model = load_compatible_autoencoder(domain_name, use_pretrained_ae)
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
         domain.task_type,
         domain.solver_type,

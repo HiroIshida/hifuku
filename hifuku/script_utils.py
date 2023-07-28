@@ -10,21 +10,39 @@ from mohou.trainer import TrainCache
 
 from hifuku.domain import DomainProtocol, select_domain
 from hifuku.library import SolutionLibrary
-from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder
+from hifuku.neuralnet import AutoEncoderBase, AutoEncoderConfig, NullAutoEncoder
 
 logger = logging.getLogger(__name__)
 
 
-def load_compatible_autoencoder(domain: Union[str, Type[DomainProtocol]]) -> AutoEncoderBase:
+def load_compatible_autoencoder(
+    domain: Union[str, Type[DomainProtocol]], pretrained: bool
+) -> AutoEncoderBase:
+
     if isinstance(domain, str):
         domain = select_domain(domain)
-    if domain.auto_encoder_project_name is None:
-        ae_model: AutoEncoderBase = NullAutoEncoder()
+
+    if pretrained:
+        logger.info("use pretrained autoencoder")
+        if domain.auto_encoder_project_name is None:
+            logger.info("actually, we will use null autoencoder")
+            ae_model: AutoEncoderBase = NullAutoEncoder()
+        else:
+            ae_pp = mohou.file.get_project_path(domain.auto_encoder_project_name)
+            ae_model = TrainCache.load_all(ae_pp)[0].best_model
+            logger.info("load from {}".format(ae_pp))
+            assert isinstance(ae_model, AutoEncoderBase)
+        return ae_model
     else:
-        ae_pp = mohou.file.get_project_path(domain.auto_encoder_project_name)
-        ae_model = TrainCache.load_all(ae_pp)[0].best_model
-        assert isinstance(ae_model, AutoEncoderBase)
-    return ae_model
+        logger.info("use untrained autoencoder")
+        T = domain.auto_encoder_type
+        if issubclass(T, NullAutoEncoder):
+            logger.info("actually, we will use null autoencoder")
+            return NullAutoEncoder()
+        else:
+            conf = AutoEncoderConfig()
+            logger.info("Initialize {} with default config {}".format(T.__name__, conf))
+            return T(conf)  # type: ignore
 
 
 def get_project_path(domain: Union[str, Type[DomainProtocol]]) -> Path:

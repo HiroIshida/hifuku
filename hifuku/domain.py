@@ -16,6 +16,12 @@ from hifuku.datagen.batch_solver import (
     DistributedBatchProblemSolver,
     MultiProcessBatchProblemSolver,
 )
+from hifuku.neuralnet import (
+    AutoEncoderBase,
+    NullAutoEncoder,
+    PixelAutoEncoder,
+    VoxelAutoEncoder,
+)
 from hifuku.rpbench_wrap import (
     BubblySimpleMeshPointConnectTask,
     BubblySimplePointConnectTask,
@@ -41,6 +47,7 @@ class DomainProtocol(Protocol):
     solver_type: ClassVar[Type[AbstractScratchSolver]]
     solver_config: ClassVar[ConfigProtocol]
     auto_encoder_project_name: ClassVar[Optional[str]]
+    auto_encoder_type: Type[AutoEncoderBase]
 
     @classmethod
     def get_domain_name(cls) -> str:
@@ -83,6 +90,7 @@ class TORR_RRT_Domain(DomainProtocol):
         ertconnect_eps=0.5,
     )
     auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 class TORR_SQP_Domain(DomainProtocol):
@@ -90,6 +98,7 @@ class TORR_SQP_Domain(DomainProtocol):
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
     auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 class TODR_SQP_Domain(DomainProtocol):
@@ -97,6 +106,7 @@ class TODR_SQP_Domain(DomainProtocol):
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
     auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 class TBDR_SQP_Domain(DomainProtocol):
@@ -106,6 +116,7 @@ class TBDR_SQP_Domain(DomainProtocol):
         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
     )
     auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 class TBDR_RRT_Domain(DomainProtocol):
@@ -118,6 +129,7 @@ class TBDR_RRT_Domain(DomainProtocol):
         ertconnect_eps=0.5,
     )
     auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 class TBRR_SQP_Domain(DomainProtocol):
@@ -127,6 +139,7 @@ class TBRR_SQP_Domain(DomainProtocol):
         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
     )
     auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 class TBRR_RRT_Domain(DomainProtocol):
@@ -139,6 +152,7 @@ class TBRR_RRT_Domain(DomainProtocol):
         ertconnect_eps=0.05,
     )
     auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 class Kivapod_Empty_RRT_Domain(DomainProtocol):
@@ -151,6 +165,7 @@ class Kivapod_Empty_RRT_Domain(DomainProtocol):
         ertconnect_eps=0.5,
     )
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 class Maze_RRT_Domain(DomainProtocol):
@@ -163,6 +178,7 @@ class Maze_RRT_Domain(DomainProtocol):
         ertconnect_eps=0.5,
     )
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 class RingObstacleFree_RRT_Domain(DomainProtocol):
@@ -175,6 +191,7 @@ class RingObstacleFree_RRT_Domain(DomainProtocol):
         ertconnect_eps=0.1,
     )
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 class RingObstacleFreeBlocked_RRT_Domain(DomainProtocol):
@@ -187,6 +204,7 @@ class RingObstacleFreeBlocked_RRT_Domain(DomainProtocol):
         ertconnect_eps=0.1,
     )
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 class EightRooms_SQP_Domain(DomainProtocol):
@@ -196,6 +214,7 @@ class EightRooms_SQP_Domain(DomainProtocol):
         n_wp=20, n_max_call=10, motion_step_satisfaction="explicit"
     )
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 class EightRooms_ERT_Domain(DomainProtocol):
@@ -210,6 +229,7 @@ class EightRooms_ERT_Domain(DomainProtocol):
         expbased_planner_backend="ertconnect",
     )
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 class EightRooms_LT_Domain(DomainProtocol):
@@ -223,6 +243,7 @@ class EightRooms_LT_Domain(DomainProtocol):
         expbased_planner_backend="lightning",
     )
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
@@ -238,6 +259,7 @@ class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
         ineq_tighten_coef=0.0,
     )
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 class HumanoidGroundRarmReaching_SQP_Domain(DomainProtocol):
@@ -253,6 +275,7 @@ class HumanoidGroundRarmReaching_SQP_Domain(DomainProtocol):
         ineq_tighten_coef=0.0,
     )
     auto_encoder_project_name = "GroundClutteredWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
 
 
 class HumanoidGroundTableRarmReaching_SQP_Domain(DomainProtocol):
@@ -268,6 +291,7 @@ class HumanoidGroundTableRarmReaching_SQP_Domain(DomainProtocol):
         ineq_tighten_coef=0.0,
     )
     auto_encoder_project_name = "GroundClutteredWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
 
 
 class BubblySimpleMeshPointConnecting_SQP_Domain(DomainProtocol):
@@ -280,6 +304,7 @@ class BubblySimpleMeshPointConnecting_SQP_Domain(DomainProtocol):
         verbose=False,
     )
     auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
 
 
 class BubblySimpleMeshPointConnecting_RRT_Domain(DomainProtocol):
@@ -289,6 +314,7 @@ class BubblySimpleMeshPointConnecting_RRT_Domain(DomainProtocol):
         200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
     )
     auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
 
 
 class BubblySimplePointConnecting_RRT_Domain(DomainProtocol):
@@ -298,6 +324,7 @@ class BubblySimplePointConnecting_RRT_Domain(DomainProtocol):
         200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
     )
     auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
 
 
 class DummyDomain(DomainProtocol):
@@ -307,6 +334,7 @@ class DummyDomain(DomainProtocol):
         n_max_call=800, random_scale=0.25, random_force_failure_rate=0.0
     )  # somehow, if 500, classifier is not trained well probably due to the positive-negative sample inbalance
     auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
 
 
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
