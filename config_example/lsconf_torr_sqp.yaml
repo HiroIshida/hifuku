@@ -1,4 +1,4 @@
-n_problem: 24000
+n_problem: 5000
 n_problem_inner: 40
 n_solution_candidate: 40
 n_difficult_problem: 200
@@ -9,4 +9,3 @@ train_config:
     n_epoch: 60
 n_determine_batch: 320
 candidate_sample_scale: 4
-train_with_encoder: True

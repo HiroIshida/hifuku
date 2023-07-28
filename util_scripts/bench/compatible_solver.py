@@ -87,7 +87,9 @@ class CompatibleSolvers:
 
         compat_solvers: Dict[str, AbstractTaskSolver] = {}
 
-        myrrt_config = MyRRTConfig(3000, satisfaction_conf=SatisfactionConfig(n_max_eval=30))
+        myrrt_config = MyRRTConfig(
+            100000, satisfaction_conf=SatisfactionConfig(n_max_eval=10000), timeout=20
+        )
         myrrt = MyRRTConnectSolver.init(myrrt_config)
         # myrrt_parallel4 = myrrt.as_parallel_solver(n_process=4)
         # myrrt_parallel8 = myrrt.as_parallel_solver(n_process=8)
@@ -100,7 +102,7 @@ class CompatibleSolvers:
         sqp_config = SQPBasedSolverConfig(30, motion_step_satisfaction="explicit")
 
         assert dataset is not None
-        for n_experience in [50, 100, 200, 400, 800, 1600]:
+        for n_experience in [1000]:
             compat_solvers["memmo_nn{}".format(n_experience)] = DatadrivenTaskSolver.init(
                 NnMemmoSolver,
                 sqp_config,
@@ -117,7 +119,8 @@ class CompatibleSolvers:
 
         compat_solvers: Dict[str, AbstractTaskSolver] = {}
 
-        myrrt_config = MyRRTConfig(10000, satisfaction_conf=SatisfactionConfig(n_max_eval=30))
+        # rrt will works as an near-complete solver
+        myrrt_config = MyRRTConfig(100000, timeout=180)
         myrrt = MyRRTConnectSolver.init(myrrt_config)
 
         task_type = HumanoidGroundRarmReachingTask
@@ -153,7 +156,10 @@ class CompatibleSolvers:
         task_type = HumanoidGroundRarmReachingTask
         compat_solvers["rrtconnect"] = SkmpTaskSolver.init(myrrt, task_type)
 
-        for n_experience in [1000]:
+        sqp_config = HumanoidGroundRarmReaching_SQP_Domain.solver_config
+        sqp_config.n_max_call = 30
+
+        for n_experience in [100, 1000]:
             compat_solvers["memmo_nn{}".format(n_experience)] = DatadrivenTaskSolver.init(
                 NnMemmoSolver,
                 sqp_config,
