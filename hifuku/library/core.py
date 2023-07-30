@@ -78,6 +78,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     _optimal_coverage_estimate: Optional[
         float
     ] = None  # the cached optimal coverage after margins optimization
+    _n_problem_now: Optional[int] = None
 
     def __setstate__(self, state):
         # NOTE: for backward compatibility
@@ -519,7 +520,7 @@ class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
 
 @dataclass
 class LibrarySamplerConfig:
-    n_problem: int
+    n_problem_init: int
     n_problem_inner: int
     train_config: TrainConfig
     n_solution_candidate: int = 10
@@ -540,6 +541,8 @@ class LibrarySamplerConfig:
     n_margins_candidate: int = 10
     candidate_sample_scale: int = 10
     train_with_encoder: bool = False
+    n_problem_mult_factor: float = 1.0
+    n_problem_max: int = 30000
 
 
 @dataclass
@@ -713,10 +716,15 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         )
 
     def _generate_problem_samples(self) -> List[ProblemT]:
-        predicated_pool = self.pool_multiple.as_predicated()
-        problems = self.sampler.sample_batch(
-            self.config.n_problem, predicated_pool, self.invalidate_gridsdf
+        assert self.library._n_problem_now is not None
+        n_problem = self.library._n_problem_now
+        logger.info(
+            "generate regression dataset with {} elements where config.n_problem_init is {}".format(
+                n_problem, self.config.n_problem_init
+            )
         )
+        predicated_pool = self.pool_multiple.as_predicated()
+        problems = self.sampler.sample_batch(n_problem, predicated_pool, self.invalidate_gridsdf)
         # logger.info("use stratified sampling to generate problem set")
         # # stratified sampling
         # th = self.difficult_iter_threshold
@@ -740,6 +748,16 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     def step_active_sampling(self) -> None:
         logger.info("active sampling step")
         self.reset_pool()
+
+        # TODO: code smell..
+        if self.library._n_problem_now is None:
+            self.library._n_problem_now = self.config.n_problem_init
+        else:
+            self.library._n_problem_now = min(
+                int(self.library._n_problem_now * self.config.n_problem_mult_factor),
+                self.config.n_problem_max,
+            )
+        logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
 
         init_solution = self._determine_init_solution()
         problems = self._generate_problem_samples()
@@ -900,7 +918,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # create dataset. Dataset creation by a large problem set often causes
         # memory error. To avoid this, we split the batch and process separately
         # if len(problems) > n_tau.
-        init_solutions = [init_solution] * self.config.n_problem
+        init_solutions = [init_solution] * len(problems)
 
         n_tau = 1000  # TODO: should be adaptive according to the data size
         partial_problems_list = [problems[i : i + n_tau] for i in range(0, len(problems), n_tau)]

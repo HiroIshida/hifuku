@@ -83,7 +83,9 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
 
     tconfig = TrainConfig(n_epoch=1)
     lconfig = LibrarySamplerConfig(
-        n_problem=10,
+        n_problem_init=10,
+        n_problem_mult_factor=1.2,
+        n_problem_max=13,
         n_problem_inner=1,
         train_config=tconfig,
         n_solution_candidate=2,
@@ -129,10 +131,16 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
                 sampler=sampler,
                 adjust_margins=False,
             )
-            # init
+            # init k=0
             lib_sampler.step_active_sampling()
-            # active sampling
+            assert lib_sampler.library._n_problem_now == 10
+            # active sampling k=1
             lib_sampler.step_active_sampling()
+            assert lib_sampler.library._n_problem_now == 12
+
+            # active sampling k=2
+            lib_sampler.step_active_sampling()
+            assert lib_sampler.library._n_problem_now == 13  # note n_problem_max
 
             # test load
             lib_load = SolutionLibrary.load(td_path, problem_type, SQPBasedSolver)[0]
