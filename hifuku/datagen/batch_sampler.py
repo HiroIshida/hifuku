@@ -3,10 +3,11 @@ import multiprocessing
 import os
 import pickle
 import tempfile
-import time
 import uuid
 from abc import ABC, abstractmethod
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from multiprocessing import get_context
 from pathlib import Path
 from typing import Generic, List, Optional, Tuple
 
@@ -20,7 +21,6 @@ from hifuku.datagen.http_datagen.request import (
     http_connection,
     send_request,
 )
-from hifuku.datagen.utils import split_number
 from hifuku.pool import PredicatedProblemPool, ProblemT
 from hifuku.utils import get_random_seed, num_torch_thread
 
@@ -66,44 +66,6 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         self.n_process = n_process
         self.n_thread = n_thread
 
-    @staticmethod
-    def work(
-        n_sample: int,
-        pool: PredicatedProblemPool[ProblemT],
-        show_progress_bar: bool,
-        n_thread: int,
-        invalidate_gridsdf: bool,
-        cache_path: Path,
-    ) -> None:
-
-        # set random seed
-        unique_seed = get_random_seed()
-        np.random.seed(unique_seed)
-        logger.debug("random seed set to {}".format(unique_seed))
-
-        logger.debug("start sampling using clf")
-        problems: List[ProblemT] = []
-
-        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
-            # NOTE: numpy internal thread parallelization greatly slow down
-            # the processing time when multuprocessing case, though the speed gain
-            # by the thread parallelization is actually poor
-            with num_torch_thread(n_thread):
-                disable = not show_progress_bar
-                with tqdm.tqdm(total=n_sample, smoothing=0.0, disable=disable) as pbar:
-                    while len(problems) < n_sample:
-                        problem = next(pool)
-                        if problem is not None:
-                            if invalidate_gridsdf:
-                                problem.invalidate_gridsdf()
-                            problems.append(problem)
-                            pbar.update(1)
-        ts = time.time()
-        file_path = cache_path / str(uuid.uuid4())
-        with file_path.open(mode="wb") as f:
-            pickle.dump(problems, f)
-        logger.debug("time to dump {}".format(time.time() - ts))
-
     def sample_batch(
         self, n_sample: int, pool: PredicatedProblemPool[ProblemT], invalidate_gridsdf: bool = False
     ) -> List[ProblemT]:
@@ -111,40 +73,44 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
 
-        with tempfile.TemporaryDirectory() as td:
-            # spawn is safe but really slow.
-            ctx = multiprocessing.get_context(method="fork")
-            n_sample_list = split_number(n_sample, n_process)
-            process_list = []
-
-            td_path = Path(td)
-            for idx_process, n_sample_part in enumerate(n_sample_list):
-                if n_sample_part == 0:
-                    continue
-                show_progress = idx_process == 0
-                args = (
-                    n_sample_part,
-                    pool,
-                    show_progress,
-                    self.n_thread,
-                    invalidate_gridsdf,
-                    td_path,
+        with ProcessPoolExecutor(
+            n_process,
+            initializer=self._process_pool_setup,
+            initargs=(pool, self.n_thread, invalidate_gridsdf),
+            mp_context=get_context("fork"),
+        ) as executor:
+            problems_sampled = list(
+                tqdm.tqdm(
+                    executor.map(self._process_pool_sample_task, range(n_sample)), total=n_sample
                 )
-                p = ctx.Process(target=self.work, args=args)  # type: ignore
-                p.start()
-                process_list.append(p)
-
-            for p in process_list:
-                p.join()
-            logger.debug("finish all subprocess")
-
-            ts = time.time()
-            problems_sampled = []
-            for file_path in td_path.iterdir():
-                with file_path.open(mode="rb") as f:
-                    problems_sampled.extend(pickle.load(f))
-            logger.debug("time to load {}".format(time.time() - ts))
+            )
         return problems_sampled
+
+    @staticmethod
+    def _process_pool_setup(
+        _pool: PredicatedProblemPool[ProblemT], _n_thread: int, _invalidate_gridsdf: bool
+    ) -> None:
+        global pool, n_thread, invalidate_gridsdf  # shared in the forked process
+        pool = _pool  # type: ignore
+        n_thread = _n_thread  # type: ignore
+        invalidate_gridsdf = _invalidate_gridsdf  # type: ignore
+
+        unique_seed = get_random_seed()
+        np.random.seed(unique_seed)
+        logger.debug("random seed set to {}".format(unique_seed))
+
+    @staticmethod
+    def _process_pool_sample_task(_) -> ProblemT:
+        global pool, n_thread, invalidate_gridsdf  # shared in the forked process
+
+        with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+            with num_torch_thread(n_thread):  # type: ignore
+                while True:
+                    task = next(pool)  # type: ignore
+                    if task is not None:
+                        if invalidate_gridsdf:  # type: ignore
+                            task.invalidate_gridsdf()
+                        return task
 
 
 class DistributeBatchProblemSampler(
