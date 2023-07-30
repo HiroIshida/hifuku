@@ -1,9 +1,7 @@
 import argparse
 import logging
 import multiprocessing
-import os
 import pickle
-import platform
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -29,7 +27,7 @@ from hifuku.datagen.http_datagen.request import (
 )
 from hifuku.pool import ProblemT
 from hifuku.script_utils import watch_memmory
-from hifuku.utils import get_module_source_hash
+from hifuku.utils import detect_physical_cpu_num, get_module_source_hash
 
 
 def split_number(num, div):
@@ -43,15 +41,7 @@ class PostHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def process_GetCPUInfoRequest(self, request: GetCPUInfoRequest) -> GetCPUInfoResponse:
-        n_cpu = os.cpu_count()
-        assert n_cpu is not None
-        if platform.machine() == "aarch64":
-            cpu_count = n_cpu - 2  # 2 is a magick number
-        else:
-            # because in hyperthreading, chache is shared.
-            # so we must count only the physical cores
-            cpu_count = int(n_cpu * 0.5)
-
+        cpu_count = detect_physical_cpu_num()
         logging.info("cpu count: {}".format(cpu_count))
         resp = GetCPUInfoResponse(cpu_count)
         return resp

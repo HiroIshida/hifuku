@@ -17,7 +17,7 @@ from hifuku.datagen.http_datagen.request import (
     send_request,
 )
 from hifuku.datagen.utils import split_number
-from hifuku.utils import get_random_seed
+from hifuku.utils import detect_physical_cpu_num, get_random_seed
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +45,12 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
     n_thread: int
 
     def __init__(self, n_process: Optional[int] = None):
-        cpu_count = os.cpu_count()
-        assert cpu_count is not None
-        n_physical_cpu = int(0.5 * cpu_count)
+        n_physical_cpu = detect_physical_cpu_num()
 
         if n_process is None:
             n_process = n_physical_cpu
 
-        # if n_process is larger than physical core num
-        # performance gain by parallelization is limited. so...
-        n_process = min(n_process, n_physical_cpu)
-
-        n_thread = n_physical_cpu // n_process
+        n_thread = min(max(int(n_process // n_physical_cpu), 1), 2)
 
         logger.info("n_process is set to {}".format(n_process))
         logger.info("n_thread is set to {}".format(n_thread))

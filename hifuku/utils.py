@@ -4,6 +4,7 @@ import inspect
 import logging
 import os
 import pickle
+import platform
 import shutil
 import subprocess
 import tempfile
@@ -16,6 +17,21 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 import torch
+
+
+def detect_physical_cpu_num() -> int:
+    n_cpu = os.cpu_count()
+    assert n_cpu is not None
+    if platform.machine() == "aarch64":
+        return n_cpu - 2  # 2 is a magick number
+    elif platform.machine() == "x86_64":
+        # because in hyperthreading, chache is shared.
+        # so we must count only the physical cores
+        # NOTE: hyperthreading can actully be off in bios though...
+        return int(n_cpu * 0.5)
+    else:
+        assert "please implement for platform {}".format(platform.machine())
+    assert False
 
 
 def get_random_seed() -> int:
