@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import pickle
@@ -162,6 +163,12 @@ def test_consistency_of_all_batch_sampler(server):
                 samples = sampler.sample_batch(n_sample, pool)
                 assert len(samples) == n_sample
                 assert len(samples[0].descriptions) == n_problem_inner
+
+                # in the parallel processing, the typical but difficult-to-find bug is
+                # duplication of sample by forgetting to set peroper random seed.
+                # check that no duplicate samples here.
+                hash_vals = [hashlib.md5(pickle.dumps(s)).hexdigest() for s in samples]
+                assert len(set(hash_vals)) == len(hash_vals)
 
 
 def test_batch_sampler_with_invalidate_gridsdf_option(server):
