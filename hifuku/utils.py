@@ -14,21 +14,25 @@ from datetime import datetime
 from hashlib import md5
 from logging import Logger
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 import torch
 
 
-def detect_physical_cpu_num() -> int:
+def determine_process_thread() -> Tuple[int, int]:
     n_cpu = os.cpu_count()
     assert n_cpu is not None
     if platform.machine() == "aarch64":
-        return n_cpu - 2  # 2 is a magick number
+        n_process = n_cpu - 2  # 2 is a magick number
+        n_thread = 1
+        return n_process, n_thread
     elif platform.machine() == "x86_64":
         # because in hyperthreading, chache is shared.
         # so we must count only the physical cores
         # NOTE: hyperthreading can actully be off in bios though...
-        return int(n_cpu * 0.5)
+        n_process = int(n_cpu * 0.5)
+        n_thread = 2
+        return n_process, n_thread
     else:
         assert "please implement for platform {}".format(platform.machine())
     assert False

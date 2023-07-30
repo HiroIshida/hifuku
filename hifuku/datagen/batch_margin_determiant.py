@@ -17,7 +17,7 @@ from hifuku.datagen.http_datagen.request import (
     send_request,
 )
 from hifuku.datagen.utils import split_number
-from hifuku.utils import detect_physical_cpu_num, get_random_seed
+from hifuku.utils import determine_process_thread, get_random_seed
 
 logger = logging.getLogger(__name__)
 
@@ -45,20 +45,10 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
     n_thread: int
 
     def __init__(self, n_process: Optional[int] = None):
-        n_physical_cpu = detect_physical_cpu_num()
-
+        n_process_default, n_thread = determine_process_thread()
         if n_process is None:
-            n_process = n_physical_cpu
-
-        n_thread = min(max(int(n_process // n_physical_cpu), 1), 2)
-
-        logger.info("n_process is set to {}".format(n_process))
-        logger.info("n_thread is set to {}".format(n_thread))
-        assert (
-            n_process * n_thread == n_physical_cpu
-        ), "n_process: {}, n_thread: {}, n_physical_cpu {}".format(
-            n_process, n_thread, n_physical_cpu
-        )
+            n_process = n_process_default
+        logger.info("n_process: {}, n_thread: {}".format(n_process, n_thread))
         self.n_process = n_process
         self.n_thread = n_thread
 

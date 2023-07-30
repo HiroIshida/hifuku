@@ -27,7 +27,7 @@ from hifuku.datagen.http_datagen.request import (
 )
 from hifuku.pool import ProblemT
 from hifuku.script_utils import watch_memmory
-from hifuku.utils import detect_physical_cpu_num, get_module_source_hash
+from hifuku.utils import determine_process_thread, get_module_source_hash
 
 
 def split_number(num, div):
@@ -41,9 +41,9 @@ class PostHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def process_GetCPUInfoRequest(self, request: GetCPUInfoRequest) -> GetCPUInfoResponse:
-        cpu_count = detect_physical_cpu_num()
-        logging.info("cpu count: {}".format(cpu_count))
-        resp = GetCPUInfoResponse(cpu_count)
+        n_process, _ = determine_process_thread()
+        logging.info("available process count: {}".format(n_process))
+        resp = GetCPUInfoResponse(n_process)
         return resp
 
     def process_GetModuleHashValueRequest(
