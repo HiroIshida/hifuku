@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import rpbench
 import skmp
+import torch
 import yaml
 from mohou.trainer import TrainConfig
 from mohou.utils import log_package_version_info
@@ -47,6 +48,8 @@ if __name__ == "__main__":
     use_distributed: bool = not args.local
     use_pretrained_ae: bool = not args.untrained
     library_sampling_conf_path_str: Optional[str] = args.conf
+
+    assert torch.cuda.is_available()
 
     filter_warnings()
     domain = select_domain(domain_name)
