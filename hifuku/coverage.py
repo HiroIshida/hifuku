@@ -194,7 +194,7 @@ def determine_margins(
         best_margins, coverage_results, threshold
     )
     logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
-    if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate_modified:
+    if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate:
         logger.info("cma result accepted")
         return DetermineMarginsResult(list(best_margins), coverage_est_cand, fp_rate_cand)
     else:
