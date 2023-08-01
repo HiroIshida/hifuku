@@ -38,10 +38,6 @@ from rpbench.articulated.pr2.tabletop import (
     TabletopOvenWorldWrap as _TabletopOvenWorldWrap,
 )
 from rpbench.interface import SamplableBase, TaskBase
-from rpbench.ring import (
-    RingObstacleFreeBlockedPlanningTask as _RingObstacleFreeBlockedPlanningTask,
-)
-from rpbench.ring import RingObstacleFreePlanningTask as _RingObstacleFreePlanningTask
 from rpbench.two_dimensional.bubbly_world import (
     BubblyComplexMeshPointConnectTask as _BubblyComplexMeshPointConnectTask,
 )
@@ -55,7 +51,6 @@ from rpbench.two_dimensional.bubbly_world import (
     BubblySimplePointConnectTask as _BubblySimplePointConnectTask,
 )
 from rpbench.two_dimensional.dummy import DummyTask as _DummyTask
-from rpbench.two_dimensional.maze import MazeSolvingTask as _MazeSolvingTask
 from rpbench.two_dimensional.multiple_rooms import (
     EightRoomsPlanningTask as _EightRoomsPlanningTask,
 )
@@ -103,9 +98,6 @@ class TabletopOvenVoxbloxWorldWrap(_TabletopOvenVoxbloxWorldWrap, PicklableTenso
 class TabletopBoxDualArmReachingTask(_TabletopBoxDualArmReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxRightArmReachingTask(_TabletopBoxRightArmReachingTask, PicklableTaskBase): ...  # noqa
 class TabletopBoxWorldWrap(_TabletopBoxWorldWrap, PicklableTensorExportSamplableBase): ...  # noqa
-class MazeSolvingTask(_MazeSolvingTask, PicklableTaskBase): ...  # noqa
-class RingObstacleFreePlanningTask(_RingObstacleFreePlanningTask, PicklableTaskBase): ...  # noqa
-class RingObstacleFreeBlockedPlanningTask(_RingObstacleFreeBlockedPlanningTask, PicklableTaskBase): ...  # noqa
 class EightRoomsPlanningTask(_EightRoomsPlanningTask, PicklableTaskBase): ...  # noqa
 class HumanoidTableReachingTask(_HumanoidTableReachingTask, PicklableTaskBase): ...  # noqa
 class HumanoidGroundRarmReachingTask(_HumanoidGroundRarmReachingTask, PicklableTaskBase): ...  # noqa

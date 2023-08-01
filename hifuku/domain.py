@@ -31,10 +31,7 @@ from hifuku.rpbench_wrap import (
     HumanoidGroundTableRarmReachingTask,
     HumanoidTableReachingTask,
     KivapodEmptyReachingTask,
-    MazeSolvingTask,
     PicklableTaskBase,
-    RingObstacleFreeBlockedPlanningTask,
-    RingObstacleFreePlanningTask,
     TabletopBoxDualArmReachingTask,
     TabletopBoxRightArmReachingTask,
     TabletopOvenDualArmReachingTask,
@@ -163,45 +160,6 @@ class Kivapod_Empty_RRT_Domain(DomainProtocol):
         n_max_satisfaction_trial=1,
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.5,
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
-class Maze_RRT_Domain(DomainProtocol):
-    task_type = MazeSolvingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=3000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.5,
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
-class RingObstacleFree_RRT_Domain(DomainProtocol):
-    task_type = RingObstacleFreePlanningTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=100,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
-class RingObstacleFreeBlocked_RRT_Domain(DomainProtocol):
-    task_type = RingObstacleFreeBlockedPlanningTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=100,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -364,8 +322,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         tbrr_sqp = TBRR_SQP_Domain
         tbrr_rrt = TBRR_RRT_Domain
         kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
-        ring_rrt = RingObstacleFree_RRT_Domain
-        ring_blocked_rrt = RingObstacleFreeBlocked_RRT_Domain
         eight_rooms_sqp = EightRooms_SQP_Domain
         eight_rooms_ert = EightRooms_ERT_Domain
         eight_rooms_lt = EightRooms_LT_Domain
