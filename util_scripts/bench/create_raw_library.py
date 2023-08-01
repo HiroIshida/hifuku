@@ -48,7 +48,7 @@ if __name__ == "__main__":
     n_sample_count = 0
     while len(pairs) < n_data:
         logger.info("new loop")
-        tasks = sampler.sample_batch(n_task_batch, pool.as_predicated(), invalidate_gridsdf=True)
+        tasks = sampler.sample_batch(n_task_batch, pool.as_predicated(), delete_cache=True)
         resultss = solver.solve_batch(tasks, [None] * n_task_batch, use_default_solver=True)
         for task, results in zip(tasks, resultss):
             if results[0].traj is not None:

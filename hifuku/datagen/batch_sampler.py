@@ -33,7 +33,7 @@ HostPortPair = Tuple[str, int]
 class BatchProblemSampler(Generic[ProblemT], ABC):
     @abstractmethod
     def sample_batch(
-        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], invalidate_gridsdf: bool = False
+        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], delete_cache: bool = False
     ) -> List[ProblemT]:
         ...
 
@@ -51,7 +51,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         self.n_thread = n_thread
 
     def sample_batch(
-        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], invalidate_gridsdf: bool = False
+        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], delete_cache: bool = False
     ) -> List[ProblemT]:
         assert pool.parallelizable()
         assert n_sample > 0
@@ -60,7 +60,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         with ProcessPoolExecutor(
             n_process,
             initializer=self._process_pool_setup,
-            initargs=(pool, self.n_thread, invalidate_gridsdf),
+            initargs=(pool, self.n_thread, delete_cache),
             mp_context=get_context("fork"),
         ) as executor:
             problems_sampled = list(
@@ -72,12 +72,12 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 
     @staticmethod
     def _process_pool_setup(
-        _pool: PredicatedProblemPool[ProblemT], _n_thread: int, _invalidate_gridsdf: bool
+        _pool: PredicatedProblemPool[ProblemT], _n_thread: int, _delete_cache: bool
     ) -> None:
-        global pool, n_thread, invalidate_gridsdf  # shared in the forked process
+        global pool, n_thread, delete_cache  # shared in the forked process
         pool = _pool  # type: ignore
         n_thread = _n_thread  # type: ignore
-        invalidate_gridsdf = _invalidate_gridsdf  # type: ignore
+        delete_cache = _delete_cache  # type: ignore
 
         unique_seed = get_random_seed()
         np.random.seed(unique_seed)
@@ -85,15 +85,15 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 
     @staticmethod
     def _process_pool_sample_task(_) -> ProblemT:
-        global pool, n_thread, invalidate_gridsdf  # shared in the forked process
+        global pool, n_thread, delete_cache  # shared in the forked process
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             with num_torch_thread(n_thread):  # type: ignore
                 while True:
                     task = next(pool)  # type: ignore
                     if task is not None:
-                        if invalidate_gridsdf:  # type: ignore
-                            task.invalidate_gridsdf()
+                        if delete_cache:  # type: ignore
+                            task.delete_cache()
                         return task
 
 
@@ -115,7 +115,7 @@ class DistributeBatchProblemSampler(
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
     def sample_batch(
-        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], invalidate_gridsdf: bool = False
+        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], delete_cache: bool = False
     ) -> List[ProblemT]:
         assert n_sample > 0
         assert pool.parallelizable()
@@ -135,7 +135,7 @@ class DistributeBatchProblemSampler(
                 n_sample_part = n_sample_table[hostport]
                 if n_sample_part > 0:
                     n_process = self.hostport_cpuinfo_map[hostport].n_cpu
-                    req = SampleProblemRequest(n_sample_part, pool, n_process, invalidate_gridsdf)
+                    req = SampleProblemRequest(n_sample_part, pool, n_process, delete_cache)
                     p = ctx.Process(
                         target=self.send_and_recive_and_write, args=(hostport, req, td_path)
                     )

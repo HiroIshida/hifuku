@@ -54,8 +54,7 @@ if __name__ == "__main__":
 
         mat_list = []
         for prob in tqdm.tqdm(problems):
-            gridsdf = prob._gridsdf
-            assert gridsdf is not None
+            gridsdf = prob.cache
             mat = np.expand_dims(gridsdf.values.reshape(gridsdf.grid.sizes).T, axis=0)
             mat_list.append(mat)
 

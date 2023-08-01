@@ -558,7 +558,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
     adjust_margins: bool
-    invalidate_gridsdf: bool
+    delete_cache: bool
     project_path: Path
     ae_model_pretrained: Optional[
         AutoEncoderBase
@@ -613,7 +613,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
         adjust_margins: bool = True,
-        invalidate_gridsdf: bool = False,
+        delete_cache: bool = False,
         n_limit_batch_solver: Optional[int] = None,
     ) -> "SimpleSolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
@@ -687,7 +687,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 problems_validation = sampler.sample_batch(
                     config.n_validation,
                     TrivialProblemPool(problem_type, config.n_validation_inner).as_predicated(),
-                    invalidate_gridsdf=invalidate_gridsdf,
+                    delete_cache=delete_cache,
                 )
 
                 with validation_cache_path.open(mode="wb") as f:
@@ -710,7 +710,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             determinant,
             test_false_positive_rate,
             adjust_margins,
-            invalidate_gridsdf,
+            delete_cache,
             project_path,
             ae_model if config.train_with_encoder else None,
         )
@@ -724,7 +724,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             )
         )
         predicated_pool = self.pool_multiple.as_predicated()
-        problems = self.sampler.sample_batch(n_problem, predicated_pool, self.invalidate_gridsdf)
+        problems = self.sampler.sample_batch(n_problem, predicated_pool, self.delete_cache)
         # logger.info("use stratified sampling to generate problem set")
         # # stratified sampling
         # th = self.difficult_iter_threshold
@@ -739,7 +739,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         #     )
         #     predicated_pool = self.pool_multiple.make_predicated(predicate, 10)
         #     problems_part = self.sampler.sample_batch(
-        #         n_problem, predicated_pool, self.invalidate_gridsdf
+        #         n_problem, predicated_pool, self.delete_cache
         #     )
         #     problems.extend(problems_part)
         # assert len(problems) == self.config.n_problem
@@ -1042,7 +1042,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             problems2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
             problems = problems1 + problems2
             for prob in problems:
-                prob.invalidate_gridsdf()
+                prob.delete_cache()
 
             # NOTE: shuffling is required asin the following sectino, for loop is existed
             # as soon as number of candidates exceeds n_sample

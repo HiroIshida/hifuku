@@ -171,7 +171,7 @@ def test_consistency_of_all_batch_sampler(server):
                 assert len(set(hash_vals)) == len(hash_vals)
 
 
-def test_batch_sampler_with_invalidate_gridsdf_option(server):
+def test_batch_sampler_with_delete_cache_option(server):
     specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
 
     sampler_list: List[BatchProblemSampler[TabletopOvenRightArmReachingTask]] = []
@@ -183,11 +183,11 @@ def test_batch_sampler_with_invalidate_gridsdf_option(server):
     for sampler in sampler_list:
         tasks = sampler.sample_batch(10, pool, False)
         for task in tasks:
-            assert task._gridsdf is not None
+            assert task._cache is not None
 
         tasks = sampler.sample_batch(10, pool, True)
         for task in tasks:
-            assert task._gridsdf is None
+            assert task._cache is None
 
 
 def test_create_dataset():

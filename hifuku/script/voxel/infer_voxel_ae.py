@@ -20,7 +20,7 @@ if __name__ == "__main__":
     best_model = TrainCache.load(pp, VoxelAutoEncoder).best_model
 
     problem = samplable_type.sample(0, standard=False)
-    gridsdf = problem._gridsdf
+    gridsdf = problem.cache
     assert gridsdf is not None
     mesh = gridsdf.values.reshape(*gridsdf.grid.sizes)
 

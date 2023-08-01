@@ -122,7 +122,7 @@ class CachedProblemPool(ProblemPool[SamplableT], Generic[OtherSamplableT, Sampla
     """Use Cache of precomputed CacheProblemT, create pool
     of ProblemT.
 
-    This pool is beneficial specifically when sampling the world (including gridsdf)
+    This pool is beneficial specifically when sampling the world (including cache)
     is not easy. In that case, if you have cache of other related tasks which can
     share the world, but not world-conditioned description, then you can use that
     cache as part of the task that you want to generate.
@@ -163,7 +163,7 @@ class CachedProblemPool(ProblemPool[SamplableT], Generic[OtherSamplableT, Sampla
         elif problem.n_inner_task == 0:
             descs = problem.sample_descriptions(problem.world, self.n_problem_inner)
             assert descs is not None  # TODO: due to change in rpbench, we must handle this case
-            return self.problem_type(problem.world, descs, problem._gridsdf)
+            return self.problem_type(problem.world, descs, problem._cache)
         else:
             assert False
 
