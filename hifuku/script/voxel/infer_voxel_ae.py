@@ -2,10 +2,10 @@ import numpy as np
 import torch
 from mohou.file import get_project_path
 from mohou.trainer import TrainCache
+from rpbench.articulated.pr2.tabletop import TabletopBoxWorldWrap
 from voxbloxpy.core import Grid, GridSDF
 
 from hifuku.neuralnet import VoxelAutoEncoder
-from hifuku.rpbench_wrap import TabletopBoxWorldWrap
 
 
 def render(mesh):

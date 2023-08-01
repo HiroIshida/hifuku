@@ -14,16 +14,16 @@ from pathlib import Path
 from typing import Callable, Generic, Iterator, List, Optional, Type, TypeVar, cast
 
 import numpy as np
+from rpbench.interface import SamplableBase, TaskBase
 
 from hifuku.llazy.dataset import DatasetIterator, LazyDecomplessDataset
-from hifuku.rpbench_wrap import PicklableSamplableBase, PicklableTaskBase
 
 logger = logging.getLogger(__name__)
 
-ProblemT = TypeVar("ProblemT", bound=PicklableTaskBase)
-SamplableT = TypeVar("SamplableT", bound=PicklableSamplableBase)
-OtherSamplableT = TypeVar("OtherSamplableT", bound=PicklableSamplableBase)
-CachedProblemT = TypeVar("CachedProblemT", bound=PicklableTaskBase)  # TODO: rename to CacheTaskT
+ProblemT = TypeVar("ProblemT", bound=TaskBase)
+SamplableT = TypeVar("SamplableT", bound=SamplableBase)
+OtherSamplableT = TypeVar("OtherSamplableT", bound=TaskBase)
+CachedProblemT = TypeVar("CachedProblemT", bound=SamplableBase)  # TODO: rename to CacheTaskT
 ProblemPoolT = TypeVar("ProblemPoolT", bound="ProblemPoolLike")
 T = TypeVar("T")
 
@@ -133,6 +133,8 @@ class CachedProblemPool(ProblemPool[SamplableT], Generic[OtherSamplableT, Sampla
     dataset_iter: Optional[DatasetIterator] = None
 
     def __post_init__(self):
+        assert False, "this class is unmaintained as Tasks are no longer be a picklable"  # TODO
+
         assert len(self.cache_path_list) > 0
         assert self.dataset_iter is None, "maybe reset is not called yet?"
 

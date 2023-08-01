@@ -26,9 +26,9 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
+from hifuku.domain import TabletopOvenRightArmReachingTask
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
-from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
 from hifuku.testing_asset import SimplePredicate
 from hifuku.types import RawData
 from hifuku.utils import create_default_logger

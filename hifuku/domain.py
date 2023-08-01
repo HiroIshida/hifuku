@@ -3,7 +3,25 @@ from enum import Enum
 from typing import ClassVar, Optional, Protocol, Type
 
 import tqdm
-from rpbench.two_dimensional.dummy import DummyConfig, DummySolver
+from rpbench.articulated.jaxon.below_table import HumanoidTableReachingTask
+from rpbench.articulated.jaxon.ground import (
+    HumanoidGroundRarmReachingTask,
+    HumanoidGroundTableRarmReachingTask,
+)
+from rpbench.articulated.pr2.kivapod import KivapodEmptyReachingTask
+from rpbench.articulated.pr2.tabletop import (
+    TabletopBoxDualArmReachingTask,
+    TabletopBoxRightArmReachingTask,
+    TabletopOvenDualArmReachingTask,
+    TabletopOvenRightArmReachingTask,
+)
+from rpbench.interface import TaskBase
+from rpbench.two_dimensional.bubbly_world import (
+    BubblySimpleMeshPointConnectTask,
+    BubblySimplePointConnectTask,
+)
+from rpbench.two_dimensional.dummy import DummyConfig, DummySolver, DummyTask
+from rpbench.two_dimensional.multiple_rooms import EightRoomsPlanningTask
 from skmp.solver.interface import AbstractScratchSolver, ConfigProtocol
 from skmp.solver.nlp_solver.sqp_based_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
@@ -22,25 +40,10 @@ from hifuku.neuralnet import (
     PixelAutoEncoder,
     VoxelAutoEncoder,
 )
-from hifuku.rpbench_wrap import (
-    BubblySimpleMeshPointConnectTask,
-    BubblySimplePointConnectTask,
-    DummyTask,
-    EightRoomsPlanningTask,
-    HumanoidGroundRarmReachingTask,
-    HumanoidGroundTableRarmReachingTask,
-    HumanoidTableReachingTask,
-    KivapodEmptyReachingTask,
-    PicklableTaskBase,
-    TabletopBoxDualArmReachingTask,
-    TabletopBoxRightArmReachingTask,
-    TabletopOvenDualArmReachingTask,
-    TabletopOvenRightArmReachingTask,
-)
 
 
 class DomainProtocol(Protocol):
-    task_type: ClassVar[Type[PicklableTaskBase]]
+    task_type: ClassVar[Type[TaskBase]]
     solver_type: ClassVar[Type[AbstractScratchSolver]]
     solver_config: ClassVar[ConfigProtocol]
     auto_encoder_project_name: ClassVar[Optional[str]]

@@ -8,7 +8,7 @@ from hifuku.datagen.http_datagen.server import (
     GetModuleHashValueRequest,
     SolveProblemRequest,
 )
-from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
+from hifuku.domain import TabletopOvenRightArmReachingTask
 
 with http_connection("localhost", 8081) as conn:
     req1 = GetModuleHashValueRequest(["skrobot", "tinyfk", "skplan"])

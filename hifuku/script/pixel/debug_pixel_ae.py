@@ -6,9 +6,9 @@ from mohou.file import get_project_path
 from mohou.trainer import TrainCache
 
 from hifuku.datagen import MultiProcessBatchProblemSampler
+from hifuku.domain import BubblySimpleMeshPointConnectTask
 from hifuku.neuralnet import PixelAutoEncoder
 from hifuku.pool import TrivialProblemPool
-from hifuku.rpbench_wrap import BubblySimpleMeshPointConnectTask
 
 if __name__ == "__main__":
     path = get_project_path("BubblyMeshPointConnectTask-AutoEncoder")

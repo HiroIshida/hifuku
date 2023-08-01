@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
+from hifuku.domain import TabletopOvenRightArmReachingTask
 
 
 @dataclass

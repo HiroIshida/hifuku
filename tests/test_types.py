@@ -7,7 +7,7 @@ import numpy as np
 from skmp.solver.ompl_solver import OMPLSolverConfig, OMPLSolverResult, TerminateState
 from skmp.trajectory import Trajectory
 
-from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
+from hifuku.domain import TabletopOvenRightArmReachingTask
 from hifuku.types import RawData
 
 

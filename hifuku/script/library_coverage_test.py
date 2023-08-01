@@ -2,9 +2,8 @@ import numpy as np
 import torch
 from mohou.file import get_project_path
 
-from hifuku.domain import TORR_SQP_Domain
+from hifuku.domain import TabletopOvenRightArmReachingTask, TORR_SQP_Domain
 from hifuku.library import SolutionLibrary
-from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
 
 np.random.seed(0)
 

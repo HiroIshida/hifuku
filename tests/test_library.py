@@ -14,7 +14,11 @@ from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 from skmp.trajectory import Trajectory
 
 from hifuku.datagen import MultiProcessBatchProblemSolver
-from hifuku.domain import BubblySimpleMeshPointConnecting_RRT_Domain, DomainProtocol
+from hifuku.domain import (
+    BubblySimpleMeshPointConnecting_RRT_Domain,
+    DomainProtocol,
+    TabletopOvenRightArmReachingTask,
+)
 from hifuku.library import (
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
@@ -26,7 +30,6 @@ from hifuku.neuralnet import (
     NullAutoEncoder,
     PixelAutoEncoder,
 )
-from hifuku.rpbench_wrap import TabletopOvenRightArmReachingTask
 from hifuku.utils import create_default_logger
 
 

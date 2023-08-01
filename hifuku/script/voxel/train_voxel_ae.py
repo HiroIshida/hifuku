@@ -4,9 +4,9 @@ from mohou.file import get_project_path
 from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train_lower
 
+from hifuku.domain import TabletopBoxWorldWrap
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.neuralnet import AutoEncoderConfig, VoxelAutoEncoder
-from hifuku.rpbench_wrap import TabletopBoxWorldWrap
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

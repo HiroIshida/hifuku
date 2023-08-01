@@ -9,15 +9,15 @@ import numpy as np
 import tqdm
 from mohou.file import get_project_path
 from mohou.utils import log_package_version_info
-
-import hifuku
-from hifuku.datagen import MultiProcessBatchProblemSampler
-from hifuku.pool import TrivialProblemPool
-from hifuku.rpbench_wrap import (
+from rpbench.articulated.pr2.tabletop import (
     TabletopBoxWorldWrap,
     TabletopOvenVoxbloxWorldWrap,
     TabletopOvenWorldWrap,
 )
+
+import hifuku
+from hifuku.datagen import MultiProcessBatchProblemSampler
+from hifuku.pool import TrivialProblemPool
 from hifuku.utils import create_default_logger
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
