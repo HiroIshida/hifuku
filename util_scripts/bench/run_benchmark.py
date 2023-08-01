@@ -74,6 +74,7 @@ if __name__ == "__main__":
 
     results = []
     fp_count = 0
+    fp_denominator = 0
     count_dict = {key: 0 for key in solver_table.keys()}
     tasks_dump = []
 
@@ -93,15 +94,18 @@ if __name__ == "__main__":
             result[name] = res
 
             if name == proposed_name:
-                if res.time_elapsed is not None and res.traj is None:
-                    fp_count += 1
+                if res.time_elapsed is not None:
+                    fp_denominator += 1
+                    if res.traj is None:
+                        fp_count += 1
 
         logger.info("count dict: {}".format(count_dict))
         tasks_dump.append(task)
         results.append(result)
 
-        fp_rate = fp_count / (i + 1)
-        logger.info("current fp rate: {}".format(fp_rate))
+        if fp_denominator > 0:
+            fp_rate = fp_count / fp_denominator
+            logger.info("current fp rate: {}".format(fp_rate))
 
     result_base_path = Path("./result")
     result_path: Path = result_base_path / "result-{}".format(domain.get_domain_name())
