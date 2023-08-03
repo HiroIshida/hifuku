@@ -11,7 +11,17 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Generic, Iterator, List, Optional, Type, TypeVar, cast
+from typing import (
+    Callable,
+    Generic,
+    Iterator,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    cast,
+    no_type_check,
+)
 
 import numpy as np
 from rpbench.interface import SamplableBase, TaskBase
@@ -138,6 +148,7 @@ class CachedProblemPool(ProblemPool[SamplableT], Generic[OtherSamplableT, Sampla
         assert len(self.cache_path_list) > 0
         assert self.dataset_iter is None, "maybe reset is not called yet?"
 
+    @no_type_check  # NOTE: this class is unmaintained.  TODO
     def reset(self):
         dataset = LazyDecomplessDataset[OtherSamplableT](
             self.cache_path_list, self.cache_problem_type, 1
