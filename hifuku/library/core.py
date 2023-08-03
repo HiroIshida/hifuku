@@ -715,57 +715,37 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             ae_model if config.train_with_encoder else None,
         )
 
-    def _generate_problem_samples(self) -> List[ProblemT]:
-        assert self.library._n_problem_now is not None
-        n_problem = self.library._n_problem_now
-        logger.info(
-            "generate regression dataset with {} elements where config.n_problem_init is {}".format(
-                n_problem, self.config.n_problem_init
-            )
-        )
-        predicated_pool = self.pool_multiple.as_predicated()
-        problems = self.sampler.sample_batch(n_problem, predicated_pool, self.delete_cache)
-        # logger.info("use stratified sampling to generate problem set")
-        # # stratified sampling
-        # th = self.difficult_iter_threshold
-        # interval_list = [(0, th), (th, th * 1.2), (th * 1.2, None)]
-        # n_problem_list = split_number(self.config.n_problem, len(interval_list))
-
-        # problems = []
-        # for interval, n_problem in zip(interval_list, n_problem_list):
-        #     logger.info("interval: {}, n_problem: {}".format(interval, n_problem))
-        #     predicate = DifficultProblemPredicate(
-        #         self.problem_type, self.library, interval[0], interval[1]
-        #     )
-        #     predicated_pool = self.pool_multiple.make_predicated(predicate, 10)
-        #     problems_part = self.sampler.sample_batch(
-        #         n_problem, predicated_pool, self.delete_cache
-        #     )
-        #     problems.extend(problems_part)
-        # assert len(problems) == self.config.n_problem
-        return problems
-
     def step_active_sampling(self) -> None:
         logger.info("active sampling step")
-        self.reset_pool()
-
-        # TODO: code smell..
-        if self.library._n_problem_now is None:
-            self.library._n_problem_now = self.config.n_problem_init
-        else:
-            self.library._n_problem_now = min(
-                int(self.library._n_problem_now * self.config.n_problem_mult_factor),
-                self.config.n_problem_max,
-            )
-        logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
-
         init_solution = self._determine_init_solution()
-        problems = self._generate_problem_samples()
-        predictor = self._learn_predictor(init_solution, self.project_path, problems)
-        ret = self._determine_margins(predictor)
-        if ret is None:
-            logger.info("active sampling fail with known reasons")
-            return None
+
+        problem_list: List[ProblemT] = []
+        while True:
+            self.reset_pool()
+
+            if self.library._n_problem_now is None:
+                self.library._n_problem_now = self.config.n_problem_init
+            else:
+                self.library._n_problem_now = min(
+                    int(self.library._n_problem_now * self.config.n_problem_mult_factor),
+                    self.config.n_problem_max,
+                )
+            logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
+
+            predicated_pool = self.pool_multiple.as_predicated()
+            n_add_require = self.library._n_problem_now - len(problem_list)
+
+            logger.info("generate dataset with {}-elements".format(n_add_require))
+            problems_add = self.sampler.sample_batch(
+                n_add_require, predicated_pool, self.delete_cache
+            )
+            problem_list.extend(problems_add)
+            predictor = self._learn_predictor(init_solution, self.project_path, problem_list)
+            ret = self._determine_margins(predictor)
+            if ret is not None:
+                break
+            logger.info("determine margin failed. try again after increasing n_problem...")
+
         margins, coverage_result = ret
 
         # update library
@@ -847,7 +827,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
                 # main
                 acceptable_results: List[DetermineMarginsResult] = []
+                max_iter = 10
+                count = 0
                 while len(acceptable_results) < self.config.n_margins_candidate:
+                    count += 1
+                    if count > max_iter:
+                        return None
                     logger.info("current acceptable result N: {}".format(len(acceptable_results)))
                     results = self.determinant.determine_batch(
                         self.config.n_determine_batch,
@@ -869,11 +854,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                     if result.coverage > max_coverage:
                         max_coverage = result.coverage
                         best_margins = result.best_margins
-
-                if best_margins is None:
-                    # TODO: we should not ignore when self.config.ignore_useless_traj=False
-                    logger.info("no improvement by this element")
-                    return None
+                assert best_margins is not None
 
                 margins = best_margins
                 self.library._optimal_coverage_estimate = max_coverage
@@ -902,7 +883,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                         margin
                     )
                     logger.info(message)
-                    return None
+                    assert False
                 margins = [margin]
         return margins, coverage_result
 
