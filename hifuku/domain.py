@@ -9,6 +9,7 @@ from rpbench.articulated.jaxon.ground import (
     HumanoidGroundTableRarmReachingTask,
 )
 from rpbench.articulated.pr2.kivapod import KivapodEmptyReachingTask
+from rpbench.articulated.pr2.shelf import ShelfBoxSandwitchingTask
 from rpbench.articulated.pr2.tabletop import (
     TabletopBoxDualArmReachingTask,
     TabletopBoxRightArmReachingTask,
@@ -168,6 +169,16 @@ class Kivapod_Empty_RRT_Domain(DomainProtocol):
     auto_encoder_type = NullAutoEncoder
 
 
+class ShelfBoxClutteredSandwitchingTask_SQP_Domain(DomainProtocol):
+    task_type = ShelfBoxSandwitchingTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=40, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
+    )
+    auto_encoder_project_name = "ShelfBoxClutteredWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
 class EightRooms_SQP_Domain(DomainProtocol):
     task_type = EightRoomsPlanningTask
     solver_type = SQPBasedSolver
@@ -325,6 +336,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         tbrr_sqp = TBRR_SQP_Domain
         tbrr_rrt = TBRR_RRT_Domain
         kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
+        shelf_cluttered_sqp = ShelfBoxClutteredSandwitchingTask_SQP_Domain
         eight_rooms_sqp = EightRooms_SQP_Domain
         eight_rooms_ert = EightRooms_ERT_Domain
         eight_rooms_lt = EightRooms_LT_Domain
