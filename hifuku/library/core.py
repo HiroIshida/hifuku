@@ -1,5 +1,6 @@
 import copy
 import datetime
+import hashlib
 import json
 import logging
 import pickle
@@ -11,6 +12,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Dict, Generic, List, Optional, Tuple, Type, Union
 
 import numpy as np
@@ -629,6 +631,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             config.solvable_threshold_factor,
             meta_data,
         )
+        library._n_problem_now = config.n_problem_init
 
         # setup solver, sampler, determinant
         if solver is None:
@@ -719,32 +722,27 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("active sampling step")
         init_solution = self._determine_init_solution()
 
-        problem_list: List[ProblemT] = []
-        while True:
-            self.reset_pool()
+        with TemporaryDirectory() as td:
+            dataset_cache_path = Path(td) / hashlib.md5(pickle.dumps(init_solution)).hexdigest()
 
-            if self.library._n_problem_now is None:
-                self.library._n_problem_now = self.config.n_problem_init
-            else:
+            while True:
+                self.reset_pool()
+
+                logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
+
+                predictor = self._train_predictor(
+                    init_solution, self.project_path, dataset_cache_path
+                )
+                ret = self._determine_margins(predictor)
+                if ret is not None:
+                    break
+
+                logger.info("determine margin failed. try again after increasing n_problem...")
+                assert self.library._n_problem_now is not None
                 self.library._n_problem_now = min(
                     int(self.library._n_problem_now * self.config.n_problem_mult_factor),
                     self.config.n_problem_max,
                 )
-            logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
-
-            predicated_pool = self.pool_multiple.as_predicated()
-            n_add_require = self.library._n_problem_now - len(problem_list)
-
-            logger.info("generate dataset with {}-elements".format(n_add_require))
-            problems_add = self.sampler.sample_batch(
-                n_add_require, predicated_pool, self.delete_cache
-            )
-            problem_list.extend(problems_add)
-            predictor = self._learn_predictor(init_solution, self.project_path, problem_list)
-            ret = self._determine_margins(predictor)
-            if ret is not None:
-                break
-            logger.info("determine margin failed. try again after increasing n_problem...")
 
         margins, coverage_result = ret
 
@@ -887,13 +885,32 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 margins = [margin]
         return margins, coverage_result
 
-    def _learn_predictor(
+    def _train_predictor(
         self,
         init_solution: Trajectory,
         project_path: Path,
-        problems: List[ProblemT],
+        dataset_cache_path: Path,
     ) -> Union[IterationPredictorWithEncoder, IterationPredictor]:
         pp = project_path
+        assert self.library._n_problem_now is not None
+
+        dataset: Optional[IterationPredictorDataset]
+        if dataset_cache_path.exists():
+            logger.debug("loading from cached dataset from {}".format(dataset_cache_path))
+            with dataset_cache_path.open(mode="rb") as fr:
+                dataset = pickle.load(fr)
+            assert isinstance(dataset, IterationPredictorDataset)
+            logger.debug("loaded dataset is created from {} tasks".format(dataset.n_task))
+            n_require = self.library._n_problem_now - dataset.n_task
+        else:
+            logger.debug("create dataset from scratch")
+            dataset = None
+            n_require = self.library._n_problem_now
+
+        predicated_pool = self.pool_multiple.as_predicated()
+
+        logger.info("generate {} tasks".format(n_require))
+        problems = self.sampler.sample_batch(n_require, predicated_pool, self.delete_cache)
 
         logger.info("start generating dataset")
         # create dataset. Dataset creation by a large problem set often causes
@@ -904,7 +921,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         n_tau = 1000  # TODO: should be adaptive according to the data size
         partial_problems_list = [problems[i : i + n_tau] for i in range(0, len(problems), n_tau)]
 
-        dataset = None
         for partial_problems in partial_problems_list:
             resultss_partial = self.solver.solve_batch(partial_problems, init_solutions)
             dataset_partial = IterationPredictorDataset.construct_from_tasks_and_resultss(
@@ -922,6 +938,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             else:
                 dataset.add(dataset_partial)
         assert dataset is not None
+
+        with dataset_cache_path.open(mode="wb") as fw:
+            pickle.dump(dataset, fw)
 
         logger.info("start training model")
         # determine 1dim tensor dimension by temp creation of a problem

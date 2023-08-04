@@ -95,6 +95,10 @@ class IterationPredictorDataset(Dataset):
         self.descriptions = descriptions
         self.itervals = itervals
 
+    @property
+    def n_task(self) -> int:
+        return int(len(self) / self.n_inner)
+
     def __len__(self) -> int:
         return len(self.descriptions)
 
