@@ -1,6 +1,7 @@
 import copy
 import datetime
 import hashlib
+import inspect
 import json
 import logging
 import pickle
@@ -621,6 +622,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         """
         use will be used only if either of solver and sampler is not set
         """
+
+        frame = inspect.currentframe()
+        assert frame is not None
+        _, _, _, values = inspect.getargvalues(frame)
+        logger.info("arg of initialize: {}".format(values))
 
         meta_data = asdict(config)
         library = SolutionLibrary.initialize(

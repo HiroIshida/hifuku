@@ -163,6 +163,7 @@ def send_request(conn: HTTPConnection, request: MainRequest) -> MainResponse:
 
 
 def send_request(conn: HTTPConnection, request):
+    logger.debug("processing request type {}".format(type(request).__name__))
     headers = {"Content-type": "application/json"}
     logger.debug("request content: {}".format(request))
 

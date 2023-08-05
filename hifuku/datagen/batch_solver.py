@@ -99,13 +99,19 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         # Thus, in the following, we first measure the pickle size, and splits the problem set
         # and then send the multiple chunk of problems sequentially.
         if self.n_limit_batch is None:
+            logger.debug("n_limit_batch is not set. detremine now...")
             max_ram_usage = 16 * 10**9
             problem_for_measuring = problems[0]
             problem_for_measuring.cache  # access cache because it's created lazily
             serialize_ram_size_each = len(pickle.dumps(problem_for_measuring)) * 2
             max_size = int(max_ram_usage // serialize_ram_size_each)
+            logger.debug(
+                f"max_ram_usage: {max_ram_usage}, serialize_ram_size_each: {serialize_ram_size_each}, max_size: {max_size}"
+            )
         else:
+            logger.debug("use prescribed n_limit_batch {}".format(self.n_limit_batch))
             max_size = self.n_limit_batch
+        logger.debug("max_size is set to {}".format(max_size))
 
         indices = range(len(problems))
         indices_list = np.array_split(indices, np.ceil(len(problems) / max_size))
