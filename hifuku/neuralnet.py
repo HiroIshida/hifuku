@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
@@ -14,6 +15,7 @@ from torch.utils.data import Dataset, default_collate
 
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.types import RawData
+from hifuku.utils import determine_process_thread
 
 
 class AutoEncoderBase(ABC):
@@ -125,6 +127,19 @@ class IterationPredictorDataset(Dataset):
         loader = LazyDecomplessDataLoader(dataset, batch_size=1000, shuffle=False)
         return cls.construct(loader, ae_model)
 
+    @staticmethod
+    def _initialize(init_solution, solver_config):
+        global _init_solution_, _solver_config_
+        _init_solution_ = init_solution
+        _solver_config_ = solver_config
+
+    @staticmethod
+    def _create_result(pair):  # used in ProcessPool
+        task, results = pair
+        global _init_solution_, _solver_config_
+        raw_data = RawData(_init_solution_, task.export_table(), results, _solver_config_)
+        return raw_data
+
     @classmethod
     def construct_from_tasks_and_resultss(
         cls,
@@ -135,9 +150,16 @@ class IterationPredictorDataset(Dataset):
         ae_model: Optional[AutoEncoderBase] = None,
     ) -> "IterationPredictorDataset":
         raw_data_list = []
-        for task, results in zip(tasks, resultss):
-            raw_data = RawData(init_solution, task.export_table(), results, solver_config)
-            raw_data_list.append(raw_data)
+
+        n_process, _ = determine_process_thread()
+
+        with ProcessPoolExecutor(
+            n_process, initializer=cls._initialize, initargs=(init_solution, solver_config)
+        ) as executor:
+            args = list(zip(tasks, resultss))
+            for raw_data in tqdm.tqdm(executor.map(cls._create_result, args), total=len(tasks)):
+                raw_data_list.append(raw_data)
+
         zipped = [raw_data.to_tensors() for raw_data in raw_data_list]
         sample = default_collate(zipped)
         return cls.construct([sample], ae_model)
