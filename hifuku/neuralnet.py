@@ -2,13 +2,14 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Literal, Optional, Tuple, no_type_check
 
 import torch
 import torch.nn as nn
 import tqdm
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from mohou.utils import detect_device
+from rpbench.interface import DescriptionTable
 from skmp.trajectory import Trajectory
 from torch import Tensor
 from torch.utils.data import Dataset, default_collate
@@ -128,15 +129,18 @@ class IterationPredictorDataset(Dataset):
         return cls.construct(loader, ae_model)
 
     @staticmethod
+    @no_type_check
     def _initialize(init_solution, solver_config):
         global _init_solution_, _solver_config_
         _init_solution_ = init_solution
         _solver_config_ = solver_config
 
     @staticmethod
+    @no_type_check
     def _create_result(pair):  # used in ProcessPool
         task, results = pair
         global _init_solution_, _solver_config_
+        table: DescriptionTable = task.export_table()
         raw_data = RawData(_init_solution_, task.export_table(), results, _solver_config_)
         return raw_data
 
@@ -328,6 +332,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
 @dataclass
 class AutoEncoderConfig(ModelConfigBase):
     dim_bottleneck: int = 1024
+    n_grid: Literal[56, 112] = 112
 
 
 VoxelAutoEncoderConfig = AutoEncoderConfig  # for backword compatibility TODO: remove this
@@ -409,39 +414,66 @@ class VoxelAutoEncoder(NeuralAutoEncoderBase):
 
 class PixelAutoEncoder(NeuralAutoEncoderBase):
     def _setup_from_config(self, config: AutoEncoderConfig) -> None:
-        # suppose n_pixel = 112
-        n_channel = 1
-        encoder_layers = [
-            nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 56x56
-            nn.ReLU(inplace=True),
-            nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),  # 28x28
-            nn.ReLU(inplace=True),
-            nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),  # 14x14
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),  # 7x7
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 128, 3, padding=1, stride=(2, 2)),  # 4x4
-            nn.ReLU(inplace=True),
-            nn.Flatten(),
-            nn.Linear(128 * 16, config.dim_bottleneck),
-            nn.ReLU(inplace=True),
-        ]
-        self.encoder = nn.Sequential(*encoder_layers)
+        if config.n_grid == 112:
+            n_channel = 1
+            encoder_layers = [
+                nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 56x56
+                nn.ReLU(inplace=True),
+                nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),  # 28x28
+                nn.ReLU(inplace=True),
+                nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),  # 14x14
+                nn.ReLU(inplace=True),
+                nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),  # 7x7
+                nn.ReLU(inplace=True),
+                nn.Conv2d(64, 128, 3, padding=1, stride=(2, 2)),  # 4x4
+                nn.ReLU(inplace=True),
+                nn.Flatten(),
+                nn.Linear(128 * 16, config.dim_bottleneck),
+                nn.ReLU(inplace=True),
+            ]
 
-        decoder_layers = [
-            nn.Linear(config.dim_bottleneck, 128 * 16),
-            nn.ReLU(inplace=True),
-            self.Reshape(-1, 128, 4, 4),
-            nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(16, 8, 4, stride=2, padding=1),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(8, n_channel, 4, stride=2, padding=1),
-        ]
+            decoder_layers = [
+                nn.Linear(config.dim_bottleneck, 128 * 16),
+                nn.ReLU(inplace=True),
+                self.Reshape(-1, 128, 4, 4),
+                nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(16, 8, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(8, n_channel, 4, stride=2, padding=1),
+            ]
+        elif config.n_grid == 56:
+            n_channel = 1
+            encoder_layers = [
+                nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 14x14
+                nn.ReLU(inplace=True),
+                nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),
+                nn.Flatten(),
+                nn.Linear(1024, config.dim_bottleneck),
+                nn.ReLU(inplace=True),
+            ]
+
+            decoder_layers = [
+                nn.Linear(config.dim_bottleneck, 1024),
+                nn.ReLU(inplace=True),
+                self.Reshape(-1, 64, 4, 4),
+                nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(16, 4, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(4, 1, 4, stride=2, padding=1),
+            ]
+        self.encoder = nn.Sequential(*encoder_layers)
         self.decoder = nn.Sequential(*decoder_layers)
 
 
