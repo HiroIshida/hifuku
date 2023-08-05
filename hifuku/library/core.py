@@ -924,25 +924,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # if len(problems) > n_tau.
         init_solutions = [init_solution] * len(problems)
 
-        n_tau = 1000  # TODO: should be adaptive according to the data size
-        partial_problems_list = [problems[i : i + n_tau] for i in range(0, len(problems), n_tau)]
-
-        for partial_problems in partial_problems_list:
-            resultss_partial = self.solver.solve_batch(partial_problems, init_solutions)
-            dataset_partial = IterationPredictorDataset.construct_from_tasks_and_resultss(
-                init_solution,
-                partial_problems,
-                resultss_partial,
-                self.solver_config,
-                self.library.ae_model_shared,
-            )
-            # TODO: why don't you just use sum() method??
-            # somehow error occurs: TypeError: unsupported operand type(s) for +: 'int' and 'IterationPredictorDataset'
-            # I dont have time to fix this
-            if dataset is None:
-                dataset = dataset_partial
-            else:
-                dataset.add(dataset_partial)
+        results = self.solver.solve_batch(problems, init_solutions)
+        dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
+            init_solution,
+            problems,
+            results,
+            self.solver_config,
+            self.library.ae_model_shared,
+        )
         assert dataset is not None
 
         with dataset_cache_path.open(mode="wb") as fw:
