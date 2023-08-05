@@ -78,34 +78,38 @@ def get_module_source_hash(module_name: str) -> Optional[str]:
     return hash_value
 
 
-def create_default_logger(project_path: Path, prefix: str) -> Logger:
-    timestr = "_" + time.strftime("%Y%m%d%H%M%S")
-    log_dir_path = project_path / "log"
-    log_dir_path.mkdir(parents=True, exist_ok=True)
-    log_file_path = log_dir_path / (prefix + timestr + ".log")
-
+def create_default_logger(
+    project_path: Optional[Path], prefix: str, stream_level: int = logging.INFO
+) -> Logger:
     logger = logging.getLogger()  # root logger
     logger.setLevel(logging.DEBUG)
 
     fmt = logging.Formatter("[%(levelname)s] %(asctime)s %(name)s: %(message)s")
 
     sh = logging.StreamHandler()
-    sh.setLevel(logging.INFO)
+    sh.setLevel(stream_level)
     sh.setFormatter(fmt)
-
-    fh = logging.FileHandler(str(log_file_path))
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(fmt)
-
     logger.addHandler(sh)
-    logger.addHandler(fh)
 
-    log_sym_path = log_dir_path / ("latest_" + prefix + ".log")
+    if project_path is not None:
+        # create file handler
+        timestr = "_" + time.strftime("%Y%m%d%H%M%S")
+        log_dir_path = project_path / "log"
+        log_dir_path.mkdir(parents=True, exist_ok=True)
+        log_file_path = log_dir_path / (prefix + timestr + ".log")
 
-    logger.info("create log symlink :{0} => {1}".format(log_file_path, log_sym_path))
-    if log_sym_path.is_symlink():
-        log_sym_path.unlink()
-    log_sym_path.symlink_to(log_file_path)
+        fh = logging.FileHandler(str(log_file_path))
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(fmt)
+
+        logger.addHandler(fh)
+
+        log_sym_path = log_dir_path / ("latest_" + prefix + ".log")
+
+        logger.info("create log symlink :{0} => {1}".format(log_file_path, log_sym_path))
+        if log_sym_path.is_symlink():
+            log_sym_path.unlink()
+        log_sym_path.symlink_to(log_file_path)
 
     return logger
 
