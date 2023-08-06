@@ -34,20 +34,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
     parser.add_argument("-n", type=int, default=100, help="")
+    parser.add_argument("-n_limit_batch", type=int, help="")
     parser.add_argument("-conf", type=str)
     parser.add_argument("--warm", action="store_true", help="warm start")
     parser.add_argument("--untrained", action="store_true", help="use untrained autoencoder")
-    parser.add_argument("--fptest", action="store_true", help="test false positive rate")
     parser.add_argument("--local", action="store_true", help="don't use distributed computers")
 
     args = parser.parse_args()
     domain_name: str = args.type
     warm_start: bool = args.warm
-    test_fp_rate: bool = args.fptest
     n_step: int = args.n
     use_distributed: bool = not args.local
     use_pretrained_ae: bool = not args.untrained
     library_sampling_conf_path_str: Optional[str] = args.conf
+
+    # in almost all case, specifying n_limit_batch is requried.
+    # so we just check here. If you'd like to set it to None,
+    # please set n_limit_batch = -1
+    n_limit_batch: Optional[int] = args.n_limit_batch
+    assert n_limit_batch is not None
+    if n_limit_batch == -1:
+        n_limit_batch = None
 
     assert torch.cuda.is_available()
 
@@ -94,7 +101,7 @@ if __name__ == "__main__":
         use_distributed=use_distributed,
         reuse_cached_validation_set=warm_start,
         delete_cache=True,
-        test_false_positive_rate=test_fp_rate,
+        n_limit_batch_solver=n_limit_batch,
     )
 
     if warm_start:
