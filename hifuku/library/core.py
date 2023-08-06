@@ -924,7 +924,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # if len(problems) > n_tau.
         init_solutions = [init_solution] * len(problems)
 
-        results = self.solver.solve_batch(problems, init_solutions)
+        results = self.solver.solve_batch(problems, init_solutions, tmp_n_max_call_mult_factor=1.5)
         dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
             init_solution,
             problems,
