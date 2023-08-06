@@ -101,9 +101,10 @@ def test_consistency_of_all_batch_sovler(server, TORR_result_traj: Trajectory):
             ]
             batch_solver_list: List[BatchProblemSolver] = []
 
+            n_max_call = 10
             solcon = SQPBasedSolverConfig(
                 n_wp=20,
-                n_max_call=10,
+                n_max_call=n_max_call,
                 motion_step_satisfaction="debug_ignore",
                 force_deterministic=True,
             )
@@ -124,7 +125,9 @@ def test_consistency_of_all_batch_sovler(server, TORR_result_traj: Trajectory):
             successes_list = []
             for batch_solver in batch_solver_list:  # type: ignore
                 print(batch_solver)
-                results_list = batch_solver.solve_batch(tasks, init_solutions)
+                results_list = batch_solver.solve_batch(
+                    tasks, init_solutions, tmp_n_max_call_mult_factor=1.5
+                )
                 assert isinstance(results_list, list)
                 assert len(results_list) == n_problem
                 assert isinstance(results_list[0], tuple)
@@ -137,6 +140,9 @@ def test_consistency_of_all_batch_sovler(server, TORR_result_traj: Trajectory):
                     successes.extend([r.traj is not None for r in results])
                 nits_list.append(tuple(nits))
                 successes_list.append(tuple(successes))
+
+                # check if multiplicatio by tmp_n_max_call_mult_factor is reset
+                assert batch_solver.config.n_max_call == n_max_call
 
             # NOTE: it seems that osqp solve results sometimes slightly different though
             # the same problem is provided.. maybe random variable is used inside???

@@ -26,7 +26,7 @@ from hifuku.datagen.http_datagen.request import (
 )
 from hifuku.datagen.utils import split_indices
 from hifuku.pool import ProblemT
-from hifuku.types import RawData
+from hifuku.types import CLAMP_FACTOR, RawData
 from hifuku.utils import filter_warnings
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,31 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         problems: List[ProblemT],
         init_solutions: Sequence[Optional[TrajectoryMaybeList]],
         use_default_solver: bool = False,
+        tmp_n_max_call_mult_factor: float = 1.0,
     ) -> List[Tuple[ResultT, ...]]:
+        """
+        tmp_n_max_call_mult_factor is used to increase the n_max_call temporarily.
+        This is beneficiall when we want to train a iteration predictor such taht
+        inference of n_call around n_max_call is accurate. Wihtout this, we will not
+        have any data of n_call > n_max_call and the inference around there will be
+        quite inaccurate. This technique is especially important for dataset genration
+        for iteration predictor of a randomized algorithm.
+        """
+        # FIXME: dirty hack (A)
+        # probably, making config be a function argument is cleaner
+
+        # if mult_factor is greater than CLAMP_FACTOR, then the infeasible problem will be
+        # treated as "easier" problem than feasible problem. so...
+        assert tmp_n_max_call_mult_factor < CLAMP_FACTOR
+
+        n_max_call_original = self.config.n_max_call
+        self.config.n_max_call = int(n_max_call_original * tmp_n_max_call_mult_factor)
+        logger.debug(
+            "temporarily increase n_max_call from {} to {}".format(
+                n_max_call_original, self.config.n_max_call
+            )
+        )
+
         # When pickling-and-depickling, the procedure takes up much more memory than
         # pickled object size. I'm not sure but according to https://stackoverflow.com/a/38971446/7624196
         # the RAM usage could be two times bigger than the serialized-object size.
@@ -122,6 +146,9 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
             init_solutions_est_list_part = [init_solutions[i] for i in indices_part]
             results_part = self._solve_batch_impl(problems_part, init_solutions_est_list_part, use_default_solver=use_default_solver)  # type: ignore
             resultss.extend(results_part)
+
+        # FIXME: dirty hack (B)
+        self.config.n_max_call = n_max_call_original
         return resultss
 
     @abstractmethod
