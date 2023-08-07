@@ -2,14 +2,13 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Literal, Optional, Tuple, no_type_check
+from typing import Any, List, Literal, Optional, Tuple
 
 import torch
 import torch.nn as nn
 import tqdm
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from mohou.utils import detect_device
-from rpbench.interface import DescriptionTable
 from skmp.trajectory import Trajectory
 from torch import Tensor
 from torch.utils.data import Dataset, default_collate
@@ -129,19 +128,16 @@ class IterationPredictorDataset(Dataset):
         return cls.construct(loader, ae_model)
 
     @staticmethod
-    @no_type_check
     def _initialize(init_solution, solver_config):
         global _init_solution_, _solver_config_
-        _init_solution_ = init_solution
-        _solver_config_ = solver_config
+        _init_solution_ = init_solution  # type: ignore
+        _solver_config_ = solver_config  # type: ignore
 
     @staticmethod
-    @no_type_check
     def _create_result(pair):  # used in ProcessPool
         task, results = pair
         global _init_solution_, _solver_config_
-        table: DescriptionTable = task.export_table()
-        raw_data = RawData(_init_solution_, task.export_table(), results, _solver_config_)
+        raw_data = RawData(_init_solution_, task.export_table(), results, _solver_config_)  # type: ignore
         return raw_data
 
     @classmethod
