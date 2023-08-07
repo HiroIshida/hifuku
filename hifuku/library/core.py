@@ -728,6 +728,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("active sampling step")
         init_solution = self._determine_init_solution()
 
+        if not self.at_first_iteration():
+            logger.info("new active sampling step. increase n_problem_now.")
+            assert self.library._n_problem_now is not None
+            self.library._n_problem_now = min(
+                int(self.library._n_problem_now * self.config.n_problem_mult_factor),
+                self.config.n_problem_max,
+            )
+
         with TemporaryDirectory() as td:
             dataset_cache_path = Path(td) / hashlib.md5(pickle.dumps(init_solution)).hexdigest()
 
@@ -744,11 +752,18 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                     break
 
                 logger.info("determine margin failed. try again after increasing n_problem...")
-                assert self.library._n_problem_now is not None
-                self.library._n_problem_now = min(
-                    int(self.library._n_problem_now * self.config.n_problem_mult_factor),
-                    self.config.n_problem_max,
-                )
+                # TODO: in my experience, if once margin determination failed, it is less likely
+                # to succeed with small addition of data (dont know the case of large addition)
+                # thus, currently we dont use the code below:
+                if False:
+                    logger.info("determine margin failed. try again after increasing n_problem...")
+                    assert self.library._n_problem_now is not None
+                    self.library._n_problem_now = min(
+                        int(self.library._n_problem_now * self.config.n_problem_mult_factor),
+                        self.config.n_problem_max,
+                    )
+                logger.info("determine margin failed. returning None")
+                return None
 
         margins, coverage_result = ret
 
