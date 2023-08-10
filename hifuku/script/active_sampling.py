@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", type=int, default=100, help="")
     parser.add_argument("-n_limit_batch", type=int, help="")
     parser.add_argument("-conf", type=str)
+    parser.add_argument("-post", type=str)
     parser.add_argument("--warm", action="store_true", help="warm start")
     parser.add_argument("--untrained", action="store_true", help="use untrained autoencoder")
     parser.add_argument("--local", action="store_true", help="don't use distributed computers")
@@ -47,6 +48,12 @@ if __name__ == "__main__":
     use_distributed: bool = not args.local
     use_pretrained_ae: bool = not args.untrained
     library_sampling_conf_path_str: Optional[str] = args.conf
+    project_name_postfix: Optional[str] = args.post
+
+    # require explicitly setting to None
+    assert project_name_postfix is not None
+    if project_name_postfix == "none":
+        project_name_postfix = None
 
     # in almost all case, specifying n_limit_batch is requried.
     # so we just check here. If you'd like to set it to None,
@@ -60,7 +67,7 @@ if __name__ == "__main__":
 
     filter_warnings()
     domain = select_domain(domain_name)
-    project_path = get_project_path(domain_name)
+    project_path = get_project_path(domain_name, project_name_postfix)
 
     logger = create_default_logger(project_path, "library_gen")
     log_package_version_info(logger, hifuku)

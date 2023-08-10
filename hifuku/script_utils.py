@@ -45,13 +45,19 @@ def load_compatible_autoencoder(
             return T(conf)  # type: ignore
 
 
-def get_project_path(domain: Union[str, Type[DomainProtocol]]) -> Path:
+def get_project_path(
+    domain: Union[str, Type[DomainProtocol]], postfix: Optional[str] = None
+) -> Path:
 
     if isinstance(domain, str):
         domain = select_domain(domain)
 
     domain_identifier = domain.get_domain_name()
-    pp = mohou.file.get_project_path("hifuku-{}".format(domain_identifier))
+    if postfix is None:
+        project_name = "hifuku-{}".format(domain_identifier)
+    else:
+        project_name = "hifuku-{}-{}".format(domain_identifier, postfix)
+    pp = mohou.file.get_project_path(project_name)
     pp.mkdir(exist_ok=True)
     return pp
 
