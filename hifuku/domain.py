@@ -223,7 +223,7 @@ class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
         n_wp=40,
-        n_max_call=8,
+        n_max_call=5,
         motion_step_satisfaction="explicit",
         verbose=False,
         ctol_eq=1e-3,
