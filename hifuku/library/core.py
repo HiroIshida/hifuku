@@ -724,7 +724,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             ae_model if config.train_with_encoder else None,
         )
 
-    def step_active_sampling(self) -> None:
+    def step_active_sampling(self) -> bool:
+        """
+        return False if failed
+        """
+
         logger.info("active sampling step")
         init_solution = self._determine_init_solution()
 
@@ -763,7 +767,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                         self.config.n_problem_max,
                     )
                 logger.info("determine margin failed. returning None")
-                return None
+                return False
 
         margins, coverage_result = ret
 
@@ -783,6 +787,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         coverage = self.library.measure_coverage(self.problems_validation)
         logger.info("current library's coverage estimate: {}".format(coverage))
+        return True
 
     @property
     def difficult_iter_threshold(self) -> float:

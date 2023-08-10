@@ -108,8 +108,9 @@ if __name__ == "__main__":
         lib_sampler.library = load_library(domain_name, "cuda", True)
 
     for i in range(n_step):
-        print(i)
-        lib_sampler.step_active_sampling()
+        sampling_successful = lib_sampler.step_active_sampling()
+        if not sampling_successful:
+            break
 
     p_watchdog.terminate()
     p_watchdog.join()
