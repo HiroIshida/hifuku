@@ -76,12 +76,17 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     uuidval: str
     meta_data: Dict
     limit_thread: bool = False
+
+    # TODO: attribute below are actually supposed not to be None.
+    # But, just because dataclass requires attributes after optional attruibte
+    # must be optional. Thus, I set it to None. we shold change the order.
     _margins_history: Optional[List[List[float]]] = None
     _candidates_history: Optional[List[List[Trajectory]]] = None
     _optimal_coverage_estimate: Optional[
         float
     ] = None  # the cached optimal coverage after margins optimization
     _n_problem_now: Optional[int] = None
+    _elapsed_time_history: Optional[List[float]] = None
 
     def __setstate__(self, state):
         # NOTE: for backward compatibility
@@ -91,6 +96,13 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             state["ae_model_shared"] = state["ae_model"]
             del state["ae_model"]
             assert "ae_model" not in state
+            logger.debug("[backward compat] ae_model => ae_model_shared")
+
+        is_old_version = "_elapsed_time_history" not in state
+        if is_old_version:
+            logger.debug("[backward compat] set _elapsed_time_history = []")
+            state["_elapsed_time_history"] = []
+
         self.__dict__.update(state)
 
     def __post_init__(self):
@@ -136,6 +148,8 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             [],
             [],
             None,
+            None,
+            [],
         )
 
     def put_on_device(self, device: torch.device):
@@ -730,6 +744,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         """
 
         logger.info("active sampling step")
+        ts = time.time()
+        assert self.library._elapsed_time_history is not None
+
         init_solution = self._determine_init_solution()
 
         if not self.at_first_iteration():
@@ -767,6 +784,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                         self.config.n_problem_max,
                     )
                 logger.info("determine margin failed. returning None")
+                elapsed_time = time.time() - ts
+                logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
+                self.library._elapsed_time_history.append(elapsed_time)
                 return False
 
         margins, coverage_result = ret
@@ -787,6 +807,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         coverage = self.library.measure_coverage(self.problems_validation)
         logger.info("current library's coverage estimate: {}".format(coverage))
+
+        elapsed_time = time.time() - ts
+        logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
+        self.library._elapsed_time_history.append(elapsed_time)
         return True
 
     @property
