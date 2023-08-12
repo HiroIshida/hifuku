@@ -580,6 +580,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     ae_model_pretrained: Optional[
         AutoEncoderBase
     ] = None  # train iteration predctor combined with encoder. Thus ae will no be shared.
+    presampled_train_problems: Optional[List[ProblemT]] = None
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -632,6 +633,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         adjust_margins: bool = True,
         delete_cache: bool = False,
         n_limit_batch_solver: Optional[int] = None,
+        presample_train_problems: bool = False,
     ) -> "SimpleSolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -720,6 +722,16 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 )
         assert len(problems_validation) > 0
 
+        if presample_train_problems:
+            predicated_pool = pool_multiple.as_predicated()
+            n_require = config.n_problem_max
+            logger.info("presample {} tasks".format(n_require))
+            presampled_train_problems = sampler.sample_batch(
+                n_require, predicated_pool, delete_cache
+            )
+        else:
+            presampled_train_problems = None
+
         logger.info("library sampler config: {}".format(config))
         return cls(
             problem_type,
@@ -736,6 +748,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             delete_cache,
             project_path,
             ae_model if config.train_with_encoder else None,
+            presampled_train_problems,
         )
 
     def step_active_sampling(self) -> bool:
@@ -959,8 +972,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         predicated_pool = self.pool_multiple.as_predicated()
 
+        # NOTE: to my future self: you can't use presampled problems if you'd like to
+        # sample tasks using some predicate!!
         logger.info("generate {} tasks".format(n_require))
-        problems = self.sampler.sample_batch(n_require, predicated_pool, self.delete_cache)
+        if self.presampled_train_problems is None:
+            problems = self.sampler.sample_batch(n_require, predicated_pool, self.delete_cache)
+        else:
+            logger.debug("use presampled tasks")
+            problems = self.presampled_train_problems[:n_require]
 
         logger.info("start generating dataset")
         # create dataset. Dataset creation by a large problem set often causes
