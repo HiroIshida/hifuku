@@ -31,7 +31,7 @@ def determine_process_thread() -> Tuple[int, int]:
         # so we must count only the physical cores
         # NOTE: hyperthreading can actully be off in bios though...
         n_process = int(n_cpu * 0.5)
-        n_thread = 2
+        n_thread = 1
         return n_process, n_thread
     else:
         assert "please implement for platform {}".format(platform.machine())
