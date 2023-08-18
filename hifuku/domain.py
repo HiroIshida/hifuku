@@ -316,8 +316,8 @@ def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> f
     elapsed_time_sum = 0.0
     for _ in tqdm.tqdm(range(n_sample)):
         task = domain.task_type.sample(1)
-        problem = task.export_problems()[0]
-        solver.setup(problem)
+        problems = [p for p in task.export_problems()]
+        solver.setup(problems[0])
         ts = time.time()
         res = solver.solve()
         elapsed_time_sum += time.time() - ts

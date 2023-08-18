@@ -470,8 +470,8 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
 
     def setup(self, task: ProblemT) -> None:
         assert task.n_inner_task == 1
-        p = task.export_problems()[0]
-        self.solver.setup(p)
+        problems = [p for p in task.export_problems()]
+        self.solver.setup(problems[0])
         self.task = task
 
 
