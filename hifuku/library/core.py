@@ -87,6 +87,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     ] = None  # the cached optimal coverage after margins optimization
     _n_problem_now: Optional[int] = None
     _elapsed_time_history: Optional[List[float]] = None
+    _coverage_est_history: Optional[List[float]] = None
 
     def __setstate__(self, state):
         # NOTE: for backward compatibility
@@ -149,6 +150,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             [],
             None,
             None,
+            [],
             [],
         )
 
@@ -773,7 +775,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         with TemporaryDirectory() as td:
             dataset_cache_path = Path(td) / hashlib.md5(pickle.dumps(init_solution)).hexdigest()
 
-            while True:
+            while True:  # TODO: this while is actually useless
                 self.reset_pool()
 
                 logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
@@ -800,6 +802,15 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 elapsed_time = time.time() - ts
                 logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
                 self.library._elapsed_time_history.append(elapsed_time)
+
+                if (
+                    self.library._coverage_est_history is not None
+                ):  # backward compat. In loaded older version, this value is None
+                    self.library._coverage_est_history.append(
+                        self.library._coverage_est_history[-1]
+                    )
+
+                self.library.dump(self.project_path)
                 return False
 
         margins, coverage_result = ret
@@ -816,14 +827,24 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         assert self.library._margins_history is not None
         self.library._margins_history.append(copy.deepcopy(margins))
 
-        self.library.dump(self.project_path)
-
         coverage = self.library.measure_coverage(self.problems_validation)
         logger.info("current library's coverage estimate: {}".format(coverage))
 
         elapsed_time = time.time() - ts
         logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
+
         self.library._elapsed_time_history.append(elapsed_time)
+        logger.info("current elapsed time history: {}".format(self.library._elapsed_time_history))
+
+        if (
+            self.library._coverage_est_history is not None
+        ):  # backward compat. In loaded older version, this value is None
+            self.library._coverage_est_history.append(coverage)
+            logger.info(
+                "current coverage est history: {}".format(self.library._coverage_est_history)
+            )
+
+        self.library.dump(self.project_path)
         return True
 
     @property
