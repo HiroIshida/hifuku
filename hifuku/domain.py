@@ -187,6 +187,19 @@ class ClutteredFridge_RRT(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
+class ClutteredFridge_RRT2(DomainProtocol):
+    task_type = TabletopClutteredFridgeReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=1000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
 class Kivapod_Empty_RRT_Domain(DomainProtocol):
     task_type = KivapodEmptyReachingTask
     solver_type = OMPLSolver
@@ -413,6 +426,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         tbrr_rrt = TBRR_RRT_Domain
         cluttered_fridge_sqp = ClutteredFridge_SQP
         cluttered_fridge_rrt = ClutteredFridge_RRT
+        cluttered_fridge_rrt2 = ClutteredFridge_RRT2
         kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
         shelf_cluttered_sqp = ShelfBoxClutteredSandwitchingTask_SQP_Domain
         shelf_cluttered_rrt = ShelfBoxClutteredSandwitchingTask_RRT_Domain
