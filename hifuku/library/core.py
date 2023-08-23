@@ -555,11 +555,10 @@ class LibrarySamplerConfig:
     bootstrap_percentile: float = 95.0
     n_validation: int = 1000
     n_validation_inner: int = 10
-    n_determine_batch: int = 80
-    n_margins_candidate: int = 10
+    n_determine_batch: int = 2000
     candidate_sample_scale: int = 10
     train_with_encoder: bool = False
-    n_problem_mult_factor: float = 1.0
+    n_problem_mult_factor: float = 1.1
     n_problem_max: int = 30000
 
 
