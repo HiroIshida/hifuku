@@ -137,7 +137,10 @@ def compute_coverage_and_fp_jit(
             if not is_real_ok:
                 n_fp += 1
     coverage_rate = n_coverage / N_mc
-    fp_rate = n_fp / n_coverage
+    if n_coverage > 0:
+        fp_rate = n_fp / n_coverage
+    else:
+        fp_rate = np.inf
     return coverage_rate, fp_rate
 
 
