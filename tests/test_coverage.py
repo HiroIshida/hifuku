@@ -28,7 +28,7 @@ def test_coverage_result():
                 result.true_positive_bools
             ) + sum(result.true_negative_bools) == len(result)
             # rate_threshold = 0.05
-            margin = result.determine_margin(rate_threshold)
+            margin, _ = result.determine_margin(rate_threshold)
 
             result = CoverageResult(values_gt, values_est + margin, 0.0)
 

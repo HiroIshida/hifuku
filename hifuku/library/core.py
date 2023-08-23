@@ -551,8 +551,6 @@ class LibrarySamplerConfig:
     )
     ignore_useless_traj: bool = True
     iterpred_model_config: Optional[Dict] = None
-    bootstrap_trial: int = 0
-    bootstrap_percentile: float = 95.0
     n_validation: int = 1000
     n_validation_inner: int = 10
     n_determine_batch: int = 2000
@@ -865,6 +863,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         if not self.adjust_margins:
             margins = self.library.margins + [0.0]
+            max_coverage = None  # TODO: actually max_coverage can be computable
         else:
             if len(self.library.predictors) > 0:
                 # determine margin using cmaes
@@ -912,26 +911,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 if best_margins is None:
                     return None
                 margins = best_margins
-                self.library._optimal_coverage_estimate = max_coverage
-                logger.info("optimal coverage estimate is set to {}".format(max_coverage))
             else:
-                if self.config.bootstrap_trial > 0:
-                    logger.info("determine margin using bootstrap method")
-                    margin_list = []
-                    for _ in tqdm.tqdm(range(self.config.bootstrap_trial)):
-                        coverage_dummy = coverage_result.bootstrap_sampling()
-                        margin = coverage_dummy.determine_margin(
-                            self.config.acceptable_false_positive_rate
-                        )
-                        margin_list.append(margin)
-                    margin = float(np.percentile(margin_list, self.config.bootstrap_percentile))
-                    logger.info(margin_list)
-                    logger.info("margin is set to {}".format(margin))
-                else:
-                    logger.info("determine margin without bootstrap method")
-                    margin = coverage_result.determine_margin(
-                        self.config.acceptable_false_positive_rate
-                    )
+                logger.info("determine margin using exact method")
+                margin, max_coverage = coverage_result.determine_margin(
+                    self.config.acceptable_false_positive_rate
+                )
 
                 if not np.isfinite(margin) and self.config.ignore_useless_traj:
                     message = "margin value {} is invalid. retrun from active_sampling".format(
@@ -940,6 +924,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                     logger.info(message)
                     assert False
                 margins = [margin]
+
+        assert max_coverage is not None
+        self.library._optimal_coverage_estimate = max_coverage
+        logger.info("optimal coverage estimate is set to {}".format(max_coverage))
         return margins, coverage_result
 
     def _train_predictor(

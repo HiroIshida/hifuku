@@ -58,6 +58,11 @@ class CoverageResult:
     def false_negative_bools(self) -> np.ndarray:
         return np.logical_and(self.reals <= self.threshold, self.ests > self.threshold)
 
+    def compute_coverage_rate(self, margin: float, eps: float = 1e-6) -> float:
+        positive_est = self.ests + margin + eps < self.threshold
+        n_positive = np.sum(positive_est)
+        return float(n_positive / len(self.ests))
+
     def compute_false_positive_rate(self, margin: float, eps: float = 1e-6) -> Optional[float]:
         positive_est = self.ests + margin + eps < self.threshold
         n_positive = np.sum(positive_est)
@@ -70,7 +75,7 @@ class CoverageResult:
         fp_rate = 1.0 - tp_rate
         return fp_rate
 
-    def determine_margin(self, acceptable_false_positive_rate: float) -> float:
+    def determine_margin(self, acceptable_false_positive_rate: float) -> Tuple[float, float]:
         """
         note that fp rate is defined as fp/(fp + tp)
         """
@@ -82,11 +87,11 @@ class CoverageResult:
         rate = self.compute_false_positive_rate(0.0)
         if rate is None:
             # make no sense to set margin because no positive est
-            return np.inf
+            return np.inf, 0.0
 
         if rate < acceptable_false_positive_rate:
             # no need to set margin
-            return 0.0
+            return 0.0, self.compute_coverage_rate(0.0)
 
         sorted_diffs = np.sort(diffs)
         for i in range(len(diffs)):
@@ -94,10 +99,10 @@ class CoverageResult:
             rate = self.compute_false_positive_rate(margin_cand)
             logger.debug("margin_cand: {}, fp_rate: {}".format(margin_cand, rate))
             if rate is None:
-                return np.inf
+                return np.inf, 0.0
             if rate < acceptable_false_positive_rate:
                 margin_final = margin_cand + 1e-6
-                return margin_final
+                return margin_final, self.compute_coverage_rate(margin_final)
         assert False, "final rate {}".format(rate)
 
     def __str__(self) -> str:
