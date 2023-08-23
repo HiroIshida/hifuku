@@ -1,4 +1,4 @@
-n_problem: 80
+n_problem_init: 80
 n_problem_inner: 100
 n_solution_candidate: 200
 n_difficult_problem: 100

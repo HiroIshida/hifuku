@@ -1,12 +1,12 @@
-n_problem_init: 3000
+n_problem_init: 2000
 n_problem_mult_factor: 1.1
-n_problem_max: 20000
+n_problem_max: 30000
 n_problem_inner: 40
 n_solution_candidate: 100
 n_difficult_problem: 100
 solvable_threshold_factor: 1.0
 difficult_threshold_factor: 1.0
-acceptable_false_positive_rate: 0.1
+acceptable_false_positive_rate: 0.2
 train_config:
     n_epoch: 60
 n_determine_batch: 2000
