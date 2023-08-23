@@ -30,6 +30,8 @@ RUN sudo apt update && sudo apt install cmake -y
 RUN sudo apt install liblapack-dev libopenblas-dev libsuitesparse-dev -y
 RUN export CPPFLAGS="-I/usr/include/suitesparse" && pip3 install cvxopt -v
 RUN sudo apt-get install libfcl-dev liboctomap-dev python3-numpy -y
+# unfortunately, python-fcl cannot be compiled with recent cython
+RUN pip3 install "cython<3.0"
 RUN pip3 install python-fcl -v
 RUN sudo apt remove python3-numpy -y  # this cause skbuild error somehow
 
