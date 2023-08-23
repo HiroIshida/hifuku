@@ -77,13 +77,13 @@ def compute_coverage_and_fp_naive(
         best_idx = None
 
         for idx, cr in enumerate(coverage_results):
-            est = cr.values_estimation[i] + margins[idx]
+            est = cr.ests[i] + margins[idx]
             if est < best_est:
                 best_est = est
                 best_idx = idx
         assert best_idx is not None
         detected_solvable = best_est < threshold
-        actually_solvable = coverage_results[best_idx].values_ground_truth[i] < threshold
+        actually_solvable = coverage_results[best_idx].reals[i] < threshold
 
         if detected_solvable:
             coverage_count += 1
@@ -122,8 +122,8 @@ def test_compute_coverage_and_fp():
     margins = np.array([10, 100, 20, 40, 200])
     coverage_jit, fp_rate_jit = compute_coverage_and_fp_jit(
         margins,
-        np.array([cr.values_ground_truth for cr in cr_list]),
-        np.array([cr.values_estimation for cr in cr_list]),
+        np.array([cr.reals for cr in cr_list]),
+        np.array([cr.ests for cr in cr_list]),
         threshold,
     )
 

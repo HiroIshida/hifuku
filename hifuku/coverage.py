@@ -14,57 +14,58 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class CoverageResult:
-    values_ground_truth: np.ndarray
-    values_estimation: np.ndarray
+    reals: np.ndarray
+    ests: np.ndarray
     threshold: float
 
+    def __setstate__(self, state):
+        # NOTE: for backward compatibility
+        is_old_version = "values_estimation" in state
+        if is_old_version:
+            state["ests"] = state["values_estimation"]
+            state["reals"] = state["values_ground_truth"]
+
+        self.__dict__.update(state)
+
     def __post_init__(self):
-        assert len(self.values_ground_truth) == len(self.values_estimation)
-        self.values_ground_truth.flags.writeable = False
-        self.values_estimation.flags.writeable = False
+        assert len(self.reals) == len(self.ests)
+        self.reals.flags.writeable = False
+        self.ests.flags.writeable = False
 
     def __len__(self) -> int:
-        return len(self.values_ground_truth)
+        return len(self.reals)
 
     def bootstrap_sampling(self) -> "CoverageResult":
         n = self.__len__()
         indices = np.random.randint(n, size=n)
-        vgt = self.values_ground_truth[indices]
-        vest = self.values_estimation[indices]
+        vgt = self.reals[indices]
+        vest = self.ests[indices]
         return CoverageResult(vgt, vest, self.threshold)
 
     @cached_property
     def true_positive_bools(self) -> np.ndarray:
-        return np.logical_and(
-            self.values_ground_truth <= self.threshold, self.values_estimation <= self.threshold
-        )
+        return np.logical_and(self.reals <= self.threshold, self.ests <= self.threshold)
 
     @cached_property
     def true_negative_bools(self) -> np.ndarray:
-        return np.logical_and(
-            self.values_ground_truth > self.threshold, self.values_estimation > self.threshold
-        )
+        return np.logical_and(self.reals > self.threshold, self.ests > self.threshold)
 
     @cached_property
     def false_postive_bools(self) -> np.ndarray:
-        return np.logical_and(
-            self.values_ground_truth > self.threshold, self.values_estimation <= self.threshold
-        )
+        return np.logical_and(self.reals > self.threshold, self.ests <= self.threshold)
 
     @cached_property
     def false_negative_bools(self) -> np.ndarray:
-        return np.logical_and(
-            self.values_ground_truth <= self.threshold, self.values_estimation > self.threshold
-        )
+        return np.logical_and(self.reals <= self.threshold, self.ests > self.threshold)
 
     def compute_false_positive_rate(self, margin: float, eps: float = 1e-6) -> Optional[float]:
-        positive_est = self.values_estimation + margin + eps < self.threshold
+        positive_est = self.ests + margin + eps < self.threshold
         n_positive = np.sum(positive_est)
         no_positive = n_positive == 0
         if no_positive:
             return None
 
-        positive_gt = self.values_ground_truth <= self.threshold
+        positive_gt = self.reals <= self.threshold
         tp_rate = np.sum(np.logical_and(positive_gt, positive_est)) / n_positive
         fp_rate = 1.0 - tp_rate
         return fp_rate
@@ -74,7 +75,7 @@ class CoverageResult:
         note that fp rate is defined as fp/(fp + tp)
         """
         fp_bools = self.false_postive_bools
-        values_est_fp = self.values_estimation[fp_bools]
+        values_est_fp = self.ests[fp_bools]
         diffs = self.threshold - values_est_fp
         assert np.all(diffs >= 0.0)
 
@@ -165,8 +166,8 @@ def determine_margins(
     coverage_est = -np.inf
     fp_rate = -np.inf
 
-    realss = np.array([cr.values_ground_truth for cr in coverage_results], order="F")
-    estss = np.array([cr.values_estimation for cr in coverage_results], order="F")
+    realss = np.array([cr.reals for cr in coverage_results], order="F")
+    estss = np.array([cr.ests for cr in coverage_results], order="F")
 
     optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
     for generation in tqdm.tqdm(range(1000)):
