@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from hifuku.coverage import CoverageResult, compute_coverage_and_fp
+from hifuku.coverage import CoverageResult, compute_coverage_and_fp_jit
 
 
 def test_coverage_result():
@@ -120,11 +120,16 @@ def test_compute_coverage_and_fp():
 
     # test main
     margins = np.array([10, 100, 20, 40, 200])
-    coverage, fp_rate = compute_coverage_and_fp(margins, cr_list, threshold)
+    coverage_jit, fp_rate_jit = compute_coverage_and_fp_jit(
+        margins,
+        np.array([cr.values_ground_truth for cr in cr_list]),
+        np.array([cr.values_estimation for cr in cr_list]),
+        threshold,
+    )
 
     coverage_rate_truth, fp_rate_truth = compute_coverage_and_fp_naive(margins, cr_list, threshold)
-    np.testing.assert_almost_equal(coverage, coverage_rate_truth)
-    np.testing.assert_almost_equal(fp_rate, fp_rate_truth)
+    np.testing.assert_almost_equal(coverage_jit, coverage_rate_truth)
+    np.testing.assert_almost_equal(fp_rate_jit, fp_rate_truth)
 
 
 if __name__ == "__main__":

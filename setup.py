@@ -10,6 +10,7 @@ install_requires = [
     "pyclustering",
     "threadpoolctl",
     "cmaes",
+    "numba",
 ]
 
 setup(

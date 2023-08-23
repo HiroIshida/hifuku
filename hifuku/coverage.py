@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import tqdm
 from cmaes import CMA
+from numba import jit
 
 logger = logging.getLogger(__name__)
 
@@ -115,33 +116,28 @@ class DetermineMarginsResult:
     fprate: float
 
 
-def compute_coverage_and_fp(
-    margins: np.ndarray, coverage_results: List[CoverageResult], threshold: float
+@jit(nopython=True)
+def compute_coverage_and_fp_jit(
+    margins: np.ndarray,
+    realss: np.ndarray,
+    estss: np.ndarray,
+    threshold: float,
 ) -> Tuple[float, float]:
 
-    est_arr_list, real_arr_list = [], []
-    for coverage_result, margin in zip(coverage_results, margins):
-        est_arr_list.append(coverage_result.values_estimation + margin)
-        real_arr_list.append(coverage_result.values_ground_truth)
-    est_mat = np.array(est_arr_list)
-    real_mat = np.array(real_arr_list)
-
-    # find element indices which have smallest est value
-    est_arr = np.min(est_mat, axis=0)
-    element_indices = np.argmin(est_mat, axis=0)
-    real_arr = np.array([real_mat[idx, i] for i, idx in enumerate(element_indices)])
-
-    # compute (true + false) positive values
-    est_bool_arr = est_arr < threshold
-    real_bool_arr = real_arr < threshold
-
-    n_total = len(est_arr)
-    coverage_est = sum(est_bool_arr) / n_total
-
-    # compute false positve rate
-    fp_rate = sum(np.logical_and(est_bool_arr, ~real_bool_arr)) / sum(est_bool_arr)
-
-    return coverage_est, fp_rate
+    N_path, N_mc = realss.shape
+    n_coverage = 0
+    n_fp = 0
+    for j in range(N_mc):
+        best_path_idx = np.argmin(estss[:, j] + margins)
+        is_est_ok = estss[best_path_idx, j] + margins[best_path_idx] < threshold
+        is_real_ok = realss[best_path_idx, j] < threshold
+        if is_est_ok:
+            n_coverage += 1
+            if not is_real_ok:
+                n_fp += 1
+    coverage_rate = n_coverage / N_mc
+    fp_rate = n_fp / n_coverage
+    return coverage_rate, fp_rate
 
 
 def determine_margins(
@@ -169,12 +165,15 @@ def determine_margins(
     coverage_est = -np.inf
     fp_rate = -np.inf
 
+    realss = np.array([cr.values_ground_truth for cr in coverage_results], order="F")
+    estss = np.array([cr.values_estimation for cr in coverage_results], order="F")
+
     optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
-    for generation in tqdm.tqdm(range(500)):
+    for generation in tqdm.tqdm(range(1000)):
         solutions = []
         for _ in range(optimizer.population_size):
             x = optimizer.ask()
-            coverage_est, fp_rate = compute_coverage_and_fp(x, coverage_results, threshold)
+            coverage_est, fp_rate = compute_coverage_and_fp_jit(x, realss, estss, threshold)
             J = -coverage_est + 1e4 * max(fp_rate - target_fp_rate_modified, 0) ** 2
             solutions.append((x, J))
         optimizer.tell(solutions)
@@ -189,9 +188,11 @@ def determine_margins(
         logger.debug(
             "[generation {}] coverage: {}, fp_rate: {}".format(generation, coverage_est, fp_rate)
         )
+        if optimizer.should_stop():
+            break
 
-    coverage_est_cand, fp_rate_cand = compute_coverage_and_fp(
-        best_margins, coverage_results, threshold
+    coverage_est_cand, fp_rate_cand = compute_coverage_and_fp_jit(
+        best_margins, realss, estss, threshold
     )
     logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
     if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate:
