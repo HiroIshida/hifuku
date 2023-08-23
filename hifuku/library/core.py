@@ -37,7 +37,6 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
-from hifuku.datagen.batch_margin_determiant import DetermineMarginsResult
 from hifuku.neuralnet import (
     AutoEncoderBase,
     IterationPredictor,
@@ -775,29 +774,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         with TemporaryDirectory() as td:
             dataset_cache_path = Path(td) / hashlib.md5(pickle.dumps(init_solution)).hexdigest()
 
-            while True:  # TODO: this while is actually useless
-                self.reset_pool()
-
-                logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
-
-                predictor = self._train_predictor(
-                    init_solution, self.project_path, dataset_cache_path
-                )
-                ret = self._determine_margins(predictor)
-                if ret is not None:
-                    break
-
-                logger.info("determine margin failed. try again after increasing n_problem...")
-                # TODO: in my experience, if once margin determination failed, it is less likely
-                # to succeed with small addition of data (dont know the case of large addition)
-                # thus, currently we dont use the code below:
-                if False:
-                    logger.info("determine margin failed. try again after increasing n_problem...")
-                    assert self.library._n_problem_now is not None
-                    self.library._n_problem_now = min(
-                        int(self.library._n_problem_now * self.config.n_problem_mult_factor),
-                        self.config.n_problem_max,
-                    )
+            self.reset_pool()
+            logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
+            predictor = self._train_predictor(init_solution, self.project_path, dataset_cache_path)
+            ret = self._determine_margins(predictor)
+            if ret is None:
                 logger.info("determine margin failed. returning None")
                 elapsed_time = time.time() - ts
                 logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
@@ -814,6 +795,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 return False
 
         margins, coverage_result = ret
+        logger.info("margin for latest iterpred is {}".format(margins[-1]))
+        logger.debug("determined margins {}".format(margins))
 
         # update library
         self.library.predictors.append(predictor)
@@ -908,36 +891,27 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 logger.debug("saved debug data to {}".format(fp))
 
                 # main
-                acceptable_results: List[DetermineMarginsResult] = []
-                max_iter = 10
-                count = 0
-                while len(acceptable_results) < self.config.n_margins_candidate:
-                    count += 1
-                    if count > max_iter:
-                        return None
-                    logger.info("current acceptable result N: {}".format(len(acceptable_results)))
-                    results = self.determinant.determine_batch(
-                        self.config.n_determine_batch,
-                        coverages_new,
-                        self.solver_config.n_max_call,
-                        self.config.acceptable_false_positive_rate,
-                        cma_std,
-                        minimum_coverage=self.library._optimal_coverage_estimate,
-                    )
-                    for result in results:
-                        if result is not None:
-                            acceptable_results.append(result)
+                results = self.determinant.determine_batch(
+                    self.config.n_determine_batch,
+                    coverages_new,
+                    self.solver_config.n_max_call,
+                    self.config.acceptable_false_positive_rate,
+                    cma_std,
+                    minimum_coverage=self.library._optimal_coverage_estimate,
+                )
 
                 best_margins = None
-                max_coverage = -np.inf
-                for result in acceptable_results:
+                assert self.library._optimal_coverage_estimate is not None
+                max_coverage = self.library._optimal_coverage_estimate
+                for result in results:
                     if result is None:
                         continue
                     if result.coverage > max_coverage:
                         max_coverage = result.coverage
                         best_margins = result.best_margins
-                assert best_margins is not None
 
+                if best_margins is None:
+                    return None
                 margins = best_margins
                 self.library._optimal_coverage_estimate = max_coverage
                 logger.info("optimal coverage estimate is set to {}".format(max_coverage))
