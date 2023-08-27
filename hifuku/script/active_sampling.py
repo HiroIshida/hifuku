@@ -101,6 +101,7 @@ if __name__ == "__main__":
         reuse_cached_validation_set=warm_start,
         delete_cache=True,
         n_limit_batch_solver=n_limit_batch,
+        presample_train_problems=True,
     )
 
     if warm_start:
@@ -108,8 +109,6 @@ if __name__ == "__main__":
 
     for i in range(n_step):
         sampling_successful = lib_sampler.step_active_sampling()
-        if not sampling_successful:
-            break
 
     p_watchdog.terminate()
     p_watchdog.join()
