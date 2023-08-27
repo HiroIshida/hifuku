@@ -67,13 +67,14 @@ def load_library(
     device: Literal["cpu", "cuda"],
     limit_thread: bool = False,
     project_path: Optional[Path] = None,
+    postfix: Optional[str] = None,
 ) -> SolutionLibrary:
 
     if isinstance(domain, str):
         domain = select_domain(domain)
 
     if project_path is None:
-        project_path = get_project_path(domain)
+        project_path = get_project_path(domain, postfix)
     lib = SolutionLibrary.load(
         project_path, domain.task_type, domain.solver_type, torch.device(device)
     )[0]
