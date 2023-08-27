@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 import torch
+from mohou.utils import log_package_version_info
 
 
 def determine_process_thread() -> Tuple[int, int]:
@@ -110,6 +111,15 @@ def create_default_logger(
         if log_sym_path.is_symlink():
             log_sym_path.unlink()
         log_sym_path.symlink_to(log_file_path)
+
+    import rpbench
+    import skmp
+
+    import hifuku
+
+    log_package_version_info(logger, hifuku)
+    log_package_version_info(logger, rpbench)
+    log_package_version_info(logger, skmp)
 
     return logger
 

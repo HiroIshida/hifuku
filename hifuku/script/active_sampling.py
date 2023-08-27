@@ -4,14 +4,10 @@ import resource
 from pathlib import Path
 from typing import Dict, Optional
 
-import rpbench
-import skmp
 import torch
 import yaml
 from mohou.trainer import TrainConfig
-from mohou.utils import log_package_version_info
 
-import hifuku
 from hifuku.domain import select_domain
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.script_utils import (
@@ -70,10 +66,6 @@ if __name__ == "__main__":
     project_path = get_project_path(domain_name, project_name_postfix)
 
     logger = create_default_logger(project_path, "library_gen")
-    log_package_version_info(logger, hifuku)
-    log_package_version_info(logger, rpbench)
-    log_package_version_info(logger, skmp)
-    # log_package_version_info(logger, selcol)
 
     # set file open limit to large
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
