@@ -9,8 +9,14 @@ from mohou.file import get_project_path
 from rpbench.interface import PlanningDataset
 
 from hifuku.domain import select_domain
-from hifuku.library import LibraryBasedGuaranteedSolver, SolutionLibrary
-from hifuku.utils import create_default_logger, filter_warnings
+from hifuku.library import (
+    LibraryBasedGuaranteedSolver,
+    LibraryBasedHeuristicSolver,
+    SolutionLibrary,
+)
+from hifuku.script_utils import create_default_logger, filter_warnings
+
+# np.random.seed(0)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

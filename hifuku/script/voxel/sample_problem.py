@@ -18,7 +18,7 @@ from rpbench.articulated.pr2.tabletop import (
 import hifuku
 from hifuku.datagen import MultiProcessBatchProblemSampler
 from hifuku.pool import TrivialProblemPool
-from hifuku.utils import create_default_logger
+from hifuku.script_utils import create_default_logger
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
 warnings.filterwarnings("ignore", message="texture specified in URDF is not supported")

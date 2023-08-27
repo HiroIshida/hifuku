@@ -12,7 +12,7 @@ from hifuku.datagen.batch_solver import (
 )
 from hifuku.domain import select_domain
 from hifuku.pool import TrivialProblemPool
-from hifuku.utils import create_default_logger
+from hifuku.script_utils import create_default_logger
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
