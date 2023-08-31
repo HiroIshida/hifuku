@@ -3,8 +3,8 @@ import argparse
 from mohou.file import get_project_path
 from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train_lower
+from rpbench.articulated.pr2.tabletop import TabletopBoxWorldWrap
 
-from hifuku.domain import TabletopBoxWorldWrap
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.neuralnet import AutoEncoderConfig, VoxelAutoEncoder
 
