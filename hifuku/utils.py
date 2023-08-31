@@ -1,23 +1,19 @@
 import ast
 import contextlib
 import inspect
-import logging
 import os
 import pickle
 import platform
 import shutil
 import subprocess
 import tempfile
-import time
 import warnings
 from datetime import datetime
 from hashlib import md5
-from logging import Logger
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 import torch
-from mohou.utils import log_package_version_info
 
 
 def determine_process_thread() -> Tuple[int, int]:
@@ -77,62 +73,6 @@ def get_module_source_hash(module_name: str) -> Optional[str]:
         proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
         hash_value = proc.stdout.decode("utf8").split()[0]
     return hash_value
-
-
-def create_default_logger(
-    project_path: Optional[Path], prefix: str, stream_level: int = logging.INFO
-) -> Logger:
-    logger = logging.getLogger()  # root logger
-    logger.setLevel(logging.DEBUG)
-
-    fmt = logging.Formatter("[%(levelname)s] %(asctime)s %(name)s: %(message)s")
-
-    sh = logging.StreamHandler()
-    sh.setLevel(stream_level)
-    sh.setFormatter(fmt)
-    logger.addHandler(sh)
-
-    if project_path is not None:
-        # create file handler
-        timestr = "_" + time.strftime("%Y%m%d%H%M%S")
-        log_dir_path = project_path / "log"
-        log_dir_path.mkdir(parents=True, exist_ok=True)
-        log_file_path = log_dir_path / (prefix + timestr + ".log")
-
-        fh = logging.FileHandler(str(log_file_path))
-        fh.setLevel(logging.DEBUG)
-        fh.setFormatter(fmt)
-
-        logger.addHandler(fh)
-
-        log_sym_path = log_dir_path / ("latest_" + prefix + ".log")
-
-        logger.info("create log symlink :{0} => {1}".format(log_file_path, log_sym_path))
-        if log_sym_path.is_symlink():
-            log_sym_path.unlink()
-        log_sym_path.symlink_to(log_file_path)
-
-    import rpbench
-    import skmp
-
-    import hifuku
-
-    log_package_version_info(logger, hifuku)
-    log_package_version_info(logger, rpbench)
-    log_package_version_info(logger, skmp)
-
-    return logger
-
-
-def filter_warnings():
-    warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
-    warnings.filterwarnings("ignore", message="texture specified in URDF is not supported")
-    warnings.filterwarnings("ignore", message="Converting sparse A to a CSC")
-    warnings.filterwarnings("ignore", message="urllib3")
-    warnings.filterwarnings(
-        "ignore",
-        message="undefined symbol: _ZNK3c1010TensorImpl36is_contiguous_nondefault_policy_implENS_12MemoryFormatE",
-    )
 
 
 def split_number(n: int, k: int) -> List[int]:

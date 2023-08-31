@@ -29,9 +29,9 @@ from hifuku.datagen import (
 from hifuku.domain import TabletopOvenRightArmReachingTask
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
+from hifuku.script_utils import create_default_logger
 from hifuku.testing_asset import SimplePredicate
 from hifuku.types import RawData
-from hifuku.utils import create_default_logger
 
 logger = logging.getLogger(__name__)
 

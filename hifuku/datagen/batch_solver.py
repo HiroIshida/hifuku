@@ -27,7 +27,6 @@ from hifuku.datagen.http_datagen.request import (
 from hifuku.datagen.utils import split_indices
 from hifuku.pool import ProblemT
 from hifuku.types import CLAMP_FACTOR, RawData
-from hifuku.utils import filter_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -236,8 +235,6 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
 
-        filter_warnings()
-
         assert len(tasks) == len(init_solutions)
         assert len(tasks) > 0
 
@@ -300,6 +297,10 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
     def _pool_setup(
         solver_t: Type[AbstractScratchSolver], config: ConfigT, use_default_solver: bool
     ):
+        from hifuku.script_utils import filter_warnings
+
+        filter_warnings()
+
         # NOTE: this function is used only in process pool
         # NOTE: a lot of type: ignore due to global variables
         global solver

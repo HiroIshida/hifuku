@@ -30,7 +30,7 @@ from hifuku.neuralnet import (
     NullAutoEncoder,
     PixelAutoEncoder,
 )
-from hifuku.utils import create_default_logger
+from hifuku.script_utils import create_default_logger
 
 
 def _test_compute_real_itervals():
