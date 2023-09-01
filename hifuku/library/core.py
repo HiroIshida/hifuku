@@ -8,8 +8,10 @@ import pickle
 import random
 import re
 import shutil
+import signal
 import time
 import uuid
+from abc import abstractmethod
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
@@ -461,13 +463,20 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
     solver: AbstractScratchSolver[ConfigT, ResultT]
     task: Optional[ProblemT]
     previous_false_positive: Optional[bool]
+    timeout: Optional[int]
 
     @classmethod
     def init(
-        cls, library: SolutionLibrary[ProblemT, ConfigT, ResultT]
+        cls, library: SolutionLibrary[ProblemT, ConfigT, ResultT], config: Optional[ConfigT] = None
     ) -> "LibraryBasedSolverBase[ProblemT, ConfigT, ResultT]":
-        solver = library.solver_type.init(library.solver_config)
-        return cls(library, solver, None, None)
+        if config is None:
+            config = library.solver_config
+        # internal solver's timeout must be None
+        # because inference time must be considered in timeout for fairness
+        timeout_stashed = config.timeout  # stash this
+        config.timeout = None
+        solver = library.solver_type.init(config)
+        return cls(library, solver, None, None, timeout_stashed)
 
     def setup(self, task: ProblemT) -> None:
         assert task.n_inner_task == 1
@@ -475,10 +484,41 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
         self.solver.setup(problems[0])
         self.task = task
 
+    def solve(self) -> ResultT:
+        # NOTE: almost copied from skmp.solver.interface
+        ts = time.time()
+
+        class TimeoutException(Exception):
+            ...
+
+        if self.timeout is not None:
+            assert self.timeout > 0
+
+            def handler(sig, frame):
+                raise TimeoutException()
+
+            signal.signal(signal.SIGALRM, handler)
+            signal.alarm(self.timeout)
+
+        try:
+            ret = self._solve()
+        except TimeoutException:
+            ret = self.solver.get_result_type().abnormal()
+
+        if self.timeout is not None:
+            signal.alarm(0)  # reset alarm
+
+        ret.time_elapsed = time.time() - ts
+        return ret
+
+    @abstractmethod
+    def _solve(self) -> ResultT:
+        ...
+
 
 @dataclass
 class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, ResultT]):
-    def solve(self) -> ResultT:
+    def _solve(self) -> ResultT:
         self.previous_false_positive = None
 
         ts = time.time()
@@ -500,7 +540,7 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, Res
 
 @dataclass
 class LibraryBasedHeuristicSolver(LibraryBasedSolverBase[ProblemT, ConfigT, ResultT]):
-    def solve(self) -> ResultT:
+    def _solve(self) -> ResultT:
         ts = time.time()
         assert self.task is not None
         inference_results = self.library.infer(self.task)
