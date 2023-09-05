@@ -732,7 +732,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         # create validation problems
         project_path.mkdir(exist_ok=True)
-        validation_cache_path = project_path / "{}-validation_set.pkl".format(problem_type.__name__)
+        validation_cache_path = project_path / "{}-validation_set.cache".format(
+            problem_type.__name__
+        )
 
         if reuse_cached_validation_set:
             assert problems_validation is None
