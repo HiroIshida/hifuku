@@ -5,11 +5,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from hifuku.domain import DummyDomain
+from hifuku.domain import ProbDummyDomain
 from hifuku.library.core import SolutionLibrary
 from hifuku.script_utils import load_library
 
-domain = DummyDomain  # global
+# domain = DummyDomain  # global
+domain = ProbDummyDomain
+
+
+COLOR_SCATTER = "blue"
+COLOR_FILL = "green"
 
 
 def sample_colors(n_colors, cmap_name="hsv"):
@@ -59,17 +64,18 @@ class SingleLibraryPlotter:
     ) -> None:
         fig, ax = fax
         X, Y = self.mesh
-        iters_main = np.maximum(self.sdf_values, self.iter_values + margin)
+        # iters_main = np.maximum(self.sdf_values, self.iter_values + margin)
+        iters_main = self.iter_values + margin
         iters_main = iters_main.reshape(X.shape)
 
         if contourf_kwargs_ is not None:
-            contourf_kwargs = {"colors": ["gray"], "alpha": 0.2}
+            contourf_kwargs = {"colors": ["gray"], "alpha": 0.6}
             for key, val in contourf_kwargs_.items():
                 contourf_kwargs[key] = val
             ax.contourf(X, Y, iters_main, levels=[-np.inf, 0], **contourf_kwargs)
 
         if contour_kwargs_ is not None:
-            contour_kwargs = {"colors": ["black"], "linewidths": 2.5}
+            contour_kwargs = {"colors": ["black"], "linewidths": 1.5}
             for key, val in contour_kwargs_.items():
                 contour_kwargs[key] = val
             ax.contour(X, Y, iters_main, levels=[0], **contour_kwargs)
@@ -96,7 +102,7 @@ if __name__ == "__main__":
 
     # domain = EightRooms_SQP_Domain
     # domain = EightRooms_Lightning_Domain
-    domain = DummyDomain
+    domain = ProbDummyDomain
     config = domain.solver_config
     world = domain.task_type.get_world_type().sample()
 
@@ -115,7 +121,7 @@ if __name__ == "__main__":
             margin = latest_margins[i]
             plotters[i].visualize((fig, ax), margin, {}, {}, {})
         plotters[n_step - 1].visualize(
-            (fig, ax), latest_margins[n_step - 1], {"colors": ["red"]}, {}, {}
+            (fig, ax), latest_margins[n_step - 1], {"colors": [COLOR_FILL]}, {}, {}
         )
     elif mode == "step1":
         candidates = lib._candidates_history[n_step]  # not n_step - 1
@@ -124,8 +130,9 @@ if __name__ == "__main__":
             margin = latest_margins[i]
             plotters[i].visualize((fig, ax), margin, {}, {}, {})
         # plot active sampling
-        pts = np.array([traj.numpy()[-1] for traj in candidates])
-        ax.scatter(pts[:, 0], pts[:, 1], c="b", s=1, label="candidates")
+        # pts = np.array([traj.numpy()[-1] for traj in candidates])
+        pts = np.array([traj.numpy()[0] for traj in candidates])
+        ax.scatter(pts[:, 0], pts[:, 1], c=COLOR_SCATTER, s=1, label="candidates")
         selected = lib.predictors[n_step].initial_solution.numpy()[-1]
         ax.scatter(selected[0], selected[1], c="orange", marker="*", s=300, label="selected")
 
@@ -137,7 +144,11 @@ if __name__ == "__main__":
                 plotters[i].visualize((fig, ax), margin, {}, {}, {})
 
         plotters[n_step].visualize(
-            (fig, ax), 0.0, None, {"colors": "red", "linestyles": "dashed"}, {"c": "red"}
+            (fig, ax),
+            0.0,
+            None,
+            {"colors": COLOR_FILL, "linestyles": "dashed", "linewidths": 1.5},
+            {"c": COLOR_FILL},
         )
 
     elif mode == "step3":
@@ -150,14 +161,18 @@ if __name__ == "__main__":
 
         # latest margin
         plotters[n_step].visualize(
-            (fig, ax), 0.0, None, {"colors": "red", "linestyles": "dashed"}, {}
+            (fig, ax), 0.0, None, {"colors": COLOR_FILL, "linestyles": "dashed"}, {}
         )
         plotters[n_step].visualize(
-            (fig, ax), latest_margins[n_step], None, {"colors": "red"}, {"c": "red"}
+            (fig, ax),
+            latest_margins[n_step],
+            None,
+            {"colors": COLOR_FILL, "linewidths": 1.5},
+            {"c": COLOR_FILL},
         )
 
-    ax.set_xlim(-1.0, 2.2)
-    ax.set_ylim(-1.8, 1.6)
+    ax.set_xlim(0.0, 0.6)
+    ax.set_ylim(0.0, 1.0)
 
     if args.save:
         if args.legend:
