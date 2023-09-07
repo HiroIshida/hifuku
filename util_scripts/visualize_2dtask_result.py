@@ -69,7 +69,7 @@ class SingleLibraryPlotter:
         iters_main = iters_main.reshape(X.shape)
 
         if contourf_kwargs_ is not None:
-            contourf_kwargs = {"colors": ["gray"], "alpha": 0.6}
+            contourf_kwargs = {"colors": ["lightgreen"], "alpha": 0.6}
             for key, val in contourf_kwargs_.items():
                 contourf_kwargs[key] = val
             ax.contourf(X, Y, iters_main, levels=[-np.inf, 0], **contourf_kwargs)
