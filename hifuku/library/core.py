@@ -598,6 +598,7 @@ class LibrarySamplerConfig:
     train_with_encoder: bool = False
     n_problem_mult_factor: float = 1.1
     n_problem_max: int = 30000
+    tmp_n_max_call_mult_factor: float = 1.5
 
 
 @dataclass
@@ -1011,7 +1012,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # if len(problems) > n_tau.
         init_solutions = [init_solution] * len(problems)
 
-        results = self.solver.solve_batch(problems, init_solutions, tmp_n_max_call_mult_factor=1.5)
+        results = self.solver.solve_batch(
+            problems,
+            init_solutions,
+            tmp_n_max_call_mult_factor=self.config.tmp_n_max_call_mult_factor,
+        )
         dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
             init_solution,
             problems,
