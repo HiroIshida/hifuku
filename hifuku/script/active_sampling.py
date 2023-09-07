@@ -18,6 +18,7 @@ from hifuku.script_utils import (
     load_library,
     watch_memmory,
 )
+from hifuku.types import _CLAMP_FACTOR
 
 
 def parse_config_yaml(dic: Dict) -> LibrarySamplerConfig:
@@ -32,6 +33,7 @@ if __name__ == "__main__":
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
     parser.add_argument("-n", type=int, default=100, help="")
     parser.add_argument("-n_limit_batch", type=int, help="")
+    parser.add_argument("-clamp", type=float)
     parser.add_argument("-conf", type=str)
     parser.add_argument("-post", type=str)
     parser.add_argument("--warm", action="store_true", help="warm start")
@@ -46,6 +48,10 @@ if __name__ == "__main__":
     use_pretrained_ae: bool = not args.untrained
     library_sampling_conf_path_str: Optional[str] = args.conf
     project_name_postfix: Optional[str] = args.post
+    clamp_factor: Optional[float] = args.clamp
+
+    if clamp_factor is not None:
+        _CLAMP_FACTOR[0] = clamp_factor
 
     # require explicitly setting to None
     assert project_name_postfix is not None
