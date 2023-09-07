@@ -30,7 +30,12 @@ from rpbench.two_dimensional.bubbly_world import (
     BubblySimpleMeshPointConnectTask,
     BubblySimplePointConnectTask,
 )
-from rpbench.two_dimensional.dummy import DummyConfig, DummySolver, DummyTask
+from rpbench.two_dimensional.dummy import (
+    DummyConfig,
+    DummySolver,
+    DummyTask,
+    ProbDummyTask,
+)
 from rpbench.two_dimensional.multiple_rooms import EightRoomsPlanningTask
 from skmp.solver.interface import AbstractScratchSolver, ConfigProtocol
 from skmp.solver.nlp_solver.osqp_sqp import OsqpSqpConfig
@@ -461,6 +466,16 @@ class DummyDomain(DomainProtocol):
     auto_encoder_type = NullAutoEncoder
 
 
+class ProbDummyDomain(DomainProtocol):
+    task_type = ProbDummyTask
+    solver_type = DummySolver
+    solver_config = DummyConfig(
+        n_max_call=200, random_scale=0.5, random_force_failure_rate=0.0
+    )  # somehow, if 500, classifier is not trained well probably due to the positive-negative sample inbalance
+    auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
+
+
 def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> float:
     solver = domain.create_solver()
 
@@ -509,5 +524,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         bubbly_simple_mesh_rrt = BubblySimpleMeshPointConnecting_RRT_Domain
         bubbly_simple_rrt = BubblySimplePointConnecting_RRT_Domain
         dummy = DummyDomain
+        prob_dummy = ProbDummyDomain
 
     return DomainCollection[domain_name].value
