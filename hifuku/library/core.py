@@ -831,6 +831,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                         self.library._coverage_est_history[-1]
                     )
 
+                assert self.library._candidates_history is not None
+                self.library._candidates_history.pop()  # TODO: quite dirty. but _candidates_history is just for visualization in the paper. So this will not cause serious bug
                 self.library.dump(self.project_path)
                 return False
 
