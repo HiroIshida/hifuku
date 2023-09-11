@@ -462,8 +462,9 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     solver: AbstractScratchSolver[ConfigT, ResultT]
     task: Optional[ProblemT]
-    previous_false_positive: Optional[bool]
     timeout: Optional[int]
+    previous_false_positive: Optional[bool]
+    previous_est_positive: Optional[bool]
 
     @classmethod
     def init(
@@ -476,7 +477,7 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
         timeout_stashed = config.timeout  # stash this
         config.timeout = None
         solver = library.solver_type.init(config)
-        return cls(library, solver, None, None, timeout_stashed)
+        return cls(library, solver, None, timeout_stashed, None, None)
 
     def setup(self, task: ProblemT) -> None:
         assert task.n_inner_task == 1
@@ -519,6 +520,7 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
 @dataclass
 class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, ResultT]):
     def _solve(self) -> ResultT:
+        self.previous_est_positive = None
         self.previous_false_positive = None
 
         ts = time.time()
@@ -528,12 +530,17 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, Res
         inference_result = inference_results[0]
 
         seems_infeasible = inference_result.nit > self.library.success_iter_threshold()
+        logger.info(f"nit {inference_result.nit}: the {self.library.success_iter_threshold()}")
         if seems_infeasible:
             result_type = self.solver.get_result_type()
-            return result_type.abnormal()
+            res = result_type.abnormal()
+            res.time_elapsed = None
+            self.previous_est_positive = False
+            return res
         solver_result = self.solver.solve(inference_result.init_solution)
         solver_result.time_elapsed = time.time() - ts
 
+        self.previous_est_positive = True
         self.previous_false_positive = solver_result.traj is None
         return solver_result
 
