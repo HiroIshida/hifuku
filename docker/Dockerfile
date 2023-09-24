@@ -60,6 +60,7 @@ RUN pip3 install ompl-thin
 RUN git clone git@github.com:HiroIshida/scikit-motionplan.git && pip3 install -e scikit-motionplan
 RUN git clone git@github.com:HiroIshida/rpbench.git && pip3 install -e rpbench
 RUN git clone git@github.com:HiroIshida/hifuku.git && cd hifuku && pip3 install -e .
+RUN git clone git@github.com:HiroIshida/diplan-cpp.git && cd diplan-cpp && git submodule update --init --recursive --recommend-shallow --depth 1 && pip3 install -e .
 RUN pip3 install pyglet==1.5.27
 
 # finally install required to run skrobot
