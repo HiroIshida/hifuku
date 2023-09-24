@@ -2,7 +2,7 @@ import contextlib
 import logging
 import pickle
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from http.client import HTTPConnection
 from typing import Generic, List, Optional, Sequence, Tuple, Type, TypeVar, overload
 
@@ -21,8 +21,9 @@ class FormatMixin:
 
     def __str__(self) -> str:
         vis_dict = {}
-        # NOTE: usage of asdict implicitly requires that mixed-ined class is a dataclass
-        for key, val in asdict(self).items():  # type: ignore[call-overload]
+        # don't use asdict. It causes error when the dataclass has a field with unpicklable object
+        # see: https://bugs.python.org/issue43905
+        for key, val in self.__dataclass_fields__.items():  # type: ignore[attr-defined]
             if key in self.ignore_fields():
                 vis_dict[key] = "????"
             else:
