@@ -452,6 +452,7 @@ class PixelAutoEncoder(NeuralAutoEncoderBase):
                 nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),
+                nn.ReLU(inplace=True),
                 nn.Flatten(),
                 nn.Linear(1024, config.dim_bottleneck),
                 nn.ReLU(inplace=True),
