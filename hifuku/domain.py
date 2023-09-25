@@ -27,8 +27,11 @@ from rpbench.articulated.pr2.tabletop import (
 )
 from rpbench.interface import TaskBase
 from rpbench.two_dimensional.bubbly_world import (
+    BubblyComplexMeshPointConnectTask,
+    BubblyEmptyMeshPointConnectTask,
     BubblySimpleMeshPointConnectTask,
-    BubblySimplePointConnectTask,
+    DoubleIntegratorOptimizationSolver,
+    DoubleIntegratorPlanningConfig,
 )
 from rpbench.two_dimensional.dummy import (
     DummyConfig,
@@ -423,36 +426,36 @@ class HumanoidGroundTableRarmReaching_SQP_Domain(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
-class BubblySimpleMeshPointConnecting_SQP_Domain(DomainProtocol):
+class DoubleIntegratorBubblyEmpty_SQP(DomainProtocol):
+    task_type = BubblyEmptyMeshPointConnectTask
+    solver_type = DoubleIntegratorOptimizationSolver
+    solver_config = DoubleIntegratorPlanningConfig(
+        n_wp=200,
+        n_max_call=5,
+    )
+    auto_encoder_project_name = "BubblyWorldEmpty-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class DoubleIntegratorBubblySimple_SQP(DomainProtocol):
     task_type = BubblySimpleMeshPointConnectTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=20,
-        n_max_call=20,
-        motion_step_satisfaction="implicit",
-        verbose=False,
+    solver_type = DoubleIntegratorOptimizationSolver
+    solver_config = DoubleIntegratorPlanningConfig(
+        n_wp=200,
+        n_max_call=5,
     )
     auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
-class BubblySimpleMeshPointConnecting_RRT_Domain(DomainProtocol):
-    task_type = BubblySimpleMeshPointConnectTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
+class DoubleIntegratorBubblyComplex_SQP(DomainProtocol):
+    task_type = BubblyComplexMeshPointConnectTask
+    solver_type = DoubleIntegratorOptimizationSolver
+    solver_config = DoubleIntegratorPlanningConfig(
+        n_wp=200,
+        n_max_call=5,
     )
-    auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class BubblySimplePointConnecting_RRT_Domain(DomainProtocol):
-    task_type = BubblySimplePointConnectTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        200, 1, expbased_planner_backend="ertconnect", ertconnect_eps=0.3
-    )
-    auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
+    auto_encoder_project_name = "BubblyWorldComplex-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
@@ -520,9 +523,9 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         humanoid_tcrr2_sqp3 = HumanoidTableClutteredRarmReaching2_SQP3_Domain
         humanoid_grr_sqp = HumanoidGroundRarmReaching_SQP_Domain
         humanoid_gtrr_sqp = HumanoidGroundTableRarmReaching_SQP_Domain
-        bubbly_simple_mesh_sqp = BubblySimpleMeshPointConnecting_SQP_Domain
-        bubbly_simple_mesh_rrt = BubblySimpleMeshPointConnecting_RRT_Domain
-        bubbly_simple_rrt = BubblySimplePointConnecting_RRT_Domain
+        di_bubbly_complex_sqp = DoubleIntegratorBubblyComplex_SQP
+        di_bubbly_simple_sqp = DoubleIntegratorBubblySimple_SQP
+        di_bubbly_empty_sqp = DoubleIntegratorBubblyEmpty_SQP
         dummy = DummyDomain
         prob_dummy = ProbDummyDomain
 
