@@ -19,6 +19,7 @@ from tempfile import TemporaryDirectory
 from typing import Dict, Generic, List, Optional, Tuple, Type, Union
 
 import numpy as np
+import onnxruntime as ort
 import threadpoolctl
 import torch
 import tqdm
@@ -46,6 +47,7 @@ from hifuku.neuralnet import (
     IterationPredictorDataset,
     IterationPredictorWithEncoder,
     IterationPredictorWithEncoderConfig,
+    NeuralAutoEncoderBase,
     NullAutoEncoder,
 )
 from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
@@ -89,6 +91,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     _n_problem_now: Optional[int] = None
     _elapsed_time_history: Optional[List[float]] = None
     _coverage_est_history: Optional[List[float]] = None
+    _ort_sessions: Optional[List[ort.InferenceSession]] = None
 
     def __setstate__(self, state):
         # NOTE: for backward compatibility
@@ -115,6 +118,70 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         else:
             for pred in self.predictors:
                 assert isinstance(pred, IterationPredictorWithEncoder)
+
+    def setup_onnx(self):
+        # NOTE: require pytorch < 2.0
+        # NOTE: onnxruntime's inference result somehow does not match with pytorch's
+        logger.warning("using onnxruntime is highly experimental")
+        logger.warning("onnxruntime's inference result somehow does not match with pytorch's")
+
+        assert self.ae_model_shared is None  # TODO: implement this
+        for idx, pred in enumerate(self.predictors):
+            uuidval = self.uuidval
+            onnx_file = Path(f"/tmp/{uuidval}-{idx}.onnx")
+            if not onnx_file.exists():
+                assert isinstance(pred, IterationPredictorWithEncoder)
+                assert isinstance(pred.ae_model, NeuralAutoEncoderBase)
+                n_grid = pred.ae_model.config.n_grid
+                x_image = torch.randn(1, 1, n_grid, n_grid)
+
+                n_desc = pred.iterpred_model.config.dim_problem_descriptor
+                x_desc = torch.randn(1, n_desc)
+
+                msg = "exporting onnx file to {}".format(onnx_file)
+                logger.info(msg)
+                print(msg)
+                inputs = (x_image, x_desc)
+                torch.onnx.export(
+                    pred,
+                    (inputs,),
+                    str(onnx_file),
+                    export_params=True,
+                    opset_version=11,
+                    do_constant_folding=True,
+                    input_names=["input_mesh", "input_desc"],
+                    output_names=["output"],
+                )
+
+        ort_sessions = []
+        for idx in range(len(self.predictors)):
+            uuidval = self.uuidval
+            onnx_file = Path(f"/tmp/{uuidval}-{idx}.onnx")
+            assert onnx_file.exists()
+            print(f"loading onnx file from {onnx_file}")
+
+            # In my benchmark, I'll force taskset -c 0,1 to run on single core
+            # and set n_thread = 2. In that case, I want to set affinity to
+            # core 0 and 1. But, I'm not sure this is correct way to do it.
+            n_thread = 1
+            if n_thread == 1:
+                cores = "1"
+            elif n_thread == 2:
+                cores = "1,2"
+            else:
+                assert False
+            so = ort.SessionOptions()
+            so.inter_op_num_threads = n_thread
+            so.intra_op_num_threads = n_thread
+            # the following option could be use via nightly built wheel
+            # so.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning, "0")
+            # so.AddConfigEntry(kOrtSessionOptionsConfigAllowInterOpSpinning, "0")
+            so.add_session_config_entry("session.intra_op_thread_affinities", cores)
+            ort_session = ort.InferenceSession(
+                onnx_file, providers=["CPUExecutionProvider"], sess_options=so
+            )
+            ort_sessions.append(ort_session)
+        self._ort_sessions = ort_sessions
 
     @dataclass
     class InferenceResult:
@@ -171,11 +238,30 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
     def _infer_iteration_num(self, task: ProblemT) -> np.ndarray:
         assert len(self.predictors) > 0
-        has_shared_ae = self.ae_model_shared is not None
-        if has_shared_ae:
-            return self._infer_iteration_num_with_shared_ae(task)
+        use_onnxruntime = self._ort_sessions is not None
+        if use_onnxruntime:
+            return self._infer_iteration_num_onnxruntime(task)
         else:
-            return self._infer_iteration_num_combined(task)
+            has_shared_ae = self.ae_model_shared is not None
+            if has_shared_ae:
+                return self._infer_iteration_num_with_shared_ae(task)
+            else:
+                return self._infer_iteration_num_combined(task)
+
+    def _infer_iteration_num_onnxruntime(self, task: ProblemT) -> np.ndarray:
+        desc_table = task.export_table()
+        mesh_np = desc_table.get_mesh()
+        assert mesh_np is not None
+        mesh_np = np.expand_dims(mesh_np, axis=(0, 1)).astype(np.float32)
+        descs_np = np.array(desc_table.get_vector_descs()).astype(np.float32)
+        assert self._ort_sessions is not None
+        inputs = {"input_mesh": mesh_np, "input_desc": descs_np}
+
+        outputs = []
+        for session in self._ort_sessions:
+            raw = session.run(None, inputs)
+            outputs.append(raw[0])
+        return np.array(outputs)
 
     def _infer_iteration_num_combined(self, task: ProblemT) -> np.ndarray:
         if self.limit_thread:
