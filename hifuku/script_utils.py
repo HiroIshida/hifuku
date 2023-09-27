@@ -19,9 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 def load_compatible_autoencoder(
-    domain: Union[str, Type[DomainProtocol]], pretrained: bool
+    domain: Union[str, Type[DomainProtocol]],
+    pretrained: bool,
+    n_grid: Optional[Literal[56, 112]] = None,
 ) -> AutoEncoderBase:
-
     if isinstance(domain, str):
         domain = select_domain(domain)
 
@@ -43,7 +44,8 @@ def load_compatible_autoencoder(
             logger.info("actually, we will use null autoencoder")
             return NullAutoEncoder()
         else:
-            conf = AutoEncoderConfig()
+            assert n_grid is not None
+            conf = AutoEncoderConfig(n_grid=n_grid)
             logger.info("Initialize {} with default config {}".format(T.__name__, conf))
             return T(conf)  # type: ignore
 
