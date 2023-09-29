@@ -171,11 +171,12 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             else:
                 assert False
             so = ort.SessionOptions()
-            so.inter_op_num_threads = n_thread
+            # so.inter_op_num_threads = n_thread
+            so.inter_op_num_threads = 0
             so.intra_op_num_threads = n_thread
-            # the following option could be use via nightly built wheel
-            # so.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning, "0")
-            # so.AddConfigEntry(kOrtSessionOptionsConfigAllowInterOpSpinning, "0")
+            # https://github.com/microsoft/onnxruntime/blob/main/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h
+            # so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+            # so.add_session_config_entry("session.inter_op.allow_spinning", "0")
             so.add_session_config_entry("session.intra_op_thread_affinities", cores)
             ort_session = ort.InferenceSession(
                 onnx_file, providers=["CPUExecutionProvider"], sess_options=so
