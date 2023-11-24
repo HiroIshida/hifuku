@@ -13,6 +13,7 @@ from rpbench.articulated.jaxon.ground import (
     HumanoidGroundRarmReachingTask,
     HumanoidGroundTableRarmReachingTask,
 )
+from rpbench.articulated.pr2.jskfridge import JskFridgeReachingTask
 from rpbench.articulated.pr2.kivapod import KivapodEmptyReachingTask
 from rpbench.articulated.pr2.minifridge import TabletopClutteredFridgeReachingTask
 from rpbench.articulated.pr2.shelf import (
@@ -220,6 +221,55 @@ class ClutteredFridge_RRT1000(DomainProtocol):
         ertconnect_eps=0.1,
     )
     auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class JSKFridge_SQP(DomainProtocol):
+    task_type = JskFridgeReachingTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=100, n_max_call=8, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
+    )
+    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class JSKFridge_RRT2000(DomainProtocol):
+    task_type = JskFridgeReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=2000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class JSKFridge_RRT5000(DomainProtocol):
+    task_type = JskFridgeReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=5000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class JSKFridge_RRT10000(DomainProtocol):
+    task_type = JskFridgeReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=10000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
@@ -509,6 +559,10 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         cluttered_fridge_rrt250 = ClutteredFridge_RRT250
         cluttered_fridge_rrt500 = ClutteredFridge_RRT500
         cluttered_fridge_rrt1000 = ClutteredFridge_RRT1000
+        jsk_fridge_sqp = JSKFridge_SQP
+        jsk_fridge_rrt2000 = JSKFridge_RRT2000
+        jsk_fridge_rrt5000 = JSKFridge_RRT5000
+        jsk_fridge_rrt10000 = JSKFridge_RRT10000
         kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
         shelf_cluttered_sqp = ShelfBoxClutteredSandwitchingTask_SQP_Domain
         shelf_cluttered_rrt = ShelfBoxClutteredSandwitchingTask_RRT_Domain
