@@ -54,6 +54,11 @@ from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
 from hifuku.types import get_clamped_iter
 from hifuku.utils import num_torch_thread
 
+try:
+    import rospy
+except ImportError:
+    rospy = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -618,7 +623,13 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, Res
 
         seems_infeasible = inference_result.nit > self.library.success_iter_threshold()
         logger.info(f"nit {inference_result.nit}: the {self.library.success_iter_threshold()}")
+        if rospy is not None:
+            rospy.loginfo(
+                f"nit {inference_result.nit}: the {self.library.success_iter_threshold()}"
+            )
         if seems_infeasible:
+            if rospy is not None:
+                rospy.logwarn("seems infeasible")
             result_type = self.solver.get_result_type()
             res = result_type.abnormal()
             res.time_elapsed = None
