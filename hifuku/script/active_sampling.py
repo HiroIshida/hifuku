@@ -4,12 +4,15 @@ import resource
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import yaml
 from mohou.trainer import TrainConfig
 
 from hifuku.domain import select_domain
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
+from hifuku.neuralnet import PixelAutoEncoder, VoxelAutoEncoder
 from hifuku.script_utils import (
     create_default_logger,
     filter_warnings,
@@ -98,6 +101,26 @@ if __name__ == "__main__":
 
     n_grid: Optional[Literal[56, 112]] = args.n_grid
     ae_model = load_compatible_autoencoder(domain_name, use_pretrained_ae, n_grid)
+
+    if use_pretrained_ae:
+        # check if the autoencoder is properly trained
+        task = domain.task_type.sample(1)
+        table = task.export_table()
+        mesh_np = table.get_mesh()
+        assert mesh_np is not None
+        mesh_np = np.expand_dims(mesh_np, axis=(0, 1)).astype(float)
+        mesh_torch = torch.from_numpy(mesh_np).float().to(ae_model.get_device())
+        assert isinstance(ae_model, (PixelAutoEncoder, VoxelAutoEncoder))
+        decoded = ae_model.decoder(ae_model.encoder(mesh_torch))
+        mesh_reconstructed = decoded.detach().cpu().squeeze().numpy()
+
+        # compare mesh and mesh_reconstructed side by side in matplotlib
+        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+        assert n_grid is not None
+        axes[0].imshow(mesh_np.reshape(n_grid, n_grid))
+        axes[1].imshow(mesh_reconstructed.reshape(n_grid, n_grid))
+        plt.show()
+
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
         domain.task_type,
         domain.solver_type,
