@@ -1072,7 +1072,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                         margin
                     )
                     logger.info(message)
-                    assert False
+                    return None
                 margins = [margin]
 
         assert max_coverage is not None
