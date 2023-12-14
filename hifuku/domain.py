@@ -231,7 +231,7 @@ class JSKFridge_SQP(DomainProtocol):
     task_type = JskFridgeReachingTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
-        n_wp=100, n_max_call=8, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
+        n_wp=40, n_max_call=8, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
     )
     auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
@@ -279,9 +279,7 @@ class JSKFridge_RRT10000(DomainProtocol):
 class JSKFridgeVertical_SQP(DomainProtocol):
     task_type = JskFridgeVerticalReachingTask
     solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=100, n_max_call=8, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
-    )
+    solver_config = SQPBasedSolverConfig(n_wp=40, n_max_call=8, motion_step_satisfaction="explicit")
     auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
