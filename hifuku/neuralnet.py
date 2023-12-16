@@ -253,7 +253,7 @@ class IterationPredictorConfig(ModelConfigBase):
     n_layer2_width: int = 100
     n_layer3_width: int = 50
     layers: Optional[List[int]] = None
-    dim_description_expand: Optional[int] = 300
+    dim_description_expand: Optional[int] = 50
     use_solution_pred: bool = False
 
 
@@ -327,7 +327,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
 
 @dataclass
 class AutoEncoderConfig(ModelConfigBase):
-    dim_bottleneck: int = 1024
+    dim_bottleneck: int = 200
     n_grid: Literal[56, 112] = 112
 
 
