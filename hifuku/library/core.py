@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Generic, List, Optional, Tuple, Type, Union
+from typing import Callable, Dict, Generic, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import onnxruntime as ort
@@ -53,11 +53,6 @@ from hifuku.neuralnet import (
 from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
 from hifuku.types import get_clamped_iter
 from hifuku.utils import num_torch_thread
-
-try:
-    import rospy
-except ImportError:
-    rospy = None
 
 logger = logging.getLogger(__name__)
 
@@ -557,10 +552,15 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
     timeout: Optional[int]
     previous_false_positive: Optional[bool]
     previous_est_positive: Optional[bool]
+    _loginfo_fun: Callable
+    _logwarn_fun: Callable
 
     @classmethod
     def init(
-        cls, library: SolutionLibrary[ProblemT, ConfigT, ResultT], config: Optional[ConfigT] = None
+        cls,
+        library: SolutionLibrary[ProblemT, ConfigT, ResultT],
+        config: Optional[ConfigT] = None,
+        use_rospy_logger: bool = False,
     ) -> "LibraryBasedSolverBase[ProblemT, ConfigT, ResultT]":
         if config is None:
             config = library.solver_config
@@ -569,7 +569,20 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
         timeout_stashed = config.timeout  # stash this
         config.timeout = None
         solver = library.solver_type.init(config)
-        return cls(library, solver, None, timeout_stashed, None, None)
+
+        if use_rospy_logger:
+            import rospy
+
+            # NOTE: don't know why but importing rospy at the top of the file
+            # cause issue in logging in the training phase. That's why I import
+            # it here.
+            loginfo_fun = rospy.loginfo
+            logwarn_fun = rospy.logwarn
+        else:
+            loginfo_fun = logger.info
+            logwarn_fun = logger.warning
+
+        return cls(library, solver, None, timeout_stashed, None, None, loginfo_fun, logwarn_fun)
 
     def setup(self, task: ProblemT) -> None:
         assert task.n_inner_task == 1
@@ -622,14 +635,11 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, Res
         inference_result = inference_results[0]
 
         seems_infeasible = inference_result.nit > self.library.success_iter_threshold()
-        logger.info(f"nit {inference_result.nit}: the {self.library.success_iter_threshold()}")
-        if rospy is not None:
-            rospy.loginfo(
-                f"nit {inference_result.nit}: the {self.library.success_iter_threshold()}"
-            )
+        self._loginfo_fun(
+            f"nit {inference_result.nit}: the {self.library.success_iter_threshold()}"
+        )
         if seems_infeasible:
-            if rospy is not None:
-                rospy.logwarn("seems infeasible")
+            self._logwarn_fun("seems infeasible")
             result_type = self.solver.get_result_type()
             res = result_type.abnormal()
             res.time_elapsed = None
