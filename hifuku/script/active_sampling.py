@@ -4,15 +4,15 @@ import resource
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import yaml
 from mohou.trainer import TrainConfig
+from pyinstrument import Profiler
 
 from hifuku.domain import select_domain
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
-from hifuku.neuralnet import PixelAutoEncoder, VoxelAutoEncoder
+from hifuku.neuralnet import PixelAutoEncoder
 from hifuku.script_utils import (
     create_default_logger,
     filter_warnings,
@@ -54,6 +54,9 @@ if __name__ == "__main__":
     project_name_postfix: Optional[str] = args.post
     clamp_factor: Optional[float] = args.clamp
 
+    if "bubbly" in domain_name:
+        assert not use_pretrained_ae
+
     if clamp_factor is not None:
         _CLAMP_FACTOR[0] = clamp_factor
 
@@ -70,6 +73,7 @@ if __name__ == "__main__":
     if n_limit_batch == -1:
         n_limit_batch = None
 
+    torch.backends.cudnn.enabled = False
     assert torch.cuda.is_available()
 
     filter_warnings()
@@ -77,6 +81,8 @@ if __name__ == "__main__":
     project_path = get_project_path(domain_name, project_name_postfix)
 
     logger = create_default_logger(project_path, "library_gen")
+
+    logger.info("cmd args: {}".format(args))
 
     # set file open limit to large
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -110,13 +116,15 @@ if __name__ == "__main__":
         assert mesh_np is not None
         mesh_np = np.expand_dims(mesh_np, axis=(0, 1)).astype(float)
         mesh_torch = torch.from_numpy(mesh_np).float().to(ae_model.get_device())
-        assert isinstance(ae_model, (PixelAutoEncoder, VoxelAutoEncoder))
+        assert isinstance(ae_model, PixelAutoEncoder)
         decoded = ae_model.decoder(ae_model.encoder(mesh_torch))
         mesh_reconstructed = decoded.detach().cpu().squeeze().numpy()
 
         # compare mesh and mesh_reconstructed side by side in matplotlib
+        import matplotlib.pyplot as plt
+
         fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        assert n_grid is not None
+        n_grid = ae_model.config.n_grid
         axes[0].imshow(mesh_np.reshape(n_grid, n_grid))
         axes[1].imshow(mesh_reconstructed.reshape(n_grid, n_grid))
         plt.show()
@@ -140,7 +148,11 @@ if __name__ == "__main__":
         lib_sampler.library = load_library(domain_name, "cuda", True, postfix=project_name_postfix)
 
     for i in range(n_step):
+        profiler = Profiler()
+        profiler.start()
         sampling_successful = lib_sampler.step_active_sampling()
+        profiler.stop()
+        logger.info(profiler.output_text(unicode=True, color=True))
 
     p_watchdog.terminate()
     p_watchdog.join()
