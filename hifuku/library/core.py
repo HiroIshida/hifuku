@@ -1191,7 +1191,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             valid_losses = tcache.reduce_to_lossseq(tcache.validate_lossseq_table)
             n_step = len(valid_losses)
             idx_min = np.argmin(valid_losses)
-            t_acceptable = 10
+            t_acceptable = 20
             no_improvement_for_long = bool((n_step - idx_min) > t_acceptable)
             return no_improvement_for_long
 
