@@ -16,6 +16,7 @@ from rpbench.articulated.jaxon.ground import (
 from rpbench.articulated.pr2.jskfridge import (
     JskFridgeReachingTask,
     JskFridgeVerticalReachingTask,
+    JskFridgeVerticalReachingTask2,
 )
 from rpbench.articulated.pr2.kivapod import KivapodEmptyReachingTask
 from rpbench.articulated.pr2.minifridge import TabletopClutteredFridgeReachingTask
@@ -286,6 +287,27 @@ class JSKFridgeVertical_SQP(DomainProtocol):
 
 class JSKFridgeVertical_RRT2000(DomainProtocol):
     task_type = JskFridgeVerticalReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=2000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class JSKFridgeVertical2_SQP(DomainProtocol):
+    task_type = JskFridgeVerticalReachingTask2
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(n_wp=40, n_max_call=8, motion_step_satisfaction="explicit")
+    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class JSKFridgeVertical2_RRT2000(DomainProtocol):
+    task_type = JskFridgeVerticalReachingTask2
     solver_type = OMPLSolver
     solver_config = OMPLSolverConfig(
         n_max_call=2000,
