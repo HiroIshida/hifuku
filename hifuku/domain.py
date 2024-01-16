@@ -302,7 +302,7 @@ class JSKFridgeVertical2_SQP(DomainProtocol):
     task_type = JskFridgeVerticalReachingTask2
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(n_wp=40, n_max_call=8, motion_step_satisfaction="explicit")
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
+    auto_encoder_project_name = "JskFridgeWorld2-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
@@ -315,7 +315,7 @@ class JSKFridgeVertical2_RRT2000(DomainProtocol):
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.1,
     )
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
+    auto_encoder_project_name = "JskFridgeWorld2-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
@@ -611,6 +611,8 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         jsk_fridge_rrt10000 = JSKFridge_RRT10000
         jsk_fridge_vertical_sqp = JSKFridgeVertical_SQP
         jsk_fridge_vertical_rrt2000 = JSKFridgeVertical_RRT2000
+        jsk_fridge_vertical2_sqp = JSKFridgeVertical2_SQP
+        jsk_fridge_vertical2_rrt2000 = JSKFridgeVertical2_RRT2000
         kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
         shelf_cluttered_sqp = ShelfBoxClutteredSandwitchingTask_SQP_Domain
         shelf_cluttered_rrt = ShelfBoxClutteredSandwitchingTask_RRT_Domain
