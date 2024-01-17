@@ -67,6 +67,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     """
 
     task_type: Type[ProblemT]
+    task_distribution_hash: str
     solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     ae_model_shared: Optional[
@@ -205,6 +206,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             meta_data = {}
         return cls(
             task_type,
+            task_type.compute_distribution_hash(),
             solver_type,
             config,
             ae_model,
@@ -447,6 +449,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         task_type: Type[ProblemT],
         solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         device: Optional[torch.device] = None,
+        check_hash: bool = True,
     ) -> List["SolutionLibrary[ProblemT, ConfigT, ResultT]"]:
         if device is None:
             if torch.cuda.is_available():
@@ -474,6 +477,8 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 latest_path = path
         assert latest_path is not None
 
+        task_hash = task_type.compute_distribution_hash()
+
         logger.debug("load latest library from {}".format(latest_path))
         with latest_path.open(mode="rb") as f:
             lib: "SolutionLibrary[ProblemT, ConfigT, ResultT]" = pickle.load(f)
@@ -482,6 +487,8 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             # In most case, user will use the library in a single process
             # thus we dont need to care about thread stuff.
             lib.limit_thread = False  # faster
+            if check_hash:
+                assert lib.task_distribution_hash == task_hash
             libraries.append(lib)
         return libraries  # type: ignore
 
@@ -493,6 +500,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
             singleton = SolutionLibrary(
                 task_type=self.task_type,
+                task_distribution_hash=self.task_distribution_hash,
                 solver_type=self.solver_type,
                 solver_config=self.solver_config,
                 ae_model_shared=self.ae_model_shared,
@@ -516,6 +524,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
         library = SolutionLibrary(
             task_type=singleton.task_type,
+            task_distribution_hash=singleton.task_distribution_hash,
             solver_type=singleton.solver_type,
             solver_config=singleton.solver_config,
             ae_model_shared=singleton.ae_model_shared,
@@ -531,6 +540,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     def get_singleton(self, idx: int) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
         singleton = SolutionLibrary(
             task_type=self.task_type,
+            task_distribution_hash=self.task_distribution_hash,
             solver_type=self.solver_type,
             solver_config=self.solver_config,
             ae_model_shared=self.ae_model_shared,
@@ -1000,6 +1010,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
             task_type=self.problem_type,
+            task_distribution_hash=self.library.task_distribution_hash,
             solver_type=self.solver_type,
             solver_config=self.solver_config,
             ae_model_shared=self.library.ae_model_shared,
