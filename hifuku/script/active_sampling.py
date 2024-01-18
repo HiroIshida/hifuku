@@ -155,6 +155,10 @@ if __name__ == "__main__":
 
     if warm_start:
         lib_sampler.library = load_library(domain_name, "cuda", True, postfix=project_name_postfix)
+        if use_pretrained_ae:
+            assert lib_sampler.library.ae_model_shared is not None
+        else:
+            assert lib_sampler.library.ae_model_shared is None
 
     for i in range(n_step):
         profiler = Profiler()
