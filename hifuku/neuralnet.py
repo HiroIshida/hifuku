@@ -90,6 +90,7 @@ class IterationPredictorDataset(Dataset):
     def reduce(self, target_ratio: float = 0.7) -> None:
         indices_fails = torch.where(self.bools_fail)[0]
         false_rate_now = len(indices_fails) / len(self)
+        logger.info(f"current false rate: {false_rate_now}")
         if false_rate_now < target_ratio:
             return
 
@@ -101,6 +102,9 @@ class IterationPredictorDataset(Dataset):
         indices_fails = indices_fails[torch.randperm(len(indices_fails))]
         indices_remove = indices_fails[:n_false_reduce]
 
+        # show first 100 indices removed
+        logger.info(f"indices removed: {indices_remove[:100]}...{indices_remove[-1]}")
+
         bools_remain = torch.ones(len(self), dtype=torch.bool)
         bools_remain[indices_remove] = False
         indices_remain = torch.where(bools_remain)[0]
@@ -109,6 +113,7 @@ class IterationPredictorDataset(Dataset):
         # compute current false rate
         indices_fails = torch.where(self.bools_fail[indices_remain])[0]
         false_rate_now = len(indices_fails) / len(indices_remain)
+        logger.info(f"reduced to {len(indices_remain)} sample from {len(self)}")
         logger.info(f"false rate: {false_rate_now}")
 
     def coarse_reduced(self, target_ratio: float = 0.7) -> "IterationPredictorDataset":
