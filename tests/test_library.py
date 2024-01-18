@@ -15,8 +15,8 @@ from skmp.trajectory import Trajectory
 
 from hifuku.datagen import MultiProcessBatchProblemSolver
 from hifuku.domain import (
-    BubblySimpleMeshPointConnecting_RRT_Domain,
     DomainProtocol,
+    DoubleIntegratorBubblySimple_SQP,
     TabletopOvenRightArmReachingTask,
 )
 from hifuku.library import (
@@ -157,9 +157,9 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
 
 
 def test_SolutionLibrarySampler():
-    _test_SolutionLibrarySampler(BubblySimpleMeshPointConnecting_RRT_Domain, False)
-    _test_SolutionLibrarySampler(BubblySimpleMeshPointConnecting_RRT_Domain, True)
+    _test_SolutionLibrarySampler(DoubleIntegratorBubblySimple_SQP, False)
+    _test_SolutionLibrarySampler(DoubleIntegratorBubblySimple_SQP, True)
 
 
 if __name__ == "__main__":
-    _test_SolutionLibrarySampler(BubblySimpleMeshPointConnecting_RRT_Domain, True)
+    _test_SolutionLibrarySampler(DoubleIntegratorBubblySimple_SQP, True)

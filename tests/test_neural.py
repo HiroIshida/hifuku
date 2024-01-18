@@ -6,7 +6,7 @@ import torch
 from mohou.trainer import TrainCache, TrainConfig, train
 
 from hifuku.datagen.batch_solver import MultiProcessBatchProblemSolver
-from hifuku.domain import BubblySimpleMeshPointConnecting_RRT_Domain
+from hifuku.domain import DoubleIntegratorBubblySimple_SQP
 from hifuku.neuralnet import (
     AutoEncoderConfig,
     IterationPredictor,
@@ -51,7 +51,7 @@ def test_network():
 
 @pytest.fixture(autouse=True, scope="module")
 def sol_tasks_and_resultss():
-    domain = BubblySimpleMeshPointConnecting_RRT_Domain
+    domain = DoubleIntegratorBubblySimple_SQP
     task_type = domain.task_type
 
     task_default = task_type.sample(1, True)
@@ -73,9 +73,9 @@ def sol_tasks_and_resultss():
 
 
 def test_dataset(sol_tasks_and_resultss):
-    domain = BubblySimpleMeshPointConnecting_RRT_Domain
+    domain = DoubleIntegratorBubblySimple_SQP
     device = torch.device("cpu")
-    ae_config = AutoEncoderConfig()
+    ae_config = AutoEncoderConfig(n_grid=56)
     ae = PixelAutoEncoder(ae_config, device=device)
     sol, tasks, resultss = sol_tasks_and_resultss
 
@@ -119,9 +119,9 @@ def test_dataset(sol_tasks_and_resultss):
 
 
 def test_training(sol_tasks_and_resultss):
-    domain = BubblySimpleMeshPointConnecting_RRT_Domain
+    domain = DoubleIntegratorBubblySimple_SQP
     device = torch.device("cpu")
-    ae_config = AutoEncoderConfig()
+    ae_config = AutoEncoderConfig(n_grid=56)
     ae = PixelAutoEncoder(ae_config, device=device)
     sol, tasks, resultss = sol_tasks_and_resultss
 
