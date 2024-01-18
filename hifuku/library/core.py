@@ -24,6 +24,7 @@ import threadpoolctl
 import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
+from ompl import set_ompl_random_seed
 from rpbench.interface import AbstractTaskSolver
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
@@ -615,7 +616,7 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
 
             signal.signal(signal.SIGALRM, handler)
             signal.alarm(self.timeout)
-
+            set_ompl_random_seed(0)  # to make result reproducible
         try:
             ret = self._solve()
         except TimeoutException:
@@ -1153,6 +1154,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             self.library.ae_model_shared,
         )
         assert dataset is not None
+        dataset.reduce()
 
         with dataset_cache_path.open(mode="wb") as fw:
             pickle.dump(dataset, fw)

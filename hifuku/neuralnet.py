@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -16,6 +17,8 @@ from torch.utils.data import Dataset, default_collate
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.types import RawData
 from hifuku.utils import determine_process_thread
+
+logger = logging.getLogger(__name__)
 
 
 class AutoEncoderBase(ABC):
@@ -75,12 +78,73 @@ class IterationPredictorDataset(Dataset):
     mesh_likes: Optional[torch.Tensor]
     descriptions: torch.Tensor
     itervals: torch.Tensor
+    bools_fail: torch.Tensor
     n_inner: int
     encoded: bool
+    indices_remain: Optional[torch.Tensor] = None
     """
     mesh_likes can be either a of stack of feature vectors (n_elem, n_feature)
     or stack of meshes (n_elem, ...) depending on `encoded".
     """
+
+    def reduce(self, target_ratio: float = 0.7) -> None:
+        indices_fails = torch.where(self.bools_fail)[0]
+        false_rate_now = len(indices_fails) / len(self)
+        if false_rate_now < target_ratio:
+            return
+
+        n_success_now = len(self) - len(indices_fails)
+        target_n_false = int(target_ratio * n_success_now / (1 - target_ratio))
+        n_false_reduce = len(indices_fails) - target_n_false
+
+        # randomize indices_fail
+        indices_fails = indices_fails[torch.randperm(len(indices_fails))]
+        indices_remove = indices_fails[:n_false_reduce]
+
+        bools_remain = torch.ones(len(self), dtype=torch.bool)
+        bools_remain[indices_remove] = False
+        indices_remain = torch.where(bools_remain)[0]
+        self.indices_remain = indices_remain
+
+        # compute current false rate
+        indices_fails = torch.where(self.bools_fail[indices_remain])[0]
+        false_rate_now = len(indices_fails) / len(indices_remain)
+        logger.info(f"false rate: {false_rate_now}")
+
+    def coarse_reduced(self, target_ratio: float = 0.7) -> "IterationPredictorDataset":
+        logger.info("start to reduce")
+        bools_fail_arr = self.bools_fail.reshape((-1, self.n_inner))
+        arr_n_fail = bools_fail_arr.sum(dim=1)
+        idxes = torch.argsort(arr_n_fail)
+
+        success_count = 0
+        fail_count = 0
+        indices = []
+        for idx in idxes:
+            fail_count_here = arr_n_fail[idx]
+            success_count_here = self.n_inner - fail_count_here
+            success_count += success_count_here
+            fail_count += fail_count_here
+            fail_rate = fail_count / (success_count + fail_count)
+            logger.info(f"fail rate: {fail_rate}")
+            indices.append(idx)
+            if fail_rate > target_ratio:
+                break
+        # re-create dataset with indices
+        indices = torch.tensor(indices)
+        if self.mesh_likes is not None:
+            mesh_likes = self.mesh_likes[indices]
+        else:
+            mesh_likes = None
+        _descriptions = self.descriptions.reshape((-1, self.n_inner))
+        descriptions = _descriptions[indices].flatte()
+        _itervals = self.itervals.reshape((-1, self.n_inner, self.itervals.shape[-1]))
+        itervals = _itervals[indices].reshape((-1, self.itervals.shape[-1]))
+        _bools_fail = self.bools_fail.reshape((-1, self.n_inner))
+        bools_fail = _bools_fail[indices].reshape((-1,))
+        return IterationPredictorDataset(
+            mesh_likes, descriptions, itervals, bools_fail, self.n_inner, self.encoded
+        )
 
     # TODO: __add__
     def add(self, other: "IterationPredictorDataset") -> None:
@@ -102,9 +166,13 @@ class IterationPredictorDataset(Dataset):
         return int(len(self) / self.n_inner)
 
     def __len__(self) -> int:
+        if self.indices_remain is not None:
+            return len(self.indices_remain)
         return len(self.descriptions)
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor, ...]:
+        if self.indices_remain is not None:
+            idx = self.indices_remain[idx]
 
         if self.mesh_likes is None:
             mesh_like_here = torch.empty(0)
@@ -178,13 +246,15 @@ class IterationPredictorDataset(Dataset):
         meshes_list = []
         descriptions_stacked_list = []
         iterval_stacked_list = []
+        bools_fail_stacked_list = []
 
         n_inner = None
         for sample in tqdm.tqdm(loader_like):
-            meshes, descriptionss, itervals = sample
+            meshes, descriptionss, itervals, bools_fail = sample
             meshes_list.append(meshes)
             descriptions_stacked_list.append(descriptionss.reshape((-1, descriptionss.shape[-1])))
             iterval_stacked_list.append(itervals.flatten())
+            bools_fail_stacked_list.append(bools_fail.flatten())
 
             n_inner = len(descriptionss[0])
         assert n_inner is not None
@@ -193,6 +263,7 @@ class IterationPredictorDataset(Dataset):
             torch.concat(meshes_list),
             torch.concat(descriptions_stacked_list),
             torch.hstack(iterval_stacked_list),
+            torch.hstack(bools_fail_stacked_list),
             n_inner,
             False,
         )
@@ -207,13 +278,14 @@ class IterationPredictorDataset(Dataset):
         encoded_list = []
         description_list = []
         iterval_list = []
+        bools_fail_list = []
 
         # create minibatch list
         n_problem: int = 0
         mesh_used: bool = False  # dirty. set in the for loop
 
         for sample in tqdm.tqdm(loader_like):
-            mesh, description, iterval = sample
+            mesh, description, iterval, bools_fail = sample
 
             mesh_used = mesh is not None
 
@@ -230,6 +302,7 @@ class IterationPredictorDataset(Dataset):
 
                 description_list.append(description[i])
                 iterval_list.append(iterval[i])
+                bools_fail_list.append(bools_fail[i])
         assert n_problem > 0
 
         if mesh_used:
@@ -239,10 +312,18 @@ class IterationPredictorDataset(Dataset):
 
         descriptions_concat = torch.cat(description_list, dim=0)
         itervals_concat = torch.cat(iterval_list, dim=0)
+        bools_fails_concat = torch.cat(bools_fail_list, dim=0)
 
         n_data = len(descriptions_concat)
         assert len(itervals_concat) == n_data
-        return cls(mesh_encodeds_concat, descriptions_concat, itervals_concat, n_problem, True)
+        return cls(
+            mesh_encodeds_concat,
+            descriptions_concat,
+            itervals_concat,
+            bools_fails_concat,
+            n_problem,
+            True,
+        )
 
 
 @dataclass

@@ -70,5 +70,8 @@ class RawData(TensorChunkBase):
             torch_wcd_descs = torch.stack(torch_vector_descs)
 
             nits = np.array([get_clamped_iter(r, self.solver_config) for r in self.results])
+            clamp_value = int(self.solver_config.n_max_call * _CLAMP_FACTOR[0])
+            failed = nits == clamp_value
+
             torch_nits = torch.from_numpy(nits).float()
-            return torch_mesh, torch_wcd_descs, torch_nits
+            return torch_mesh, torch_wcd_descs, torch_nits, failed
