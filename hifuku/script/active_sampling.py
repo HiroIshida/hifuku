@@ -13,7 +13,7 @@ from pyinstrument import Profiler
 
 from hifuku.domain import select_domain
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
-from hifuku.neuralnet import PixelAutoEncoder
+from hifuku.neuralnet import PixelAutoEncoder, IterationPredictorWithEncoder, NeuralAutoEncoderBase
 from hifuku.script_utils import (
     create_default_logger,
     filter_warnings,
@@ -102,11 +102,18 @@ if __name__ == "__main__":
         lsconfig = parse_config_yaml(dic)
     logger.info("lsconfig: {}".format(lsconfig))
 
+    if not use_pretrained_ae:
+        assert lsconfig.train_with_encoder, "you must train encoder, otherwise encoder will be just a random one"
+
     # run memmory watchdog
     p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0,))
     p_watchdog.start()
 
     n_grid: Optional[Literal[56, 112]] = args.n_grid
+    if use_pretrained_ae:
+        assert n_grid is None
+    else:
+        assert n_grid is not None
     ae_model = load_compatible_autoencoder(domain_name, use_pretrained_ae, n_grid)
 
     if use_pretrained_ae:
@@ -159,6 +166,11 @@ if __name__ == "__main__":
             assert lib_sampler.library.ae_model_shared is not None
         else:
             assert lib_sampler.library.ae_model_shared is None
+            predictor_pre = lib_sampler.library.predictors[-1]
+            assert isinstance(predictor_pre, IterationPredictorWithEncoder)
+            assert isinstance(predictor_pre.ae_model, NeuralAutoEncoderBase)
+            n_grid_pre = predictor_pre.ae_model.config.n_grid
+            assert n_grid == n_grid_pre
 
     for i in range(n_step):
         profiler = Profiler()
