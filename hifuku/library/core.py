@@ -489,7 +489,10 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             # thus we dont need to care about thread stuff.
             lib.limit_thread = False  # faster
             if check_hash:
-                assert lib.task_distribution_hash == task_hash
+                if lib.task_distribution_hash != task_hash:
+                    msg = f"task_distribution_hash mismatch: {lib.task_distribution_hash} != {task_hash}\n"
+                    msg += "task definition has been change after training the library."
+                    raise RuntimeError(msg)
             libraries.append(lib)
         return libraries  # type: ignore
 
