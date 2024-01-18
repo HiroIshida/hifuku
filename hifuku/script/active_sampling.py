@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import resource
+import threading
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
@@ -127,6 +128,14 @@ if __name__ == "__main__":
         n_grid = ae_model.config.n_grid
         axes[0].imshow(mesh_np.reshape(n_grid, n_grid))
         axes[1].imshow(mesh_reconstructed.reshape(n_grid, n_grid))
+
+        def close_plot_after_timeout(timeout):
+            plt.pause(timeout)
+            plt.close()
+
+        # close automatically after 5 seconds
+        t = threading.Thread(target=close_plot_after_timeout, args=(5,))
+        t.start()
         plt.show()
 
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
