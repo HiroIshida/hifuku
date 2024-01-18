@@ -152,7 +152,7 @@ if __name__ == "__main__":
         profiler.start()
         sampling_successful = lib_sampler.step_active_sampling()
         profiler.stop()
-        logger.info(profiler.output_text(unicode=True, color=True))
+        logger.info(profiler.output_text(unicode=True, color=False))
 
     p_watchdog.terminate()
     p_watchdog.join()
