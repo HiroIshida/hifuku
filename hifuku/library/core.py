@@ -26,7 +26,12 @@ import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 from ompl import set_ompl_random_seed
 from rpbench.interface import AbstractTaskSolver
-from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
+from skmp.solver.interface import (
+    AbstractScratchSolver,
+    ConfigT,
+    ResultProtocol,
+    ResultT,
+)
 from skmp.trajectory import Trajectory
 
 from hifuku.coverage import CoverageResult
@@ -1169,7 +1174,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             logger.info(f"rate of unsolvable yet: {torch.sum(unsolvable_yet) / n_total}")
 
             # actually ...
-            this_nitss = torch.tensor([[e.n_call for e in results] for results in resultss])
+            def res_to_nit(res: ResultProtocol) -> float:
+                if res.traj is not None:
+                    return float(res.n_call)
+                else:
+                    return np.inf
+
+            this_nitss = torch.tensor([[res_to_nit(r) for r in results] for results in resultss])
             solved_by_this = this_nitss < self.library.success_iter_threshold()
             logger.info(f"rate of solved by this: {torch.sum(solved_by_this) / n_total}")
 
