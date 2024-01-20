@@ -13,7 +13,12 @@ from pyinstrument import Profiler
 
 from hifuku.domain import select_domain
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
-from hifuku.neuralnet import PixelAutoEncoder, IterationPredictorWithEncoder, NeuralAutoEncoderBase
+from hifuku.neuralnet import (
+    IterationPredictorWithEncoder,
+    NeuralAutoEncoderBase,
+    NullAutoEncoder,
+    PixelAutoEncoder,
+)
 from hifuku.script_utils import (
     create_default_logger,
     filter_warnings,
@@ -103,7 +108,9 @@ if __name__ == "__main__":
     logger.info("lsconfig: {}".format(lsconfig))
 
     if not use_pretrained_ae:
-        assert lsconfig.train_with_encoder, "you must train encoder, otherwise encoder will be just a random one"
+        assert (
+            lsconfig.train_with_encoder
+        ), "you must train encoder, otherwise encoder will be just a random one"
 
     # run memmory watchdog
     p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0,))
@@ -116,7 +123,7 @@ if __name__ == "__main__":
         assert n_grid is not None
     ae_model = load_compatible_autoencoder(domain_name, use_pretrained_ae, n_grid)
 
-    if use_pretrained_ae:
+    if not isinstance(ae_model, NullAutoEncoder) and use_pretrained_ae:
         # check if the autoencoder is properly trained
         task = domain.task_type.sample(1)
         table = task.export_table()
