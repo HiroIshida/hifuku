@@ -228,6 +228,19 @@ class ClutteredFridge_RRT1000(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
+class ClutteredFridge_RRT2000(DomainProtocol):
+    task_type = TabletopClutteredFridgeReachingTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=2000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
 class JSKFridge_SQP(DomainProtocol):
     task_type = JskFridgeReachingTask
     solver_type = SQPBasedSolver
@@ -605,6 +618,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         cluttered_fridge_rrt250 = ClutteredFridge_RRT250
         cluttered_fridge_rrt500 = ClutteredFridge_RRT500
         cluttered_fridge_rrt1000 = ClutteredFridge_RRT1000
+        cluttered_fridge_rrt2000 = ClutteredFridge_RRT2000
         jsk_fridge_sqp = JSKFridge_SQP
         jsk_fridge_rrt2000 = JSKFridge_RRT2000
         jsk_fridge_rrt5000 = JSKFridge_RRT5000
