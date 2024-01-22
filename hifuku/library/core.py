@@ -1155,12 +1155,19 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             tmp_n_max_call_mult_factor=self.config.tmp_n_max_call_mult_factor,
         )
 
-        if len(self.library.predictors) > 0:
+        use_weighting = False
+        if use_weighting and len(self.library.predictors) > 0:
             # this modification of loss function using cost may be related to the following articles
             # Good introduction:
             # https://machinelearningmastery.com/cost-sensitive-learning-for-imbalanced-classification/
             # A concise review:
             # Haixiang, Guo, et al. "Learning from class-imbalanced data: Review of methods and applications." Expert systems with applications 73 (2017): 220-239.
+
+            # NOTE about the performance
+            # the result here suggests that performance is not improved by this modification
+            # https://github.com/HiroIshida/hifuku/pull/27
+            # https://github.com/HiroIshida/hifuku/issues/28
+            assert False  # 2024/01/22
 
             weights = torch.ones((len(problems), problems[0].n_inner_task))
             n_total = len(problems) * problems[0].n_inner_task
