@@ -26,7 +26,12 @@ import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 from ompl import set_ompl_random_seed
 from rpbench.interface import AbstractTaskSolver
-from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
+from skmp.solver.interface import (
+    AbstractScratchSolver,
+    ConfigT,
+    ResultProtocol,
+    ResultT,
+)
 from skmp.trajectory import Trajectory
 
 from hifuku.coverage import CoverageResult
@@ -1144,20 +1149,72 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # if len(problems) > n_tau.
         init_solutions = [init_solution] * len(problems)
 
-        results = self.solver.solve_batch(
+        resultss = self.solver.solve_batch(
             problems,
             init_solutions,
             tmp_n_max_call_mult_factor=self.config.tmp_n_max_call_mult_factor,
         )
+
+        use_weighting = False
+        if use_weighting and len(self.library.predictors) > 0:
+            # this modification of loss function using cost may be related to the following articles
+            # Good introduction:
+            # https://machinelearningmastery.com/cost-sensitive-learning-for-imbalanced-classification/
+            # A concise review:
+            # Haixiang, Guo, et al. "Learning from class-imbalanced data: Review of methods and applications." Expert systems with applications 73 (2017): 220-239.
+
+            # NOTE about the performance
+            # the result here suggests that performance is not improved by this modification
+            # https://github.com/HiroIshida/hifuku/pull/27
+            # https://github.com/HiroIshida/hifuku/issues/28
+            assert False  # 2024/01/22
+
+            weights = torch.ones((len(problems), problems[0].n_inner_task))
+            n_total = len(problems) * problems[0].n_inner_task
+
+            # compute if each task is difficult or not
+            infer_resultss = [self.library.infer(task) for task in problems]
+            infer_nitss = torch.tensor(
+                [[e.nit for e in infer_results] for infer_results in infer_resultss]
+            )
+            unsolvable_yet = infer_nitss > self.library.success_iter_threshold()
+            logger.info(f"rate of unsolvable yet: {torch.sum(unsolvable_yet) / n_total}")
+
+            # actually ...
+            def res_to_nit(res: ResultProtocol) -> float:
+                if res.traj is not None:
+                    return float(res.n_call)
+                else:
+                    return np.inf
+
+            this_nitss = torch.tensor([[res_to_nit(r) for r in results] for results in resultss])
+            solved_by_this = this_nitss < self.library.success_iter_threshold()
+            logger.info(f"rate of solved by this: {torch.sum(solved_by_this) / n_total}")
+
+            # if unsolvable so far but solved by this, such sample is quite valuable for training
+            bools_unsolvable_yet_and_solved_by_this = unsolvable_yet & solved_by_this
+            weights[bools_unsolvable_yet_and_solved_by_this] = 9.0
+            rate = torch.sum(bools_unsolvable_yet_and_solved_by_this) / n_total
+            logger.info(f"rate of unsolvable yet but solved by this: {rate}")
+
+            # if unsovled so far and not solved by this, such sample is still valuable
+            bools_unsolvable_yet_and_not_solved_by_this = unsolvable_yet & ~solved_by_this
+            weights[bools_unsolvable_yet_and_not_solved_by_this] = 4.0
+            rate = torch.sum(bools_unsolvable_yet_and_not_solved_by_this) / n_total
+            logger.info(f"rate of unsolvable yet and not solved by this: {rate}")
+        else:
+            weights = None
+
         dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
             init_solution,
             problems,
-            results,
+            resultss,
             self.solver_config,
+            weights,
             self.library.ae_model_shared,
         )
         assert dataset is not None
-        dataset.reduce()
+        # dataset.reduce()
 
         with dataset_cache_path.open(mode="wb") as fw:
             pickle.dump(dataset, fw)

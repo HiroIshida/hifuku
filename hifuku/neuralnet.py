@@ -2,7 +2,6 @@ import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, List, Literal, Optional, Tuple
 
 import torch
@@ -14,7 +13,6 @@ from skmp.trajectory import Trajectory
 from torch import Tensor
 from torch.utils.data import Dataset, default_collate
 
-from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.types import RawData
 from hifuku.utils import determine_process_thread
 
@@ -79,6 +77,7 @@ class IterationPredictorDataset(Dataset):
     descriptions: torch.Tensor
     itervals: torch.Tensor
     bools_fail: torch.Tensor
+    weights: torch.Tensor
     n_inner: int
     encoded: bool
     indices_remain: Optional[torch.Tensor] = None
@@ -115,41 +114,6 @@ class IterationPredictorDataset(Dataset):
         false_rate_now = len(indices_fails) / len(indices_remain)
         logger.info(f"reduced to {torch.sum(self.bools_fail)} sample from {len(self.bools_fail)}")
         logger.info(f"false rate: {false_rate_now}")
-
-    def coarse_reduced(self, target_ratio: float = 0.7) -> "IterationPredictorDataset":
-        logger.info("start to reduce")
-        bools_fail_arr = self.bools_fail.reshape((-1, self.n_inner))
-        arr_n_fail = bools_fail_arr.sum(dim=1)
-        idxes = torch.argsort(arr_n_fail)
-
-        success_count = 0
-        fail_count = 0
-        indices = []
-        for idx in idxes:
-            fail_count_here = arr_n_fail[idx]
-            success_count_here = self.n_inner - fail_count_here
-            success_count += success_count_here
-            fail_count += fail_count_here
-            fail_rate = fail_count / (success_count + fail_count)
-            logger.info(f"fail rate: {fail_rate}")
-            indices.append(idx)
-            if fail_rate > target_ratio:
-                break
-        # re-create dataset with indices
-        indices = torch.tensor(indices)
-        if self.mesh_likes is not None:
-            mesh_likes = self.mesh_likes[indices]
-        else:
-            mesh_likes = None
-        _descriptions = self.descriptions.reshape((-1, self.n_inner))
-        descriptions = _descriptions[indices].flatte()
-        _itervals = self.itervals.reshape((-1, self.n_inner, self.itervals.shape[-1]))
-        itervals = _itervals[indices].reshape((-1, self.itervals.shape[-1]))
-        _bools_fail = self.bools_fail.reshape((-1, self.n_inner))
-        bools_fail = _bools_fail[indices].reshape((-1,))
-        return IterationPredictorDataset(
-            mesh_likes, descriptions, itervals, bools_fail, self.n_inner, self.encoded
-        )
 
     # TODO: __add__
     def add(self, other: "IterationPredictorDataset") -> None:
@@ -190,15 +154,8 @@ class IterationPredictorDataset(Dataset):
             mesh_like_here,
             self.descriptions[idx],
             self.itervals[idx],
+            self.weights[idx],
         )
-
-    @classmethod
-    def load_from_path(
-        cls, dataset_path: Path, ae_model: Optional[AutoEncoderBase] = None
-    ) -> "IterationPredictorDataset":
-        dataset = LazyDecomplessDataset.load(dataset_path, RawData, n_worker=-1)
-        loader = LazyDecomplessDataLoader(dataset, batch_size=1000, shuffle=False)
-        return cls.construct(loader, ae_model)
 
     @staticmethod
     def _initialize(init_solution, solver_config):
@@ -220,7 +177,8 @@ class IterationPredictorDataset(Dataset):
         tasks,
         resultss,
         solver_config,
-        ae_model: Optional[AutoEncoderBase] = None,
+        weightss: Optional[Tensor],
+        ae_model: Optional[AutoEncoderBase],
     ) -> "IterationPredictorDataset":
         raw_data_list = []
 
@@ -235,19 +193,22 @@ class IterationPredictorDataset(Dataset):
 
         zipped = [raw_data.to_tensors() for raw_data in raw_data_list]
         sample = default_collate(zipped)
-        return cls.construct([sample], ae_model)
+        if weightss is None:
+            weightss = torch.ones((len(tasks), tasks[0].n_inner_task))
+        assert weightss.ndim == 2
+        return cls.construct([sample], weightss, ae_model)
 
     @classmethod
     def construct(
-        cls, loader_like, ae_model: Optional[AutoEncoderBase] = None
+        cls, loader_like, weightss: Tensor, ae_model: Optional[AutoEncoderBase]
     ) -> "IterationPredictorDataset":
         if ae_model is None:
-            return cls.construct_keeping_mesh(loader_like)
+            return cls.construct_keeping_mesh(loader_like, weightss)
         else:
-            return cls.construct_by_encoding(loader_like, ae_model)
+            return cls.construct_by_encoding(loader_like, weightss, ae_model)
 
     @classmethod
-    def construct_keeping_mesh(cls, loader_like) -> "IterationPredictorDataset":
+    def construct_keeping_mesh(cls, loader_like, weightss: Tensor) -> "IterationPredictorDataset":
         meshes_list = []
         descriptions_stacked_list = []
         iterval_stacked_list = []
@@ -269,13 +230,14 @@ class IterationPredictorDataset(Dataset):
             torch.concat(descriptions_stacked_list),
             torch.hstack(iterval_stacked_list),
             torch.hstack(bools_fail_stacked_list),
+            weightss.flatten(),
             n_inner,
             False,
         )
 
     @classmethod
     def construct_by_encoding(
-        cls, loader_like, ae_model: AutoEncoderBase
+        cls, loader_like, weightss: Tensor, ae_model: AutoEncoderBase
     ) -> "IterationPredictorDataset":
         device = detect_device()
         ae_model.put_on_device(device)
@@ -326,6 +288,7 @@ class IterationPredictorDataset(Dataset):
             descriptions_concat,
             itervals_concat,
             bools_fails_concat,
+            weightss.flatten(),
             n_problem,
             True,
         )
@@ -391,23 +354,15 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         solution_pred = None
         return iter_pred, solution_pred
 
-    def loss(self, sample: Tuple[Tensor, Tensor, Tensor]) -> LossDict:
-        mesh_encoded, descriptor, iterval = sample
-        # mesh: (n_batch, (mesh_size))
-        # descriptors: (n_batch, n_pose, (descriptor_dim))
-        # iterval: (n_batch, n_pose, (,))
-        dic = {}
-        iter_pred, solution_pred = self.forward((mesh_encoded, descriptor))
-        if iterval.ndim == 1:
-            iterval = iterval.unsqueeze(dim=1)
-        iter_loss = nn.MSELoss()(iter_pred, iterval)
-        dic["iter"] = iter_loss
+    def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
+        mesh_encoded, descriptor, iterval, weight = sample
+        iter_pred, _ = self.forward((mesh_encoded, descriptor))
+        iter_pred = iter_pred.flatten()
+        iterval = iterval.flatten()
 
-        if solution_pred is not None:
-            assert False, "this feature is deleted"
-            solution = solution_pred  # this is just a dummy line to linter pass
-            solution_loss = nn.MSELoss()(solution_pred, solution) * 1000
-            dic["solution"] = solution_loss
+        weihted_iter_loss = (iter_pred - iterval) ** 2 * weight
+        iter_loss = torch.mean(weihted_iter_loss)
+        dic = {"iter": iter_loss}
         return LossDict(dic)
 
 
@@ -600,9 +555,13 @@ class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfi
         iters_pred = iters_pred.flatten()
         return iters_pred
 
-    def loss(self, sample: Tuple[Tensor, Tensor, Tensor]) -> LossDict:
-        meshes, descs, iters = sample
+    def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
+        meshes, descs, iters, weithtss = sample
         iters_pred = self.forward((meshes, descs))
-        iter_loss = nn.MSELoss()(iters_pred, iters)
+        iters_pred = iters_pred.flatten()
+        iters = iters.flatten()
+
+        weihted_iter_loss = (iters_pred - iters) ** 2 * weithtss.flatten()
+        iter_loss = torch.mean(weihted_iter_loss)
         dic = {"iter": iter_loss}
         return LossDict(dic)

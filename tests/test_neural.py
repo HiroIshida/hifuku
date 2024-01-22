@@ -44,8 +44,9 @@ def test_network():
         mesh_encoded = ae.encoder(mesh)
         descriptions = torch.zeros(n_batch, 12)
         nits = torch.zeros(n_batch, 1)
+        weights = torch.ones(n_batch, 1)
 
-        sample = (mesh_encoded, descriptions, nits)
+        sample = (mesh_encoded, descriptions, nits, weights)
         model.loss(sample)
 
 
@@ -81,41 +82,57 @@ def test_dataset(sol_tasks_and_resultss):
 
     n_data = len(tasks) * tasks[0].n_inner_task
 
-    # test dataset when ae is specified (encoded)
-    dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
-        sol.traj, tasks, resultss, domain.solver_config, ae
-    )
-    assert len(dataset) == n_data
-    assert dataset.n_inner == 3
-    mesh, desc, it = dataset[0]
-    assert len(mesh.shape) == 1
-    assert len(desc.shape) == 1
-    assert len(it.shape) == 0
+    for use_weight in [True, False]:
+        if use_weight:
+            weightss = torch.ones(len(tasks), tasks[0].n_inner_task) * 2.0
+            w_expected = 2.0
+        else:
+            weightss = None
+            w_expected = 1.0
 
-    dataset.add(dataset)
-    assert len(dataset) == n_data * 2
-    mesh, desc, it = dataset[0]
-    assert len(mesh.shape) == 1
-    assert len(desc.shape) == 1
-    assert len(it.shape) == 0
+        # test dataset when ae is specified (encoded)
+        dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
+            sol.traj, tasks, resultss, domain.solver_config, weightss, ae
+        )
+        assert len(dataset) == n_data
+        assert dataset.n_inner == 3
+        mesh, desc, it, w = dataset[0]
+        assert len(mesh.shape) == 1
+        assert len(desc.shape) == 1
+        assert len(it.shape) == 0
+        assert len(w.shape) == 0
+        assert w.item() == w_expected
 
-    # test dataset when ae is not specified
-    dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
-        sol.traj, tasks, resultss, domain.solver_config, None
-    )
-    assert len(dataset) == n_data
-    assert dataset.n_inner == 3
-    mesh, desc, it = dataset[0]
-    assert len(mesh.shape) == 3
-    assert len(desc.shape) == 1
-    assert len(it.shape) == 0
+        dataset.add(dataset)
+        assert len(dataset) == n_data * 2
+        mesh, desc, it, w = dataset[0]
+        assert len(mesh.shape) == 1
+        assert len(desc.shape) == 1
+        assert len(it.shape) == 0
+        assert len(w.shape) == 0
+        assert w.item() == w_expected
 
-    dataset.add(dataset)
-    assert len(dataset) == n_data * 2
-    mesh, desc, it = dataset[0]
-    assert len(mesh.shape) == 3
-    assert len(desc.shape) == 1
-    assert len(it.shape) == 0
+        # test dataset when ae is not specified
+        dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
+            sol.traj, tasks, resultss, domain.solver_config, weightss, None
+        )
+        assert len(dataset) == n_data
+        assert dataset.n_inner == 3
+        mesh, desc, it, w = dataset[0]
+        assert len(mesh.shape) == 3
+        assert len(desc.shape) == 1
+        assert len(it.shape) == 0
+        assert len(w.shape) == 0
+        assert w.item() == w_expected
+
+        dataset.add(dataset)
+        assert len(dataset) == n_data * 2
+        mesh, desc, it, w = dataset[0]
+        assert len(mesh.shape) == 3
+        assert len(desc.shape) == 1
+        assert len(it.shape) == 0
+        assert len(w.shape) == 0
+        assert w.item() == w_expected
 
 
 def test_training(sol_tasks_and_resultss):
@@ -130,7 +147,7 @@ def test_training(sol_tasks_and_resultss):
 
     # test dataset when ae is specified (encoded)
     dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
-        sol.traj, tasks, resultss, domain.solver_config, ae
+        sol.traj, tasks, resultss, domain.solver_config, None, ae
     )
 
     conf = IterationPredictorConfig(n_dof_desc, ae_config.dim_bottleneck, 10, 10, 10)
@@ -141,9 +158,9 @@ def test_training(sol_tasks_and_resultss):
         tcache = TrainCache.from_model(iterpred_model)
         train(td_path, tcache, dataset, train_config)
 
-    # test dataset when ae is specified
+    # test dataset when ae is not specified
     dataset_raw = IterationPredictorDataset.construct_from_tasks_and_resultss(
-        sol.traj, tasks, resultss, domain.solver_config, None
+        sol.traj, tasks, resultss, domain.solver_config, None, None
     )
     conf = IterationPredictorWithEncoderConfig(iterpred_model, ae)
     combined_model = IterationPredictorWithEncoder(conf, device=device)
