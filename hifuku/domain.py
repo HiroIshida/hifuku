@@ -19,7 +19,10 @@ from rpbench.articulated.pr2.jskfridge import (
     JskFridgeVerticalReachingTask2,
 )
 from rpbench.articulated.pr2.kivapod import KivapodEmptyReachingTask
-from rpbench.articulated.pr2.minifridge import TabletopClutteredFridgeReachingTask
+from rpbench.articulated.pr2.minifridge import (
+    TabletopClutteredFridgeReachingRealisticTask,
+    TabletopClutteredFridgeReachingTask,
+)
 from rpbench.articulated.pr2.shelf import (
     ShelfBoxClutteredSandwitchingTask,
     ShelfBoxSandwitchingTask,
@@ -34,6 +37,7 @@ from rpbench.interface import TaskBase
 from rpbench.two_dimensional.bubbly_world import (
     BubblyComplexMeshPointConnectTask,
     BubblyEmptyMeshPointConnectTask,
+    BubblyModerateMeshPointConnectTask,
     BubblySimpleMeshPointConnectTask,
     DoubleIntegratorOptimizationSolver,
     DoubleIntegratorPlanningConfig,
@@ -181,6 +185,16 @@ class TBRR_RRT_Domain(DomainProtocol):
 
 class ClutteredFridge_SQP(DomainProtocol):
     task_type = TabletopClutteredFridgeReachingTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
+    )
+    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class ClutteredFridgeRealistic_SQP(DomainProtocol):
+    task_type = TabletopClutteredFridgeReachingRealisticTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
@@ -557,6 +571,17 @@ class DoubleIntegratorBubblySimple_SQP(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
+class DoubleIntegratorBubblyModerate_SQP(DomainProtocol):
+    task_type = BubblyModerateMeshPointConnectTask
+    solver_type = DoubleIntegratorOptimizationSolver
+    solver_config = DoubleIntegratorPlanningConfig(
+        n_wp=200,
+        n_max_call=5,
+    )
+    auto_encoder_project_name = None
+    auto_encoder_type = PixelAutoEncoder
+
+
 class DoubleIntegratorBubblyComplex_SQP(DomainProtocol):
     task_type = BubblyComplexMeshPointConnectTask
     solver_type = DoubleIntegratorOptimizationSolver
@@ -641,6 +666,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         humanoid_tcrr2_sqp3 = HumanoidTableClutteredRarmReaching2_SQP3_Domain
         humanoid_grr_sqp = HumanoidGroundRarmReaching_SQP_Domain
         humanoid_gtrr_sqp = HumanoidGroundTableRarmReaching_SQP_Domain
+        di_bubbly_moderate_sqp = DoubleIntegratorBubblyModerate_SQP
         di_bubbly_complex_sqp = DoubleIntegratorBubblyComplex_SQP
         di_bubbly_simple_sqp = DoubleIntegratorBubblySimple_SQP
         di_bubbly_empty_sqp = DoubleIntegratorBubblyEmpty_SQP
