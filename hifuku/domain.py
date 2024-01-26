@@ -199,7 +199,7 @@ class ClutteredFridgeRealistic_SQP(DomainProtocol):
     solver_config = SQPBasedSolverConfig(
         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
     )
-    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+    auto_encoder_project_name = "TabletopClutteredFridgeWorldWithRealisticContents-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
