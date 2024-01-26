@@ -640,6 +640,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         tbrr_sqp = TBRR_SQP_Domain
         tbrr_rrt = TBRR_RRT_Domain
         cluttered_fridge_sqp = ClutteredFridge_SQP
+        cluttered_fridge_realistic_sqp = ClutteredFridgeRealistic_SQP
         cluttered_fridge_rrt250 = ClutteredFridge_RRT250
         cluttered_fridge_rrt500 = ClutteredFridge_RRT500
         cluttered_fridge_rrt1000 = ClutteredFridge_RRT1000
