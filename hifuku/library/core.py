@@ -669,6 +669,7 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[ProblemT, ConfigT, Res
             res = result_type.abnormal()
             res.time_elapsed = None
             self.previous_est_positive = False
+            self.previous_false_positive = False
             return res
         solver_result = self.solver.solve(inference_result.init_solution)
         solver_result.time_elapsed = time.time() - ts
