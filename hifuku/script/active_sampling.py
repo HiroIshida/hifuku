@@ -25,7 +25,7 @@ from hifuku.script_utils import (
     get_project_path,
     load_compatible_autoencoder,
     load_library,
-    watch_memmory,
+    watch_memory,
 )
 from hifuku.types import _CLAMP_FACTOR
 
@@ -112,8 +112,8 @@ if __name__ == "__main__":
             lsconfig.train_with_encoder
         ), "you must train encoder, otherwise encoder will be just a random one"
 
-    # run memmory watchdog
-    p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0,))
+    # run memory watchdog
+    p_watchdog = multiprocessing.Process(target=watch_memory, args=(5.0,))
     p_watchdog.start()
 
     n_grid: Optional[Literal[56, 112]] = args.n_grid

@@ -1212,6 +1212,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         else:
             weights = None
 
+        logger.info("creating dataset")
         dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
             init_solution,
             problems,
@@ -1223,6 +1224,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         assert dataset is not None
         # dataset.reduce()
 
+        logger.info("save dataset to {}".format(dataset_cache_path))
         with dataset_cache_path.open(mode="wb") as fw:
             pickle.dump(dataset, fw)
 

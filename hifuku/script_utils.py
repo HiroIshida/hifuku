@@ -92,14 +92,14 @@ def load_library(
     return lib
 
 
-def watch_memmory(interval: float, debug: bool = True):
+def watch_memory(interval: float, debug: bool = True):
     while True:
         ram = psutil.virtual_memory()
         ram_percent = ram.percent
         if debug:
-            logger.debug("memmory usage: {}%".format(ram_percent))
+            logger.debug("memory usage: {}%".format(ram_percent))
         else:
-            logger.info("memmory usage: {}%".format(ram_percent))
+            logger.info("memory usage: {}%".format(ram_percent))
         time.sleep(interval)
 
 

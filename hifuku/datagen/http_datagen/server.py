@@ -26,7 +26,7 @@ from hifuku.datagen.http_datagen.request import (
     SolveProblemResponse,
 )
 from hifuku.pool import ProblemT
-from hifuku.script_utils import watch_memmory
+from hifuku.script_utils import watch_memory
 from hifuku.utils import determine_process_thread, get_module_source_hash
 
 
@@ -142,7 +142,7 @@ def run_server(server_class=HTTPServer, port=8080, with_memory_watchdog: bool = 
     httpd = server_class(server_address, PostHandler)
 
     if with_memory_watchdog:
-        p_watchdog = multiprocessing.Process(target=watch_memmory, args=(5.0, False))
+        p_watchdog = multiprocessing.Process(target=watch_memory, args=(5.0, False))
         p_watchdog.start()
 
     logging.info("Starting httpd...\n")
