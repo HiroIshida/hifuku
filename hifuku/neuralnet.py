@@ -1,7 +1,11 @@
 import logging
+import os
+import pickle
+import uuid
 from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, List, Literal, Optional, Tuple
 
 import torch
@@ -162,13 +166,26 @@ class IterationPredictorDataset(Dataset):
         global _init_solution_, _solver_config_
         _init_solution_ = init_solution  # type: ignore
         _solver_config_ = solver_config  # type: ignore
+        logger.info(f"initialized pid {os.getpid()}")
 
     @staticmethod
-    def _create_result(pair):  # used in ProcessPool
+    def _create_raw_data(pair):  # used in ProcessPool
         task, results = pair
         global _init_solution_, _solver_config_
         raw_data = RawData(_init_solution_, task.export_table(), results, _solver_config_)  # type: ignore
         return raw_data
+
+    @classmethod
+    def _compute_expected_raw_data_size(cls, tasks, resultss, solver_config) -> int:
+        task = tasks[0]
+        results = resultss[0]
+        raw_data = RawData(None, task.export_table(), results, solver_config)  # type: ignore
+        dump_path = Path(f"/tmp/expected_raw_data_{uuid.uuid4()}.pkl")
+        logger.debug(f"dumping raw data to {dump_path}")
+        with dump_path.open("wb") as f:
+            pickle.dump(raw_data, f)
+        expected_total_size = len(pickle.dumps(raw_data)) * len(tasks)  # in bytes
+        return expected_total_size
 
     @classmethod
     def construct_from_tasks_and_resultss(
@@ -180,15 +197,18 @@ class IterationPredictorDataset(Dataset):
         weightss: Optional[Tensor],
         ae_model: Optional[AutoEncoderBase],
     ) -> "IterationPredictorDataset":
+        expected_total_data_size = cls._compute_expected_raw_data_size(
+            tasks, resultss, solver_config
+        )
+        logger.info(f"expected total data size: {expected_total_data_size / 1e6} MB")
+
         raw_data_list = []
-
         n_process, _ = determine_process_thread()
-
         with ProcessPoolExecutor(
             n_process, initializer=cls._initialize, initargs=(init_solution, solver_config)
         ) as executor:
             args = list(zip(tasks, resultss))
-            for raw_data in tqdm.tqdm(executor.map(cls._create_result, args), total=len(tasks)):
+            for raw_data in tqdm.tqdm(executor.map(cls._create_raw_data, args), total=len(tasks)):
                 raw_data_list.append(raw_data)
 
         zipped = [raw_data.to_tensors() for raw_data in raw_data_list]
