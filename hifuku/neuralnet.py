@@ -318,12 +318,10 @@ class IterationPredictorDataset(Dataset):
 class IterationPredictorConfig(ModelConfigBase):
     dim_problem_descriptor: int
     dim_conv_bottleneck: int
-    n_layer1_width: int = 500
-    n_layer2_width: int = 100
-    n_layer3_width: int = 50
-    layers: Optional[List[int]] = None
+    layers: Tuple[int, ...] = (500, 100, 50)
     dim_description_expand: Optional[int] = 50
     use_solution_pred: bool = False
+    use_batch_norm: bool = True
 
 
 class IterationPredictor(ModelBase[IterationPredictorConfig]):
@@ -334,35 +332,31 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
     def _setup_from_config(self, config: IterationPredictorConfig) -> None:
 
         if config.dim_description_expand is not None:
-            self.description_expand_linears = nn.Sequential(
-                nn.Linear(config.dim_problem_descriptor, config.dim_description_expand),
-                nn.ReLU(),
-                nn.Linear(config.dim_description_expand, config.dim_description_expand),
-                nn.ReLU(),
-            )
+            lst: List[nn.Module] = [
+                nn.Linear(config.dim_problem_descriptor, config.dim_description_expand)
+            ]
+            if config.use_batch_norm:
+                lst.append(nn.BatchNorm1d(config.dim_description_expand))
+            lst.append(nn.ReLU())
+            lst.append(nn.Linear(config.dim_description_expand, config.dim_description_expand))
+            if config.use_batch_norm:
+                lst.append(nn.BatchNorm1d(config.dim_description_expand))
+            lst.append(nn.ReLU())
+            self.description_expand_linears = nn.Sequential(*lst)
             n_input = config.dim_conv_bottleneck + config.dim_description_expand
         else:
             self.description_expand_linears = None
             n_input = config.dim_conv_bottleneck + config.dim_problem_descriptor
 
-        if config.layers is None:
-            self.linears = nn.Sequential(
-                nn.Linear(n_input, config.n_layer1_width),
-                nn.ReLU(),
-                nn.Linear(config.n_layer1_width, config.n_layer2_width),
-                nn.ReLU(),
-                nn.Linear(config.n_layer2_width, config.n_layer3_width),
-                nn.ReLU(),
-                nn.Linear(config.n_layer3_width, 1),
-            )
-        else:
-            width_list = [n_input] + config.layers
-            layers: List[Any] = []
-            for i in range(len(width_list) - 1):
-                layers.append(nn.Linear(width_list[i], width_list[i + 1]))
-                layers.append(nn.ReLU())
-            layers.append(nn.Linear(config.layers[-1], 1))
-            self.linears = nn.Sequential(*layers)
+        width_list = [n_input] + list(config.layers)
+        layers: List[Any] = []
+        for i in range(len(width_list) - 1):
+            layers.append(nn.Linear(width_list[i], width_list[i + 1]))
+            if config.use_batch_norm:
+                layers.append(nn.BatchNorm1d(width_list[i + 1]))
+            layers.append(nn.ReLU())
+        layers.append(nn.Linear(config.layers[-1], 1))
+        self.linears = nn.Sequential(*layers)
 
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
         mesh_features, descriptor = sample

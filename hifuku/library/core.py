@@ -489,6 +489,8 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         with latest_path.open(mode="rb") as f:
             lib: "SolutionLibrary[ProblemT, ConfigT, ResultT]" = pickle.load(f)
             assert lib.device == torch.device("cpu")
+            for pred in lib.predictors:
+                assert not pred.training
             lib.put_on_device(device)
             # In most case, user will use the library in a single process
             # thus we dont need to care about thread stuff.
@@ -1278,6 +1280,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             return no_improvement_for_long
 
         train(pp, tcache, dataset, self.config.train_config, is_stoppable=is_stoppable)
+        model.eval()
         return model
 
     def _sample_solution_canidates(
