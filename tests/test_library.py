@@ -137,13 +137,17 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
             # init k=0
             lib_sampler.step_active_sampling()
             assert lib_sampler.library._n_problem_now == 10
+            lib_sampler.library._elapsed_time_history[-1].is_valid
+
             # active sampling k=1
             lib_sampler.step_active_sampling()
             assert lib_sampler.library._n_problem_now == 12
+            lib_sampler.library._elapsed_time_history[-1].is_valid
 
             # active sampling k=2
             lib_sampler.step_active_sampling()
             assert lib_sampler.library._n_problem_now == 13  # note n_problem_max
+            lib_sampler.library._elapsed_time_history[-1].is_valid
 
             # test load
             lib_load = SolutionLibrary.load(td_path, problem_type, SQPBasedSolver)[0]

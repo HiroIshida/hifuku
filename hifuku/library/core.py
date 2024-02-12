@@ -83,6 +83,15 @@ class ProfileInfo:  # per each iteration
             ]
         )
 
+    @property
+    def is_valid(self) -> bool:
+        if not self.has_all_info:
+            return False
+        # sum of each time must be smaller than t_total
+        return self.t_total > (
+            self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin
+        )
+
     @classmethod
     def from_total(cls, t_total: float) -> "ProfileInfo":
         # for backward compatibility
@@ -999,13 +1008,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 init_solution, self.project_path, dataset_cache_path, prof_info
             )
 
-            ts = time.time()
+            ts_margin = time.time()
             ret = self._determine_margins(predictor)
-            prof_info.t_margin = time.time() - ts
+            prof_info.t_margin = time.time() - ts_margin
             if ret is None:
                 logger.info("determine margin failed. returning None")
                 elapsed_time = time.time() - ts
                 logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
+                logger.info("prof_info: {}".format(prof_info))
                 prof_info.t_total = elapsed_time
                 self.library._elapsed_time_history.append(prof_info)
 
@@ -1043,6 +1053,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         elapsed_time = time.time() - ts
         logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
         prof_info.t_total = elapsed_time
+        logger.info("prof_info: {}".format(prof_info))
 
         self.library._elapsed_time_history.append(prof_info)
 
