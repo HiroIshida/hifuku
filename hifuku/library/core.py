@@ -64,6 +64,38 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class ProfileInfo:  # per each iteration
+    t_total: Optional[float] = None
+    t_determine_cand: Optional[float] = None
+    t_dataset: Optional[float] = None
+    t_train: Optional[float] = None
+    t_margin: Optional[float] = None
+
+    @property
+    def has_all_info(self) -> bool:
+        return all(
+            [
+                self.t_total is not None,
+                self.t_determine_cand is not None,
+                self.t_dataset is not None,
+                self.t_train is not None,
+                self.t_margin is not None,
+            ]
+        )
+
+    @classmethod
+    def from_total(cls, t_total: float) -> "ProfileInfo":
+        # for backward compatibility
+        return cls(t_total, None, None, None, None)
+
+    @property
+    def t_other(self) -> float:
+        return self.t_total - (
+            self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin
+        )
+
+
+@dataclass
 class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     """Solution Library
 
@@ -96,7 +128,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         float
     ] = None  # the cached optimal coverage after margins optimization
     _n_problem_now: Optional[int] = None
-    _elapsed_time_history: Optional[List[float]] = None
+    _elapsed_time_history: Optional[List[ProfileInfo]] = None
     _coverage_est_history: Optional[List[float]] = None
     _ort_sessions: Optional[List[ort.InferenceSession]] = None
 
@@ -110,10 +142,11 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             assert "ae_model" not in state
             logger.debug("[backward compat] ae_model => ae_model_shared")
 
-        is_old_version = "_elapsed_time_history" not in state
-        if is_old_version:
-            logger.debug("[backward compat] set _elapsed_time_history = []")
-            state["_elapsed_time_history"] = []
+        # for backward compatibility
+        elapsed_time_history = state["_elapsed_time_history"]
+        for idx, elapsed_time in enumerate(elapsed_time_history):
+            if isinstance(elapsed_time, float):
+                elapsed_time_history[idx] = ProfileInfo.from_total(elapsed_time)
 
         self.__dict__.update(state)
 
@@ -939,12 +972,15 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         """
         return False if failed
         """
+        prof_info = ProfileInfo()
 
         logger.info("active sampling step")
         ts = time.time()
         assert self.library._elapsed_time_history is not None
 
+        ts_determine_cand = time.time()
         init_solution = self._determine_init_solution()
+        prof_info.t_determine_cand = time.time() - ts_determine_cand
 
         if not self.at_first_iteration():
             logger.info("new active sampling step. increase n_problem_now.")
@@ -959,13 +995,19 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
             self.reset_pool()
             logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
-            predictor = self._train_predictor(init_solution, self.project_path, dataset_cache_path)
+            predictor = self._train_predictor(
+                init_solution, self.project_path, dataset_cache_path, prof_info
+            )
+
+            ts = time.time()
             ret = self._determine_margins(predictor)
+            prof_info.t_margin = time.time() - ts
             if ret is None:
                 logger.info("determine margin failed. returning None")
                 elapsed_time = time.time() - ts
                 logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
-                self.library._elapsed_time_history.append(elapsed_time)
+                prof_info.t_total = elapsed_time
+                self.library._elapsed_time_history.append(prof_info)
 
                 if (
                     self.library._coverage_est_history is not None
@@ -1000,9 +1042,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         elapsed_time = time.time() - ts
         logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
+        prof_info.t_total = elapsed_time
 
-        self.library._elapsed_time_history.append(elapsed_time)
-        logger.info("current elapsed time history: {}".format(self.library._elapsed_time_history))
+        self.library._elapsed_time_history.append(prof_info)
+
+        t_total_list = [e.t_total for e in self.library._elapsed_time_history]
+        logger.info("current elapsed time history: {}".format(t_total_list))
 
         if (
             self.library._coverage_est_history is not None
@@ -1124,10 +1169,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         init_solution: Trajectory,
         project_path: Path,
         dataset_cache_path: Path,
+        profile_info: ProfileInfo,
     ) -> Union[IterationPredictorWithEncoder, IterationPredictor]:
         pp = project_path
         assert self.library._n_problem_now is not None
 
+        ts_dataset = time.time()
         dataset: Optional[IterationPredictorDataset]
         if dataset_cache_path.exists():
             logger.debug("loading from cached dataset from {}".format(dataset_cache_path))
@@ -1224,13 +1271,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             self.library.ae_model_shared,
         )
         assert dataset is not None
-        # dataset.reduce()
-
         logger.info("save dataset to {}".format(dataset_cache_path))
         with dataset_cache_path.open(mode="wb") as fw:
             pickle.dump(dataset, fw)
 
+        profile_info.t_dataset = time.time() - ts_dataset
+
         logger.info("start training model")
+        ts_train = time.time()
         # determine 1dim tensor dimension by temp creation of a problem
         # TODO: should I implement this as a method?
         problem = self.problem_type.sample(1, standard=True)
@@ -1281,6 +1329,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         train(pp, tcache, dataset, self.config.train_config, is_stoppable=is_stoppable)
         model.eval()
+        profile_info.t_train = time.time() - ts_train
         return model
 
     def _sample_solution_canidates(
