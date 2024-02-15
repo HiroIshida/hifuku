@@ -19,8 +19,9 @@ pip3 install -e .
 ## knowledges
 
 ### joint-training of encoder with fcn vs only fcn
-At least for "ClutteredFridge_SQP" domain (2000, 80), training only fcn fixing encoder part is slightly better than the other. 
+At least for "ClutteredFridge_SQP" domain (2000, 80), training only fcn fixing encoder is better than others
 https://gist.github.com/HiroIshida/18c4dc62e284267a9c000a604ca4671a
+https://gist.github.com/HiroIshida/7c40f870fe48c6e1aa00aa47b8451baa
 
 ### iterpred training will be much more efficient with batchnorm
 For "ClutteredFridge_SQP" domain (2000, 80), training with batch norm outperform the counterpart in terms of learning speed and obtained loss
