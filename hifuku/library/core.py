@@ -137,6 +137,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         float
     ] = None  # the cached optimal coverage after margins optimization
     _n_problem_now: Optional[int] = None
+    _n_difficult_now: Optional[int] = None
     _elapsed_time_history: Optional[List[ProfileInfo]] = None
     _coverage_est_history: Optional[List[float]] = None
     _ort_sessions: Optional[List[ort.InferenceSession]] = None
@@ -267,6 +268,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             True,  # assume that we are gonna build library and not in eval time.
             [],
             [],
+            None,
             None,
             None,
             [],
@@ -767,7 +769,7 @@ class LibrarySamplerConfig:
     n_problem_inner: int
     train_config: TrainConfig
     n_solution_candidate: int = 10
-    n_difficult_problem: int = 100
+    n_difficult_init: int = 500
     solvable_threshold_factor: float = 0.8
     difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
     acceptable_false_positive_rate: float = 0.005
@@ -878,6 +880,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             meta_data,
         )
         library._n_problem_now = config.n_problem_init
+        library._n_difficult_now = config.n_difficult_problem_init
 
         # setup solver, sampler, determinant
         if solver is None:
@@ -987,17 +990,21 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         ts = time.time()
         assert self.library._elapsed_time_history is not None
 
-        ts_determine_cand = time.time()
-        init_solution = self._determine_init_solution()
-        prof_info.t_determine_cand = time.time() - ts_determine_cand
 
+        assert self.library._n_problem_now is not None
+        assert self.library._n_difficult_now is not None
         if not self.at_first_iteration():
             logger.info("new active sampling step. increase n_problem_now.")
-            assert self.library._n_problem_now is not None
             self.library._n_problem_now = min(
                 int(self.library._n_problem_now * self.config.n_problem_mult_factor),
                 self.config.n_problem_max,
             )
+            self.library._n_difficult_now = int(self.library._n_difficult_now * self.config.n_problem_mult_factor)
+
+        ts_determine_cand = time.time()
+        logger.info(f"n_difficult_now: {self.library._n_difficult_now}")
+        init_solution = self._determine_init_solution(self.library._n_difficult_now)
+        prof_info.t_determine_cand = time.time() - ts_determine_cand
 
         with TemporaryDirectory() as td:
             dataset_cache_path = Path(td) / hashlib.md5(pickle.dumps(init_solution)).hexdigest()
@@ -1465,7 +1472,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("n_solved_max of candidates: {}".format(n_solved_max))
         return best_cand
 
-    def _determine_init_solution(self) -> Trajectory:
+    def _determine_init_solution(self, n_difficult: int) -> Trajectory:
         n_repeat_budget = 2
         for i_repeat in range(n_repeat_budget):
             logger.info("sample solution candidates ({}-th repeat)".format(i_repeat))
@@ -1480,13 +1487,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
             logger.info("sample difficult problems")
             if self.at_first_iteration():
-                difficult_problems = [
-                    next(problem_pool) for _ in range(self.config.n_difficult_problem)
-                ]
+                difficult_problems = [next(problem_pool) for _ in range(n_difficult)]
             else:
-                difficult_problems, _ = self._sample_difficult_problems(
-                    self.config.n_difficult_problem, problem_pool
-                )
+                difficult_problems, _ = self._sample_difficult_problems(n_difficult, problem_pool)
             best_solution = self._select_solution_candidates(
                 solution_candidates, difficult_problems
             )
