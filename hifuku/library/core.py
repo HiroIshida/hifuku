@@ -765,14 +765,14 @@ class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
 
 @dataclass
 class LibrarySamplerConfig:
-    n_problem_init: int
-    n_problem_inner: int
+    n_problem_init: int = 1500
+    n_problem_inner: int = 80
     train_config: TrainConfig
-    n_solution_candidate: int = 10
+    n_solution_candidate: int = 100
     n_difficult_init: int = 500
-    solvable_threshold_factor: float = 0.8
-    difficult_threshold_factor: float = 0.8  # should equal to solvable_threshold_factor
-    acceptable_false_positive_rate: float = 0.005
+    solvable_threshold_factor: float = 1.0
+    difficult_threshold_factor: float = 1.0  # should equal to solvable_threshold_factor
+    acceptable_false_positive_rate: float = 0.1
     sample_from_difficult_region: bool = (
         True  # In test, classifier cannot be wel trained. So this should be False
     )
@@ -781,9 +781,9 @@ class LibrarySamplerConfig:
     n_validation: int = 1000
     n_validation_inner: int = 10
     n_determine_batch: int = 2000
-    candidate_sample_scale: int = 10
+    candidate_sample_scale: int = 4
     train_with_encoder: bool = False
-    n_problem_mult_factor: float = 1.1
+    n_problem_mult_factor: float = 1.05
     n_problem_max: int = 30000
     tmp_n_max_call_mult_factor: float = 1.5
 
@@ -990,7 +990,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         ts = time.time()
         assert self.library._elapsed_time_history is not None
 
-
         assert self.library._n_problem_now is not None
         assert self.library._n_difficult_now is not None
         if not self.at_first_iteration():
@@ -999,7 +998,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 int(self.library._n_problem_now * self.config.n_problem_mult_factor),
                 self.config.n_problem_max,
             )
-            self.library._n_difficult_now = int(self.library._n_difficult_now * self.config.n_problem_mult_factor)
+            self.library._n_difficult_now = int(
+                self.library._n_difficult_now * self.config.n_problem_mult_factor
+            )
 
         ts_determine_cand = time.time()
         logger.info(f"n_difficult_now: {self.library._n_difficult_now}")
