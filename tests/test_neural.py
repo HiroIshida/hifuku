@@ -26,19 +26,21 @@ def test_network():
     ae = VoxelAutoEncoder(ae_config, device=device)
 
     # test iteration predictor
-    conf = IterationPredictorConfig(
-        12, ae_config.dim_bottleneck, 10, 10, 10, use_solution_pred=False
-    )
+    conf = IterationPredictorConfig(12, ae_config.dim_bottleneck, (10, 10, 10))
     model1 = IterationPredictor(conf, device=device)
-    assert len(model1.linears) == 7
+    assert len(model1.linears) == 3 * 3 + 1
 
     conf = IterationPredictorConfig(
-        12, ae_config.dim_bottleneck, layers=[5, 5, 5, 5], use_solution_pred=False
+        12, ae_config.dim_bottleneck, (10, 10, 10), use_batch_norm=False
     )
     model2 = IterationPredictor(conf, device=device)
-    assert len(model2.linears) == 9
+    assert len(model2.linears) == 3 * 2 + 1
 
-    for model in [model1, model2]:
+    conf = IterationPredictorConfig(12, ae_config.dim_bottleneck, (5, 5, 5, 5))
+    model3 = IterationPredictor(conf, device=device)
+    assert len(model3.linears) == 3 * 4 + 1
+
+    for model in [model1, model2, model3]:
         n_batch = 10
         mesh = torch.zeros(n_batch, 1, 56, 56, 28)
         mesh_encoded = ae.encoder(mesh)
@@ -150,7 +152,7 @@ def test_training(sol_tasks_and_resultss):
         sol.traj, tasks, resultss, domain.solver_config, None, ae
     )
 
-    conf = IterationPredictorConfig(n_dof_desc, ae_config.dim_bottleneck, 10, 10, 10)
+    conf = IterationPredictorConfig(n_dof_desc, ae_config.dim_bottleneck, (10, 10, 10))
     iterpred_model = IterationPredictor(conf, device=device)
 
     with TemporaryDirectory() as td:
