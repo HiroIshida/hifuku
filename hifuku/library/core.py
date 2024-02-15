@@ -767,7 +767,7 @@ class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
 class LibrarySamplerConfig:
     n_problem_init: int = 1500
     n_problem_inner: int = 80
-    train_config: TrainConfig
+    train_config: TrainConfig = TrainConfig()
     n_solution_candidate: int = 100
     n_difficult_init: int = 500
     solvable_threshold_factor: float = 1.0
@@ -880,7 +880,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             meta_data,
         )
         library._n_problem_now = config.n_problem_init
-        library._n_difficult_now = config.n_difficult_problem_init
+        library._n_difficult_now = config.n_difficult_init
 
         # setup solver, sampler, determinant
         if solver is None:

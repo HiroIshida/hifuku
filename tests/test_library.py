@@ -92,7 +92,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
         n_problem_inner=1,
         train_config=tconfig,
         n_solution_candidate=2,
-        n_difficult_problem=5,
+        n_difficult_init=5,
         solvable_threshold_factor=0.0,
         difficult_threshold_factor=-np.inf,  # all pass
         acceptable_false_positive_rate=1.0,
