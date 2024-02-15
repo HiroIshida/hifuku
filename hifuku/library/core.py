@@ -765,11 +765,11 @@ class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
 
 @dataclass
 class LibrarySamplerConfig:
-    n_problem_init: int = 1500
+    n_problem_init: int = 1000
     n_problem_inner: int = 80
     train_config: TrainConfig = TrainConfig()
     n_solution_candidate: int = 100
-    n_difficult_init: int = 500
+    n_difficult_init: int = 300
     solvable_threshold_factor: float = 1.0
     difficult_threshold_factor: float = 1.0  # should equal to solvable_threshold_factor
     acceptable_false_positive_rate: float = 0.1
