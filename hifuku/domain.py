@@ -9,24 +9,15 @@ from rpbench.articulated.jaxon.below_table import (
     HumanoidTableReachingTask,
     HumanoidTableReachingTask2,
 )
-from rpbench.articulated.jaxon.ground import (
-    HumanoidGroundRarmReachingTask,
-    HumanoidGroundTableRarmReachingTask,
-)
 from rpbench.articulated.pr2.jskfridge import (
     JskFridgeReachingTask,
     JskFridgeVerticalReachingTask,
     JskFridgeVerticalReachingTask2,
 )
-from rpbench.articulated.pr2.kivapod import KivapodEmptyReachingTask
 from rpbench.articulated.pr2.minifridge import (
     TabletopClutteredFridgeReachingManyContentsTask,
     TabletopClutteredFridgeReachingRealisticTask,
     TabletopClutteredFridgeReachingTask,
-)
-from rpbench.articulated.pr2.shelf import (
-    ShelfBoxClutteredSandwitchingTask,
-    ShelfBoxSandwitchingTask,
 )
 from rpbench.articulated.pr2.tabletop import (
     TabletopBoxDualArmReachingTask,
@@ -49,9 +40,7 @@ from rpbench.two_dimensional.dummy import (
     DummyTask,
     ProbDummyTask,
 )
-from rpbench.two_dimensional.multiple_rooms import EightRoomsPlanningTask
 from skmp.solver.interface import AbstractScratchSolver, ConfigProtocol
-from skmp.solver.nlp_solver.osqp_sqp import OsqpSqpConfig
 from skmp.solver.nlp_solver.sqp_based_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 
@@ -357,97 +346,6 @@ class JSKFridgeVertical2_RRT2000(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
-class Kivapod_Empty_RRT_Domain(DomainProtocol):
-    task_type = KivapodEmptyReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=3000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.5,
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
-class ShelfBoxClutteredSandwitchingTask_SQP_Domain(DomainProtocol):
-    task_type = ShelfBoxClutteredSandwitchingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=40,
-        n_max_call=5,
-        motion_step_satisfaction="explicit",
-        _osqpsqp_config=OsqpSqpConfig(maxrelax=0),
-    )
-    auto_encoder_project_name = "ShelfBoxClutteredWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class ShelfBoxClutteredSandwitchingTask_RRT_Domain(DomainProtocol):
-    task_type = ShelfBoxClutteredSandwitchingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=500,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="lightning",
-        simplify=False,
-    )
-    auto_encoder_project_name = "ShelfBoxClutteredWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class ShelfBoxSandwitchingTask_SQP_Domain(DomainProtocol):
-    task_type = ShelfBoxSandwitchingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=40,
-        n_max_call=5,
-        motion_step_satisfaction="explicit",
-        _osqpsqp_config=OsqpSqpConfig(maxrelax=0),
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
-class EightRooms_SQP_Domain(DomainProtocol):
-    task_type = EightRoomsPlanningTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=20, n_max_call=10, motion_step_satisfaction="explicit"
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
-class EightRooms_ERT_Domain(DomainProtocol):
-    task_type = EightRoomsPlanningTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        600,
-        1,
-        ertconnect_eps=0.5,
-        algorithm_range=0.1,
-        simplify=False,
-        expbased_planner_backend="ertconnect",
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
-class EightRooms_LT_Domain(DomainProtocol):
-    task_type = EightRoomsPlanningTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        800,
-        1,
-        algorithm_range=0.1,
-        simplify=False,  # if True, it tries to simplify all the part of the trajectory
-        expbased_planner_backend="lightning",
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
 class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
     task_type = HumanoidTableReachingTask
     solver_type = SQPBasedSolver
@@ -525,38 +423,6 @@ class HumanoidTableClutteredRarmReaching2_SQP3_Domain(DomainProtocol):
         ineq_tighten_coef=0.0,
     )
     auto_encoder_project_name = "BelowTableClutteredWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class HumanoidGroundRarmReaching_SQP_Domain(DomainProtocol):
-    task_type = HumanoidGroundRarmReachingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=40,
-        n_max_call=8,
-        motion_step_satisfaction="explicit",
-        verbose=False,
-        ctol_eq=1e-3,
-        ctol_ineq=1e-3,
-        ineq_tighten_coef=0.0,
-    )
-    auto_encoder_project_name = "GroundClutteredWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class HumanoidGroundTableRarmReaching_SQP_Domain(DomainProtocol):
-    task_type = HumanoidGroundTableRarmReachingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=40,
-        n_max_call=8,
-        motion_step_satisfaction="explicit",
-        verbose=False,
-        ctol_eq=1e-3,
-        ctol_ineq=1e-3,
-        ineq_tighten_coef=0.0,
-    )
-    auto_encoder_project_name = "GroundClutteredWorld-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
@@ -665,20 +531,11 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         jsk_fridge_vertical_rrt2000 = JSKFridgeVertical_RRT2000
         jsk_fridge_vertical2_sqp = JSKFridgeVertical2_SQP
         jsk_fridge_vertical2_rrt2000 = JSKFridgeVertical2_RRT2000
-        kivapod_empty_rrt = Kivapod_Empty_RRT_Domain
-        shelf_cluttered_sqp = ShelfBoxClutteredSandwitchingTask_SQP_Domain
-        shelf_cluttered_rrt = ShelfBoxClutteredSandwitchingTask_RRT_Domain
-        shelf_sqp = ShelfBoxSandwitchingTask_SQP_Domain
-        eight_rooms_sqp = EightRooms_SQP_Domain
-        eight_rooms_ert = EightRooms_ERT_Domain
-        eight_rooms_lt = EightRooms_LT_Domain
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         humanoid_trr2_sqp = HumanoidTableRarmReaching2_SQP_Domain
         humanoid_tcrr_sqp = HumanoidTableClutteredRarmReaching_SQP_Domain
         humanoid_tcrr2_sqp = HumanoidTableClutteredRarmReaching2_SQP_Domain
         humanoid_tcrr2_sqp3 = HumanoidTableClutteredRarmReaching2_SQP3_Domain
-        humanoid_grr_sqp = HumanoidGroundRarmReaching_SQP_Domain
-        humanoid_gtrr_sqp = HumanoidGroundTableRarmReaching_SQP_Domain
         di_bubbly_moderate_sqp = DoubleIntegratorBubblyModerate_SQP
         di_bubbly_complex_sqp = DoubleIntegratorBubblyComplex_SQP
         di_bubbly_simple_sqp = DoubleIntegratorBubblySimple_SQP
