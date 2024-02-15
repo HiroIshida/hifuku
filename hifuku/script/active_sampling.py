@@ -9,7 +9,6 @@ import numpy as np
 import torch
 import yaml
 from mohou.trainer import TrainConfig
-from pyinstrument import Profiler
 
 from hifuku.domain import select_domain
 from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
@@ -137,21 +136,21 @@ if __name__ == "__main__":
         mesh_reconstructed = decoded.detach().cpu().squeeze().numpy()
 
         # compare mesh and mesh_reconstructed side by side in matplotlib
-        import matplotlib.pyplot as plt
+        # import matplotlib.pyplot as plt
 
-        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        n_grid = ae_model.config.n_grid
-        axes[0].imshow(mesh_np.reshape(n_grid, n_grid))
-        axes[1].imshow(mesh_reconstructed.reshape(n_grid, n_grid))
+        # fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+        # n_grid = ae_model.config.n_grid
+        # axes[0].imshow(mesh_np.reshape(n_grid, n_grid))
+        # axes[1].imshow(mesh_reconstructed.reshape(n_grid, n_grid))
 
-        def close_plot_after_timeout(timeout):
-            plt.pause(timeout)
-            plt.close()
+        # def close_plot_after_timeout(timeout):
+        #     plt.pause(timeout)
+        #     plt.close()
 
-        # close automatically after 5 seconds
-        t = threading.Thread(target=close_plot_after_timeout, args=(5,))
-        t.start()
-        plt.show()
+        # # close automatically after 5 seconds
+        # t = threading.Thread(target=close_plot_after_timeout, args=(4,))
+        # t.start()
+        # plt.show()
 
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
         domain.task_type,
@@ -181,11 +180,16 @@ if __name__ == "__main__":
             assert n_grid == n_grid_pre
 
     for i in range(n_step):
-        profiler = Profiler()
-        profiler.start()
+        history = lib_sampler.library._elapsed_time_history
+        if history is not None:
+            time_total = sum([info.t_total for info in history])
+            logger.info("time_total: {}".format(time_total))
+            if time_total > 3600 * 24:
+                logger.info("time_total > 24 hours, break")
+                break
+
         sampling_successful = lib_sampler.step_active_sampling()
-        profiler.stop()
-        logger.info(profiler.output_text(unicode=True, color=False))
+        time_history = lib_sampler.library._elapsed_time_history
 
     p_watchdog.terminate()
     p_watchdog.join()
