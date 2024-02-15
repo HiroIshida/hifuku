@@ -31,8 +31,9 @@ from hifuku.types import _CLAMP_FACTOR
 
 
 def parse_config_yaml(dic: Dict) -> LibrarySamplerConfig:
-    train_config = TrainConfig(**dic["train_config"])
-    dic["train_config"] = train_config
+    if "train_config" in dic:
+        train_config = TrainConfig(**dic["train_config"])
+        dic["train_config"] = train_config
     ls_config = LibrarySamplerConfig(**dic)
     return ls_config
 
