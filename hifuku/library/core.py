@@ -786,6 +786,7 @@ class LibrarySamplerConfig:
     n_problem_mult_factor: float = 1.05
     n_problem_max: int = 30000
     tmp_n_max_call_mult_factor: float = 1.5
+    sampling_number_factor: float = 100.0
 
 
 @dataclass
@@ -990,21 +991,23 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         ts = time.time()
         assert self.library._elapsed_time_history is not None
 
-        assert self.library._n_problem_now is not None
         assert self.library._n_difficult_now is not None
         if not self.at_first_iteration():
-            logger.info("new active sampling step. increase n_problem_now.")
-            self.library._n_problem_now = min(
-                int(self.library._n_problem_now * self.config.n_problem_mult_factor),
-                self.config.n_problem_max,
-            )
+            logger.info("new active sampling step. increase n_problem_now??")
+            # self.library._n_problem_now = min(
+            #     int(self.library._n_problem_now * self.config.n_problem_mult_factor),
+            #     self.config.n_problem_max,
+            # )
             self.library._n_difficult_now = int(
                 self.library._n_difficult_now * self.config.n_problem_mult_factor
             )
 
         ts_determine_cand = time.time()
         logger.info(f"n_difficult_now: {self.library._n_difficult_now}")
-        init_solution = self._determine_init_solution(self.library._n_difficult_now)
+        init_solution, rate = self._determine_init_solution(self.library._n_difficult_now)
+        n_problem_now = int((1.0 / rate) * self.config.sampling_number_factor)  # adaptive
+        self.library._n_problem_now = n_problem_now
+        logger.info(f"n_problem_now: {n_problem_now}")
         prof_info.t_determine_cand = time.time() - ts_determine_cand
 
         with TemporaryDirectory() as td:
@@ -1443,7 +1446,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
     def _select_solution_candidates(
         self, candidates: List[Trajectory], problems: List[ProblemT]
-    ) -> Optional[Trajectory]:
+    ) -> Tuple[Trajectory, int]:
         logger.info("select single solution out of {} candidates".format(len(candidates)))
 
         candidates_repeated = []
@@ -1471,9 +1474,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 n_solved_max = n_solved
                 best_cand = candidates[idx_cand]
         logger.info("n_solved_max of candidates: {}".format(n_solved_max))
-        return best_cand
+        assert best_cand is not None
+        return best_cand, n_solved_max
 
-    def _determine_init_solution(self, n_difficult: int) -> Trajectory:
+    def _determine_init_solution(self, n_difficult: int) -> Tuple[Trajectory, float]:
         n_repeat_budget = 2
         for i_repeat in range(n_repeat_budget):
             logger.info("sample solution candidates ({}-th repeat)".format(i_repeat))
@@ -1489,12 +1493,20 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             logger.info("sample difficult problems")
             if self.at_first_iteration():
                 difficult_problems = [next(problem_pool) for _ in range(n_difficult)]
+                n_total = len(difficult_problems)
             else:
-                difficult_problems, _ = self._sample_difficult_problems(n_difficult, problem_pool)
-            best_solution = self._select_solution_candidates(
+                difficult_problems, easy_problems = self._sample_difficult_problems(
+                    n_difficult, problem_pool
+                )
+                n_total = len(difficult_problems) + len(easy_problems)
+
+            best_solution, n_solved_max = self._select_solution_candidates(
                 solution_candidates, difficult_problems
             )
+            # the rate of solved difficult problems / all
+            rate_difficult_solved = n_solved_max / n_total
             if best_solution is not None:
+                logger.info(f"rate of difficult problems solved: {rate_difficult_solved}")
                 logger.info("found best solution")
-                return best_solution
+                return best_solution, rate_difficult_solved
         raise RuntimeError("consumed all repeat budget")
