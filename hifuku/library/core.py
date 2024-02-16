@@ -769,7 +769,7 @@ class LibrarySamplerConfig:
     n_problem_inner: int = 80
     train_config: TrainConfig = TrainConfig()
     n_solution_candidate: int = 100
-    n_difficult_init: int = 300
+    n_difficult_init: int = 500
     solvable_threshold_factor: float = 1.0
     difficult_threshold_factor: float = 1.0  # should equal to solvable_threshold_factor
     acceptable_false_positive_rate: float = 0.1
@@ -786,7 +786,7 @@ class LibrarySamplerConfig:
     n_problem_mult_factor: float = 1.05
     n_problem_max: int = 30000
     tmp_n_max_call_mult_factor: float = 1.5
-    sampling_number_factor: float = 100.0
+    sampling_number_factor: float = 50.0
 
 
 @dataclass
@@ -998,9 +998,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             #     int(self.library._n_problem_now * self.config.n_problem_mult_factor),
             #     self.config.n_problem_max,
             # )
-            self.library._n_difficult_now = int(
-                self.library._n_difficult_now * self.config.n_problem_mult_factor
-            )
+            # self.library._n_difficult_now = int(
+            #     self.library._n_difficult_now * self.config.n_problem_mult_factor
+            # )
 
         ts_determine_cand = time.time()
         logger.info(f"n_difficult_now: {self.library._n_difficult_now}")
