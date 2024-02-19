@@ -105,6 +105,8 @@ if __name__ == "__main__":
     with library_sampling_conf_path.open(mode="r") as f:
         dic = yaml.safe_load(f)
         lsconfig = parse_config_yaml(dic)
+        if not use_pretrained_ae:
+            assert lsconfig.train_with_encoder
     logger.info("lsconfig: {}".format(lsconfig))
 
     if not use_pretrained_ae:
