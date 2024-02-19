@@ -318,7 +318,7 @@ class IterationPredictorDataset(Dataset):
 class IterationPredictorConfig(ModelConfigBase):
     dim_problem_descriptor: int
     dim_conv_bottleneck: int
-    layers: Tuple[int, ...] = (500, 100, 50)
+    layers: Tuple[int, ...] = (500, 100, 100, 100, 50)
     dim_description_expand: Optional[int] = 50
     use_solution_pred: bool = False
     use_batch_norm: bool = True
