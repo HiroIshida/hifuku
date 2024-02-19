@@ -322,6 +322,8 @@ class IterationPredictorConfig(ModelConfigBase):
     dim_description_expand: Optional[int] = 50
     use_solution_pred: bool = False
     use_batch_norm: bool = True
+    as_classifier: bool = False  # TODO: dirty design. we should create another class
+    classifier_threshold: Optional[float] = None
 
 
 class IterationPredictor(ModelBase[IterationPredictorConfig]):
@@ -330,6 +332,8 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
     initial_solution: Optional[Trajectory] = None
 
     def _setup_from_config(self, config: IterationPredictorConfig) -> None:
+        if config.as_classifier:
+            assert config.classifier_threshold is not None
 
         if config.dim_description_expand is not None:
             lst: List[nn.Module] = [
@@ -356,6 +360,8 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
                 layers.append(nn.BatchNorm1d(width_list[i + 1]))
             layers.append(nn.ReLU())
         layers.append(nn.Linear(config.layers[-1], 1))
+        if config.as_classifier:
+            layers.append(nn.Sigmoid())
         self.linears = nn.Sequential(*layers)
 
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Optional[Tensor]]:
@@ -372,11 +378,16 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
         mesh_encoded, descriptor, iterval, weight = sample
         iter_pred, _ = self.forward((mesh_encoded, descriptor))
         iter_pred = iter_pred.flatten()
-        iterval = iterval.flatten()
+        if self.config.as_classifier:
+            classes = (iterval < self.config.classifier_threshold).float()
+            class_loss = nn.BCELoss()(iter_pred, classes)
+            dic = {"class": class_loss}
+        else:
+            iterval = iterval.flatten()
 
-        weihted_iter_loss = (iter_pred - iterval) ** 2 * weight
-        iter_loss = torch.mean(weihted_iter_loss)
-        dic = {"iter": iter_loss}
+            weihted_iter_loss = (iter_pred - iterval) ** 2 * weight
+            iter_loss = torch.mean(weihted_iter_loss)
+            dic = {"iter": iter_loss}
         return LossDict(dic)
 
 
