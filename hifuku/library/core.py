@@ -138,6 +138,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     ] = None  # the cached optimal coverage after margins optimization
     _n_problem_now: Optional[int] = None
     _n_difficult_now: Optional[int] = None
+    _sampling_number_factor_now: Optional[float] = None
     _elapsed_time_history: Optional[List[ProfileInfo]] = None
     _coverage_est_history: Optional[List[float]] = None
     _ort_sessions: Optional[List[ort.InferenceSession]] = None
@@ -268,6 +269,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             True,  # assume that we are gonna build library and not in eval time.
             [],
             [],
+            None,
             None,
             None,
             None,
@@ -882,6 +884,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         )
         library._n_problem_now = config.n_problem_init
         library._n_difficult_now = config.n_difficult_init
+        library._sampling_number_factor_now = config.sampling_number_factor
 
         # setup solver, sampler, determinant
         if solver is None:
@@ -1004,8 +1007,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         ts_determine_cand = time.time()
         logger.info(f"n_difficult_now: {self.library._n_difficult_now}")
-        init_solution, rate = self._determine_init_solution(self.library._n_difficult_now)
-        n_problem_now = int((1.0 / rate) * self.config.sampling_number_factor)  # adaptive
+        init_solution, gain_expected = self._determine_init_solution(self.library._n_difficult_now)
+        logger.info(f"sampling nuber factor: {self.library._sampling_number_factor_now}")
+        n_problem_now = int((1.0 / gain_expected) * self.library._sampling_number_factor_now)
         self.library._n_problem_now = n_problem_now
         logger.info(f"n_problem_now: {n_problem_now}")
         prof_info.t_determine_cand = time.time() - ts_determine_cand
@@ -1022,25 +1026,31 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             ts_margin = time.time()
             ret = self._determine_margins(predictor)
             prof_info.t_margin = time.time() - ts_margin
-            if ret is None:
-                logger.info("determine margin failed. returning None")
-                elapsed_time = time.time() - ts
-                logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
-                logger.info("prof_info: {}".format(prof_info))
-                prof_info.t_total = elapsed_time
-                self.library._elapsed_time_history.append(prof_info)
 
-                if (
-                    self.library._coverage_est_history is not None
-                ):  # backward compat. In loaded older version, this value is None
-                    self.library._coverage_est_history.append(
-                        self.library._coverage_est_history[-1]
-                    )
+        if ret is None:
+            logger.info("determine margin failed. returning None")
+            elapsed_time = time.time() - ts
+            logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
+            logger.info("prof_info: {}".format(prof_info))
+            prof_info.t_total = elapsed_time
+            self.library._elapsed_time_history.append(prof_info)
 
-                assert self.library._candidates_history is not None
-                self.library._candidates_history.pop()  # TODO: quite dirty. but _candidates_history is just for visualization in the paper. So this will not cause serious bug
-                self.library.dump(self.project_path)
-                return False
+            if (
+                self.library._coverage_est_history is not None
+            ):  # backward compat. In loaded older version, this value is None
+                self.library._coverage_est_history.append(self.library._coverage_est_history[-1])
+
+            assert self.library._candidates_history is not None
+            self.library._candidates_history.pop()  # TODO: quite dirty. but _candidates_history is just for visualization in the paper. So this will not cause serious bug
+            self.library.dump(self.project_path)
+
+            self.library._sampling_number_factor_now *= 1.1
+            logger.info(
+                "coverage gain is 0.0. increase sampling number factor to {}".format(
+                    self.library._sampling_number_factor_now
+                )
+            )
+            return False
 
         margins, coverage_result = ret
         logger.info("margin for latest iterpred is {}".format(margins[-1]))
@@ -1078,6 +1088,17 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             logger.info(
                 "current coverage est history: {}".format(self.library._coverage_est_history)
             )
+
+        # increase the factor
+        assert self.library._coverage_est_history is not None
+        if len(self.library._coverage_est_history) > 1:
+            coverage_previous = self.library._coverage_est_history[-2]
+            coverage_this = self.library._coverage_est_history[-1]
+            if (coverage_this - coverage_previous) < gain_expected * 0.2:
+                self.library._sampling_number_factor_now *= 1.1
+                logger.info(
+                    f"expected gain is {gain_expected}, but actual gain is {coverage_this - coverage_previous}. increase sampling number factor to {self.library._sampling_number_factor_now}"
+                )
 
         self.library.dump(self.project_path)
         return True
