@@ -1254,8 +1254,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             tmp_n_max_call_mult_factor=self.config.tmp_n_max_call_mult_factor,
         )
 
-        use_weighting = False
-        if use_weighting and len(self.library.predictors) > 0:
+        use_weighting = True
+        if use_weighting:
             # this modification of loss function using cost may be related to the following articles
             # Good introduction:
             # https://machinelearningmastery.com/cost-sensitive-learning-for-imbalanced-classification/
@@ -1266,18 +1266,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             # the result here suggests that performance is not improved by this modification
             # https://github.com/HiroIshida/hifuku/pull/27
             # https://github.com/HiroIshida/hifuku/issues/28
-            assert False  # 2024/01/22
+            # assert False  # 2024/01/22
 
             weights = torch.ones((len(problems), problems[0].n_inner_task))
             n_total = len(problems) * problems[0].n_inner_task
-
-            # compute if each task is difficult or not
-            infer_resultss = [self.library.infer(task) for task in problems]
-            infer_nitss = torch.tensor(
-                [[e.nit for e in infer_results] for infer_results in infer_resultss]
-            )
-            unsolvable_yet = infer_nitss > self.library.success_iter_threshold()
-            logger.info(f"rate of unsolvable yet: {torch.sum(unsolvable_yet) / n_total}")
 
             # actually ...
             def res_to_nit(res: ResultProtocol) -> float:
@@ -1290,17 +1282,28 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             solved_by_this = this_nitss < self.library.success_iter_threshold()
             logger.info(f"rate of solved by this: {torch.sum(solved_by_this) / n_total}")
 
+            # compute if each task is difficult or not
+            if len(self.library.predictors) > 0:
+                infer_resultss = [self.library.infer(task) for task in problems]
+                infer_nitss = torch.tensor(
+                    [[e.nit for e in infer_results] for infer_results in infer_resultss]
+                )
+                unsolvable_yet = infer_nitss > self.library.success_iter_threshold()
+                logger.info(f"rate of unsolvable yet: {torch.sum(unsolvable_yet) / n_total}")
+            else:
+                unsolvable_yet = torch.ones(
+
             # if unsolvable so far but solved by this, such sample is quite valuable for training
             bools_unsolvable_yet_and_solved_by_this = unsolvable_yet & solved_by_this
-            weights[bools_unsolvable_yet_and_solved_by_this] = 9.0
-            rate = torch.sum(bools_unsolvable_yet_and_solved_by_this) / n_total
-            logger.info(f"rate of unsolvable yet but solved by this: {rate}")
+            n_this = torch.sum(bools_unsolvable_yet_and_solved_by_this)
+            logger.info(f"rate of solved by only this: {n_this / n_total}")
+            n_other = n_total - n_this
 
-            # if unsovled so far and not solved by this, such sample is still valuable
-            bools_unsolvable_yet_and_not_solved_by_this = unsolvable_yet & ~solved_by_this
-            weights[bools_unsolvable_yet_and_not_solved_by_this] = 4.0
-            rate = torch.sum(bools_unsolvable_yet_and_not_solved_by_this) / n_total
-            logger.info(f"rate of unsolvable yet and not solved by this: {rate}")
+            c_plus = n_total / (n_this * 2)
+            c_minus = n_total / (n_other * 2)
+            logger.info(f"c_plus: {c_plus}, c_minus: {c_minus}")
+            weights[bools_unsolvable_yet_and_solved_by_this] = c_plus
+            weights[~bools_unsolvable_yet_and_solved_by_this] = c_minus
         else:
             weights = None
 
