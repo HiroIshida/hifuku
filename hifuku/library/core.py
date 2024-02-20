@@ -1254,7 +1254,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             tmp_n_max_call_mult_factor=self.config.tmp_n_max_call_mult_factor,
         )
 
-        use_weighting = True
+        use_weighting = False
         if use_weighting:
             # this modification of loss function using cost may be related to the following articles
             # Good introduction:
@@ -1267,6 +1267,17 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             # https://github.com/HiroIshida/hifuku/pull/27
             # https://github.com/HiroIshida/hifuku/issues/28
             # assert False  # 2024/01/22
+
+            # 2024/02/21: changed weighting scheme refering Tanimoto, Akira, et al. "Improving imbalanced classification using near-miss instances." Expert Systems with Applications 201 (2022): 117130. 
+            # NOTE about the performance: with_weightning
+            # [INFO] 2024-02-21 00:52:47,981 hifuku.library.core: current coverage est history: [0.1137, 0.2119, 0.2149, 0.2209, 0.2574, 0.3029, 0.3264, 0.3277, 0.3328, 0.3385, 0.3385, 0.3455]
+            # [INFO] 2024-02-21 01:12:58,221 hifuku.library.core: optimal coverage estimate is set to 0.3455
+            # [INFO] 2024-02-21 01:35:03,758 hifuku.library.core: optimal coverage estimate is set to 0.3455
+            # [INFO] 2024-02-21 01:57:14,569 hifuku.library.core: optimal coverage estimate is set to 0.3455
+            # without weighting ...
+            # [INFO] 2024-02-20 12:43:03,258 hifuku.library.core: current coverage est history: [0.105, 0.1683, 0.2526, 0.2599, 0.2599, 0.2677, 0.2961, 0.3197, 0.3199, 0.3213, 0.3297, 0.342, 0.3583, 0.3691, 0.4017, 0.466, 0.466, 0.466, 0.4825, 0.4847, 0.4847, 0.5061, 0.5126, 0.5482, 0.5649, 0.6106, 0.6142]
+            # Seems that performance rather worse
+            assert False  # 2024/2/21
 
             weights = torch.ones((len(problems), problems[0].n_inner_task))
             n_total = len(problems) * problems[0].n_inner_task
@@ -1291,7 +1302,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 unsolvable_yet = infer_nitss > self.library.success_iter_threshold()
                 logger.info(f"rate of unsolvable yet: {torch.sum(unsolvable_yet) / n_total}")
             else:
-                unsolvable_yet = torch.ones(
+                unsolvable_yet = torch.ones(len(problems), problems[0].n_inner_task, dtype=bool)
 
             # if unsolvable so far but solved by this, such sample is quite valuable for training
             bools_unsolvable_yet_and_solved_by_this = unsolvable_yet & solved_by_this
