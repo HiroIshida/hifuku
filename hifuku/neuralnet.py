@@ -590,3 +590,84 @@ class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfi
         iter_loss = torch.mean(weihted_iter_loss)
         dic = {"iter": iter_loss}
         return LossDict(dic)
+
+
+@dataclass
+class FusingIterationPredictorConfig(ModelConfigBase):
+    dim_vector_descriptor: int
+    n_grid: int
+
+
+class FusingIterationPredictor(ModelBase[FusingIterationPredictorConfig]):
+    ae_model: AutoEncoderBase
+    conv_layers1: nn.Sequential
+    fusing_layers: nn.Sequential
+    conv_layers2: nn.Sequential
+    linear_layers: nn.Sequential
+
+    def _setup_from_config(self, config: FusingIterationPredictorConfig) -> None:
+        assert config.n_grid == 56, "only 56 is supported now"
+        conv_layers1 = nn.Sequential(
+            *[
+                nn.Conv2d(1, 8, 3, padding=1, stride=(2, 2)),  # 28 x 28
+                nn.BatchNorm2d(8),
+                nn.ReLU(inplace=True),
+            ]
+        )
+
+        fusing_layers = nn.Sequential(
+            *[
+                nn.Linear(config.dim_vector_descriptor, 28 * 28),
+                nn.BatchNorm1d(28 * 28),
+                nn.ReLU(inplace=True),
+            ]
+        )
+
+        conv_layer2 = nn.Sequential(
+            *[
+                nn.Conv2d(9, 16, 3, padding=1, stride=(2, 2)),  # 14 x 14
+                nn.BatchNorm2d(16),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),
+                nn.BatchNorm2d(32),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True),  # 64 x 4 x 4
+            ]
+        )
+
+        linear_layers = nn.Sequential(
+            *[
+                nn.Flatten(),
+                nn.Linear(64 * 4 * 4, 100),
+                nn.BatchNorm1d(100),
+                nn.ReLU(inplace=True),
+                nn.Linear(100, 1),
+            ]
+        )
+
+        self.conv_layers1 = conv_layers1
+        self.fusing_layers = fusing_layers
+        self.conv_layers2 = conv_layer2
+        self.linear_layers = linear_layers
+
+    def forward(self, sample: Tuple[Tensor, Tensor]) -> Tensor:
+        image, vector = sample
+        image = self.conv_layers1(image)
+        vector = self.fusing_layers(vector)
+        vector = vector.view(-1, 1, 28, 28)
+        image = torch.cat([image, vector], dim=1)
+        image = self.conv_layers2(image)
+        return self.linear_layers(image).flatten()
+
+    def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
+        image, vector, iters, weight = sample
+        iters_pred = self.forward((image, vector))
+        iters_pred = iters_pred.flatten()
+        iters = iters.flatten()
+
+        weihted_iter_loss = (iters_pred - iters) ** 2 * weight
+        iter_loss = torch.mean(weihted_iter_loss)
+        dic = {"iter": iter_loss}
+        return LossDict(dic)
