@@ -939,9 +939,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         else:
             if problems_validation is None:
                 logger.info("start creating validation set")
-                if config.n_problem_inner == 1:
-                    message = "In almost all case (except user's special intension), inner = 1 means that world description perfectly determines the problem. Therefore, setting n_validation_inner>1 is waste of computational time"
-                    assert config.n_validation_inner == 1, message
+
                 problems_validation = sampler.sample_batch(
                     config.n_validation,
                     TrivialProblemPool(problem_type, config.n_validation_inner).as_predicated(),
