@@ -1275,8 +1275,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             # without weighting ...
             # [INFO] 2024-02-20 12:43:03,258 hifuku.library.core: current coverage est history: [0.105, 0.1683, 0.2526, 0.2599, 0.2599, 0.2677, 0.2961, 0.3197, 0.3199, 0.3213, 0.3297, 0.342, 0.3583, 0.3691, 0.4017, 0.466, 0.466, 0.466, 0.4825, 0.4847, 0.4847, 0.5061, 0.5126, 0.5482, 0.5649, 0.6106, 0.6142]
             # Seems that performance rather worse
-            assert False  # 2024/2/21
+            # assert False  # 2024/2/21
 
+            # 2024/2/22:
+            # Even after modification n_inner = 1, the above tendency is the case (weighting is bit worse than the original).
+            # Even worse, as weighting requires infer for each samples, the weight determination becomes particulary costly
+            # when n_inner = 1
+            assert False, "don't use. Really. (2024/2/23)"
             weights = torch.ones((len(problems), problems[0].n_inner_task))
             n_total = len(problems) * problems[0].n_inner_task
 
