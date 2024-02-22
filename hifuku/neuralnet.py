@@ -196,6 +196,7 @@ class IterationPredictorDataset(Dataset):
         solver_config,
         weightss: Optional[Tensor],
         ae_model: Optional[AutoEncoderBase],
+        batch_size: int = 500,
     ) -> "IterationPredictorDataset":
         expected_total_data_size = cls._compute_expected_raw_data_size(
             tasks, resultss, solver_config
@@ -211,12 +212,17 @@ class IterationPredictorDataset(Dataset):
             for raw_data in tqdm.tqdm(executor.map(cls._create_raw_data, args), total=len(tasks)):
                 raw_data_list.append(raw_data)
 
-        zipped = [raw_data.to_tensors() for raw_data in raw_data_list]
-        sample = default_collate(zipped)
+        # split the data into batches to avoid GPU out of memory in dataset construction
+        # NOTE: GPU may be used to apply cnn-encoder to the mesh in dataset construction
+        zipped = [raw_data.to_tensors() for raw_data in raw_data_list]  # list of tuples
+        loader_like = [
+            default_collate(zipped[i : i + batch_size]) for i in range(0, len(zipped), batch_size)
+        ]
+
         if weightss is None:
             weightss = torch.ones((len(tasks), tasks[0].n_inner_task))
         assert weightss.ndim == 2
-        return cls.construct([sample], weightss, ae_model)
+        return cls.construct(loader_like, weightss, ae_model)
 
     @classmethod
     def construct(
