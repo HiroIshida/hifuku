@@ -41,7 +41,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
     parser.add_argument("-n", type=int, default=100, help="")
-    parser.add_argument("-n_limit_batch", type=int, help="")
+    parser.add_argument("-n_limit_batch", type=int, help="", default=50000)
     parser.add_argument("-n_grid", type=int)
     parser.add_argument("-clamp", type=float)
     parser.add_argument("-conf", type=str)
@@ -60,9 +60,6 @@ if __name__ == "__main__":
     project_name_postfix: Optional[str] = args.post
     clamp_factor: Optional[float] = args.clamp
 
-    if "bubbly" in domain_name:
-        assert not use_pretrained_ae
-
     if clamp_factor is not None:
         _CLAMP_FACTOR[0] = clamp_factor
 
@@ -70,14 +67,6 @@ if __name__ == "__main__":
     assert project_name_postfix is not None
     if project_name_postfix == "none":
         project_name_postfix = None
-
-    # in almost all case, specifying n_limit_batch is requried.
-    # so we just check here. If you'd like to set it to None,
-    # please set n_limit_batch = -1
-    n_limit_batch: Optional[int] = args.n_limit_batch
-    assert n_limit_batch is not None
-    if n_limit_batch == -1:
-        n_limit_batch = None
 
     torch.backends.cudnn.enabled = False
     assert torch.cuda.is_available()
@@ -165,7 +154,7 @@ if __name__ == "__main__":
         use_distributed=use_distributed,
         reuse_cached_validation_set=warm_start,
         delete_cache=True,
-        n_limit_batch_solver=n_limit_batch,
+        n_limit_batch_solver=args.n_limit_batch,
         presample_train_problems=True,
     )
 
