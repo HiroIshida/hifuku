@@ -15,10 +15,12 @@ from skmp.trajectory import Trajectory
 from hifuku.datagen import MultiProcessBatchProblemSolver
 from hifuku.domain import (
     DomainProtocol,
+    DummyDomain,
     DummyMeshDomain,
     TabletopOvenRightArmReachingTask,
 )
 from hifuku.library import (
+    ActiveSamplerState,
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
@@ -85,7 +87,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
     sampler = domain.get_multiprocess_batch_sampler(2)
 
     lconfig = LibrarySamplerConfig(
-        n_difficult_init=100,
+        n_difficult=100,
         n_solution_candidate=10,
         sampling_number_factor=20,
         train_config=TrainConfig(n_epoch=20, learning_rate=0.01),
@@ -119,17 +121,17 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
                 td_path,
                 solver=solver,
                 sampler=sampler,
-                adjust_margins=True,
             )
             lib_sampler.step_active_sampling()
             lib_sampler.step_active_sampling()
             lib_sampler.step_active_sampling()
-            assert lib_sampler.library._optimal_coverage_estimate > 0.5  # only for Mesh Task...
-            SolutionLibrary.load(td_path, problem_type, SQPBasedSolver)[0]
+            assert lib_sampler.sampler_state.coverage_est_history[-1] > 0.5
+            SolutionLibrary.load(td_path, problem_type, solver_type)[0]
+            ActiveSamplerState.load(td_path)
 
 
 def test_SolutionLibrarySampler():
-    # _test_SolutionLibrarySampler(DummyDomain, False)
+    _test_SolutionLibrarySampler(DummyDomain, False)
     _test_SolutionLibrarySampler(DummyMeshDomain, False)
 
 
