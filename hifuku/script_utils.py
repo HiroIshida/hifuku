@@ -12,7 +12,7 @@ from mohou.trainer import TrainCache
 from mohou.utils import log_package_version_info
 
 from hifuku.domain import DomainProtocol, select_domain
-from hifuku.library import SolutionLibrary
+from hifuku.library import ActiveSamplerState, SolutionLibrary
 from hifuku.neuralnet import AutoEncoderBase, AutoEncoderConfig, NullAutoEncoder
 
 logger = logging.getLogger(__name__)
@@ -90,6 +90,20 @@ def load_library(
     )[0]
     lib.limit_thread = limit_thread
     return lib
+
+
+def load_sampler_state(
+    domain: Union[str, Type[DomainProtocol]],
+    project_path: Optional[Path] = None,
+    postfix: Optional[str] = None,
+) -> ActiveSamplerState:
+
+    if isinstance(domain, str):
+        domain = select_domain(domain)
+    if project_path is None:
+        project_path = get_project_path(domain, postfix)
+    state = ActiveSamplerState.load(project_path)
+    return state
 
 
 def watch_memory(interval: float, debug: bool = True):
