@@ -4,7 +4,6 @@ setup_requires = []
 
 install_requires = [
     "pyinstrument",
-    "onnxruntime",
     "voxbloxpy",
     "scikit-motionplan",
     "rpbench",
