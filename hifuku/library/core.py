@@ -98,6 +98,28 @@ class ProfileInfo:  # per each iteration
         return self.t_total - (self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin)  # type: ignore[operator]
 
 
+class ActiveSamplerState:
+    # states
+    sampling_number_factor: float
+    optimal_coverage_estimate: float
+
+    # the below are not states but history for postmortem analysis
+    coverage_results: List[CoverageResult]
+    margins_history: List[List[float]]
+    candidates_history: List[List[Trajectory]]
+    elapsed_time_history: List[ProfileInfo]
+    coverage_est_history: List[float]
+
+    def __init__(self, sampling_number_factor: float):
+        self.sampling_number_factor = sampling_number_factor
+        self.optimal_coverage_estimate = 0.0
+        self.coverage_results = []
+        self.margins_history = []
+        self.candidates_history = []
+        self.elapsed_time_history = []
+        self.coverage_est_history = []
+
+
 @dataclass
 class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     """Solution Library
@@ -116,41 +138,10 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     ]  # if None, when each predictor does not share autoencoder
     predictors: List[Union[IterationPredictor, IterationPredictorWithEncoder]]
     margins: List[float]
-    coverage_results: Optional[List[CoverageResult]]
     solvable_threshold_factor: float
     uuidval: str
     meta_data: Dict
     limit_thread: bool = False
-
-    # TODO: attribute below are actually supposed not to be None.
-    # But, just because dataclass requires attributes after optional attruibte
-    # must be optional. Thus, I set it to None. we shold change the order.
-    _margins_history: Optional[List[List[float]]] = None
-    _candidates_history: Optional[List[List[Trajectory]]] = None
-    _optimal_coverage_estimate: Optional[
-        float
-    ] = None  # the cached optimal coverage after margins optimization
-    _sampling_number_factor_now: Optional[float] = None
-    _elapsed_time_history: Optional[List[ProfileInfo]] = None
-    _coverage_est_history: Optional[List[float]] = None
-
-    def __setstate__(self, state):
-        # NOTE: for backward compatibility
-        is_old_version = "ae_model" in state
-        if is_old_version:
-            assert "ae_model_shared" not in state
-            state["ae_model_shared"] = state["ae_model"]
-            del state["ae_model"]
-            assert "ae_model" not in state
-            logger.debug("[backward compat] ae_model => ae_model_shared")
-
-        # for backward compatibility
-        elapsed_time_history = state["_elapsed_time_history"]
-        for idx, elapsed_time in enumerate(elapsed_time_history):
-            if isinstance(elapsed_time, float):
-                elapsed_time_history[idx] = ProfileInfo.from_total(elapsed_time)
-
-        self.__dict__.update(state)
 
     def __post_init__(self):
         if self.ae_model_shared is not None:
@@ -188,17 +179,9 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             ae_model,
             [],
             [],
-            [],
             solvable_threshold_factor,
             uuidval,
             meta_data,
-            True,  # assume that we are gonna build library and not in eval time.
-            [],
-            [],
-            None,
-            None,
-            [],
-            [],
         )
 
     def put_on_device(self, device: torch.device):
@@ -474,7 +457,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 ae_model_shared=self.ae_model_shared,
                 predictors=[predictor],
                 margins=[margin],
-                coverage_results=None,
                 solvable_threshold_factor=self.solvable_threshold_factor,
                 uuidval="dummy",
                 meta_data={},
@@ -498,7 +480,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             ae_model_shared=singleton.ae_model_shared,
             predictors=predictors,
             margins=margins,
-            coverage_results=None,
             solvable_threshold_factor=singleton.solvable_threshold_factor,
             uuidval="dummy",
             meta_data={},
@@ -514,7 +495,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             ae_model_shared=self.ae_model_shared,
             predictors=[self.predictors[idx]],
             margins=[self.margins[idx]],
-            coverage_results=None,
             solvable_threshold_factor=self.solvable_threshold_factor,
             uuidval="dummy",
             meta_data={},
@@ -706,6 +686,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     adjust_margins: bool
     delete_cache: bool
     project_path: Path
+    sampler_state: ActiveSamplerState
     ae_model_pretrained: Optional[
         AutoEncoderBase
     ] = None  # train iteration predctor combined with encoder. Thus ae will no be shared.
@@ -782,7 +763,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             config.solvable_threshold_factor,
             meta_data,
         )
-        library._sampling_number_factor_now = config.sampling_number_factor
+        sampler_state = ActiveSamplerState(config.sampling_number_factor)
 
         # setup solver, sampler, determinant
         if solver is None:
@@ -876,6 +857,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             adjust_margins,
             delete_cache,
             project_path,
+            sampler_state,
             ae_model if config.train_with_encoder else None,
             presampled_train_problems,
         )
@@ -888,13 +870,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         logger.info("active sampling step")
         ts = time.time()
-        assert self.library._elapsed_time_history is not None
 
         ts_determine_cand = time.time()
         init_solution, gain_expected = self._determine_init_solution(self.config.n_difficult)
-        logger.info(f"sampling nuber factor: {self.library._sampling_number_factor_now}")
-        assert self.library._sampling_number_factor_now is not None
-        n_problem_now = int((1.0 / gain_expected) * self.library._sampling_number_factor_now)
+        logger.info(f"sampling nuber factor: {self.sampler_state.sampling_number_factor}")
+        n_problem_now = int((1.0 / gain_expected) * self.sampler_state.sampling_number_factor)
         logger.info(f"n_problem_now: {n_problem_now}")
         prof_info.t_determine_cand = time.time() - ts_determine_cand
 
@@ -916,21 +896,16 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
             logger.info("prof_info: {}".format(prof_info))
             prof_info.t_total = elapsed_time
-            self.library._elapsed_time_history.append(prof_info)
-
-            if (
-                self.library._coverage_est_history is not None
-            ):  # backward compat. In loaded older version, this value is None
-                self.library._coverage_est_history.append(self.library._coverage_est_history[-1])
-
-            assert self.library._candidates_history is not None
-            self.library._candidates_history.pop()  # TODO: quite dirty. but _candidates_history is just for visualization in the paper. So this will not cause serious bug
+            self.sampler_state.elapsed_time_history.append(prof_info)
+            self.sampler_state.coverage_est_history.append(
+                self.sampler_state.coverage_est_history[-1]
+            )
             self.library.dump(self.project_path)
 
-            self.library._sampling_number_factor_now *= 1.1
+            self.sampler_state.sampling_number_factor *= 1.1
             logger.info(
                 "coverage gain is 0.0. increase sampling number factor to {}".format(
-                    self.library._sampling_number_factor_now
+                    self.sampler_state.sampling_number_factor
                 )
             )
             return False
@@ -942,46 +917,34 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # update library
         self.library.predictors.append(predictor)
         self.library.margins = margins
-        assert (
-            self.library.coverage_results is not None
-        )  # TODO: we should remove Optional from the definition in the first place
-        self.library.coverage_results.append(coverage_result)
 
-        # TODO: margins_history should not be Optional in the first place
-        assert self.library._margins_history is not None
-        self.library._margins_history.append(copy.deepcopy(margins))
-
-        coverage = self.library.measure_coverage(self.problems_validation)
-        logger.info("current library's coverage estimate: {}".format(coverage))
+        coverage_est = self.library.measure_coverage(self.problems_validation)
+        logger.info("current library's coverage estimate: {}".format(coverage_est))
 
         elapsed_time = time.time() - ts
         logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
         prof_info.t_total = elapsed_time
         logger.info("prof_info: {}".format(prof_info))
 
-        self.library._elapsed_time_history.append(prof_info)
-
-        t_total_list = [e.t_total for e in self.library._elapsed_time_history]
-        logger.info("current elapsed time history: {}".format(t_total_list))
-
-        if (
-            self.library._coverage_est_history is not None
-        ):  # backward compat. In loaded older version, this value is None
-            self.library._coverage_est_history.append(coverage)
-            logger.info(
-                "current coverage est history: {}".format(self.library._coverage_est_history)
-            )
-
-        # increase the factor
-        assert self.library._coverage_est_history is not None
-        if len(self.library._coverage_est_history) > 1:
-            coverage_previous = self.library._coverage_est_history[-2]
-            coverage_this = self.library._coverage_est_history[-1]
+        # udpate sampler state
+        if len(self.sampler_state.coverage_est_history) > 1:
+            coverage_previous = self.sampler_state.coverage_est_history[-2]
+            coverage_this = self.sampler_state.coverage_est_history[-1]
             if (coverage_this - coverage_previous) < gain_expected * 0.2:
-                self.library._sampling_number_factor_now *= 1.1
+                self.sampler_state.sampling_number_factor *= 1.1
                 logger.info(
-                    f"expected gain is {gain_expected}, but actual gain is {coverage_this - coverage_previous}. increase sampling number factor to {self.library._sampling_number_factor_now}"
+                    f"expected gain is {gain_expected}, but actual gain is {coverage_this - coverage_previous}. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
                 )
+        self.sampler_state.coverage_results.append(coverage_result)
+        self.sampler_state.margins_history.append(copy.deepcopy(margins))
+        self.sampler_state.elapsed_time_history.append(prof_info)
+        self.sampler_state.coverage_est_history.append(coverage_est)
+
+        t_total_list = [e.t_total for e in self.sampler_state.elapsed_time_history]
+        logger.info("current elapsed time history: {}".format(t_total_list))
+        logger.info(
+            "current coverage est history: {}".format(self.sampler_state.coverage_est_history)
+        )
 
         self.library.dump(self.project_path)
         return True
@@ -1005,7 +968,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             ae_model_shared=self.library.ae_model_shared,
             predictors=[predictor],
             margins=[0.0],
-            coverage_results=None,
             solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
             meta_data={},
@@ -1015,8 +977,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         )
         logger.info(coverage_result)
 
-        assert self.library.coverage_results is not None
-
         if not self.adjust_margins:
             margins = self.library.margins + [0.0]
             max_coverage = None  # TODO: actually max_coverage can be computable
@@ -1024,10 +984,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             if len(self.library.predictors) > 0:
                 # determine margin using cmaes
                 cma_std = self.solver_config.n_max_call * 0.5
-                coverages_new = self.library.coverage_results + [coverage_result]
+                coverages_new = self.sampler_state.coverage_results + [coverage_result]
                 logger.info(
                     "optimal coverage estimate is set to {}".format(
-                        self.library._optimal_coverage_estimate
+                        self.sampler_state.optimal_coverage_estimate
                     )
                 )
 
@@ -1037,12 +997,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                     self.solver_config.n_max_call,
                     self.config.acceptable_false_positive_rate,
                     cma_std,
-                    minimum_coverage=self.library._optimal_coverage_estimate,
+                    minimum_coverage=self.sampler_state.optimal_coverage_estimate,
                 )
 
                 best_margins = None
-                assert self.library._optimal_coverage_estimate is not None
-                max_coverage = self.library._optimal_coverage_estimate
+                max_coverage = self.sampler_state.optimal_coverage_estimate
                 for result in results:
                     if result is None:
                         continue
@@ -1068,7 +1027,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 margins = [margin]
 
         assert max_coverage is not None
-        self.library._optimal_coverage_estimate = max_coverage
+        self.sampler_state.optimal_coverage_estimate = max_coverage
         logger.info("optimal coverage estimate is set to {}".format(max_coverage))
         return margins, coverage_result
 
@@ -1390,10 +1349,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             solution_candidates = self._sample_solution_canidates(
                 self.config.n_solution_candidate, problem_pool
             )
-            assert (
-                self.library._candidates_history is not None
-            )  # FIXME: this never be None so this shouldnt be Optional
-            self.library._candidates_history.append(solution_candidates)
+            self.sampler_state.candidates_history.append(solution_candidates)
 
             logger.info("sample difficult problems")
             if self.at_first_iteration():
