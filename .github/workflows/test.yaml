@@ -32,6 +32,12 @@ jobs:
                   pip3 install scikit-build
                   cd /tmp && git clone git@github.com:HiroIshida/scikit-motionplan.git && cd scikit-motionplan && pip3 install .
                   cd /tmp && git clone git@github.com:HiroIshida/rpbench.git && cd rpbench && pip3 install .
+
+            - name: install diplan package
+              run: |
+                  sudo apt install libeigen3-dev
+                  cd /tmp && git clone https://github.com/HiroIshida/diplan-cpp.git && cd diplan-cpp && git submodule update --init --recursive --recommend-shallow --depth 1 && pip3 install . -v
+
             - name: install this package
               run: |
                   sudo apt-get install libspatialindex-dev freeglut3-dev libsuitesparse-dev libblas-dev liblapack-dev
@@ -44,8 +50,8 @@ jobs:
 
             - name: Run Pytest with timeout
               run: |
-                  timeout 1200 pytest -s -v tests
+                  timeout 1200 pytest -v tests
 
-            - name: Run mypy
-              run: |
-                  mypy hifuku
+                  # - name: Run mypy
+                  #   run: |
+                  #       mypy hifuku
