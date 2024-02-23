@@ -51,7 +51,7 @@ class RawData(TensorChunkBase):
             loaded = pickle.load(f)
         return loaded
 
-    def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def to_tensors(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         np_mesh = self.desc.get_mesh()
         if np_mesh is None:
             torch_mesh = torch.empty((0))
@@ -61,10 +61,7 @@ class RawData(TensorChunkBase):
         np_vector_descs = self.desc.get_vector_descs()
 
         if len(np_vector_descs) == 0:
-            # FIXME: when wcd len == 0, wd_1dim_desc_tensor is ignored ...?
-            torch_wcd_descs = torch.zeros(0, 0).float()
-            torch_nits = torch.zeros(0, 0).float()
-            return torch_mesh, torch_wcd_descs, torch_nits
+            assert False, "This should not happen"
         else:
             torch_vector_descs = [torch.from_numpy(desc).float() for desc in np_vector_descs]
             torch_wcd_descs = torch.stack(torch_vector_descs)

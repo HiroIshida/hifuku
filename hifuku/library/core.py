@@ -88,9 +88,7 @@ class ProfileInfo:  # per each iteration
         if not self.has_all_info:
             return False
         # sum of each time must be smaller than t_total
-        return self.t_total > (
-            self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin
-        )
+        return self.t_total > (self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin)  # type: ignore[operator]
 
     @classmethod
     def from_total(cls, t_total: float) -> "ProfileInfo":
@@ -99,9 +97,7 @@ class ProfileInfo:  # per each iteration
 
     @property
     def t_other(self) -> float:
-        return self.t_total - (
-            self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin
-        )
+        return self.t_total - (self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin)  # type: ignore[operator]
 
 
 @dataclass
@@ -622,7 +618,7 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
     library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     solver: AbstractScratchSolver[ConfigT, ResultT]
     task: Optional[ProblemT]
-    timeout: Optional[int]
+    timeout: Optional[float]
     previous_false_positive: Optional[bool]
     previous_est_positive: Optional[bool]
     _loginfo_fun: Callable
@@ -667,21 +663,18 @@ class LibraryBasedSolverBase(AbstractTaskSolver[ProblemT, ConfigT, ResultT]):
         # NOTE: almost copied from skmp.solver.interface
         ts = time.time()
 
-        class TimeoutException(Exception):
-            ...
-
         if self.timeout is not None:
             assert self.timeout > 0
 
             def handler(sig, frame):
-                raise TimeoutException()
+                raise TimeoutError()
 
             signal.signal(signal.SIGALRM, handler)
-            signal.alarm(self.timeout)
+            signal.setitimer(signal.ITIMER_REAL, self.timeout)
             set_ompl_random_seed(0)  # to make result reproducible
         try:
             ret = self._solve()
-        except TimeoutException:
+        except TimeoutError:
             ret = self.solver.get_result_type().abnormal()
 
         if self.timeout is not None:
@@ -1007,6 +1000,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(f"n_difficult_now: {self.library._n_difficult_now}")
         init_solution, gain_expected = self._determine_init_solution(self.library._n_difficult_now)
         logger.info(f"sampling nuber factor: {self.library._sampling_number_factor_now}")
+        assert self.library._sampling_number_factor_now is not None
         n_problem_now = int((1.0 / gain_expected) * self.library._sampling_number_factor_now)
         self.library._n_problem_now = n_problem_now
         logger.info(f"n_problem_now: {n_problem_now}")
