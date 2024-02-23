@@ -89,7 +89,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
     lconfig = LibrarySamplerConfig(
         n_difficult=100,
         n_solution_candidate=10,
-        sampling_number_factor=20,
+        sampling_number_factor=1000,
         train_config=TrainConfig(n_epoch=20, learning_rate=0.01),
         iterpred_model_config={"layers": [64, 64, 64]},
         n_determine_batch=50,

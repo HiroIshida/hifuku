@@ -676,18 +676,18 @@ class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
 @dataclass
 class LibrarySamplerConfig:
     # you have to tune
-    sampling_number_factor: float = 50.0
+    sampling_number_factor: float = 5000
     acceptable_false_positive_rate: float = 0.1
 
     # maybe you have to tune maybe ...
     inc_coef_mult_snf: float = 1.1  # snf stands for sampling_number_factor
     threshold_inc_snf: float = 0.2  # if gain < expected * this, then increase snf
-    n_problem_inner: int = 80
     n_solution_candidate: int = 100
     n_difficult: int = 500
-    n_problem_max: int = 30000
+    n_problem_max: int = 1000000
 
     # same for all settings (you dont have to tune)
+    n_problem_inner: int = 1  # this should be 1 always (2024/02/24)
     sample_from_difficult_region: bool = True
     train_config: TrainConfig = TrainConfig()
     ignore_useless_traj: bool = True
