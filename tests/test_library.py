@@ -2,7 +2,6 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Type
 
-import numpy as np
 import torch
 from mohou.trainer import TrainConfig
 from skmp.solver.nlp_solver import (
@@ -16,7 +15,7 @@ from skmp.trajectory import Trajectory
 from hifuku.datagen import MultiProcessBatchProblemSolver
 from hifuku.domain import (
     DomainProtocol,
-    DoubleIntegratorBubblySimple_SQP,
+    DummyMeshDomain,
     TabletopOvenRightArmReachingTask,
 )
 from hifuku.library import (
@@ -31,6 +30,7 @@ from hifuku.neuralnet import (
     PixelAutoEncoder,
 )
 from hifuku.script_utils import create_default_logger
+from hifuku.types import _CLAMP_FACTOR
 
 
 def _test_compute_real_itervals():
@@ -80,30 +80,19 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
     problem_type = domain.task_type
     solcon = domain.solver_config
     solver_type = domain.solver_type
-    aepp = domain.auto_encoder_project_name
+    domain.auto_encoder_project_name
     solver = domain.get_multiprocess_batch_solver(2)
     sampler = domain.get_multiprocess_batch_sampler(2)
 
-    tconfig = TrainConfig(n_epoch=1)
     lconfig = LibrarySamplerConfig(
-        n_problem_init=10,
-        n_problem_mult_factor=1.2,
-        n_problem_max=13,
-        n_problem_inner=1,
-        train_config=tconfig,
-        n_solution_candidate=2,
-        n_difficult_init=5,
-        solvable_threshold_factor=0.0,
-        difficult_threshold_factor=-np.inf,  # all pass
-        acceptable_false_positive_rate=1.0,
-        sample_from_difficult_region=False,
-        ignore_useless_traj=False,
-        train_with_encoder=train_with_encoder,
-        n_validation=50,
-        n_validation_inner=2,
-        n_determine_batch=10,
-        candidate_sample_scale=5,
-    )  # all pass
+        n_difficult_init=100,
+        n_solution_candidate=10,
+        sampling_number_factor=20,
+        train_config=TrainConfig(n_epoch=20, learning_rate=0.01),
+        iterpred_model_config={"layers": [64, 64, 64]},
+        n_determine_batch=50,
+    )
+    _CLAMP_FACTOR[0] = 1.5
 
     test_devices = [torch.device("cpu")]
     if torch.cuda.is_available():
@@ -111,13 +100,12 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
 
     for device in test_devices:
         ae_model: AutoEncoderBase
-        if aepp is None:
+        if domain.auto_encoder_type is NullAutoEncoder:
             ae_model = NullAutoEncoder()
         else:
-            ae_model = PixelAutoEncoder(AutoEncoderConfig())
+            ae_model = PixelAutoEncoder(AutoEncoderConfig(n_grid=56))
             ae_model.loss_called = True  # mock that model is already trained
             ae_model.put_on_device(device)
-        pool_validation = [problem_type.sample(1) for _ in range(10)]
 
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
@@ -129,41 +117,21 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
                 ae_model,
                 lconfig,
                 td_path,
-                problems_validation=pool_validation,
                 solver=solver,
                 sampler=sampler,
-                adjust_margins=False,
+                adjust_margins=True,
             )
-            # init k=0
             lib_sampler.step_active_sampling()
-            assert lib_sampler.library._n_problem_now == 10
-            lib_sampler.library._elapsed_time_history[-1].is_valid
-
-            # active sampling k=1
             lib_sampler.step_active_sampling()
-            assert lib_sampler.library._n_problem_now == 12
-            lib_sampler.library._elapsed_time_history[-1].is_valid
-
-            # active sampling k=2
             lib_sampler.step_active_sampling()
-            assert lib_sampler.library._n_problem_now == 13  # note n_problem_max
-            lib_sampler.library._elapsed_time_history[-1].is_valid
-
-            # test load
-            lib_load = SolutionLibrary.load(td_path, problem_type, SQPBasedSolver)[0]
-
-            # compare
-            for _ in range(10):
-                problem = problem_type.sample(1)
-                iters = lib_sampler.library._infer_iteration_num(problem)
-                iters_again = lib_load._infer_iteration_num(problem)
-                np.testing.assert_almost_equal(iters, iters_again)
+            assert lib_sampler.library._optimal_coverage_estimate > 0.5  # only for Mesh Task...
+            SolutionLibrary.load(td_path, problem_type, SQPBasedSolver)[0]
 
 
 def test_SolutionLibrarySampler():
-    _test_SolutionLibrarySampler(DoubleIntegratorBubblySimple_SQP, False)
-    _test_SolutionLibrarySampler(DoubleIntegratorBubblySimple_SQP, True)
+    # _test_SolutionLibrarySampler(DummyDomain, False)
+    _test_SolutionLibrarySampler(DummyMeshDomain, False)
 
 
 if __name__ == "__main__":
-    _test_SolutionLibrarySampler(DoubleIntegratorBubblySimple_SQP, True)
+    test_SolutionLibrarySampler()

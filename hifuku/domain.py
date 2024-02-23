@@ -36,6 +36,7 @@ from rpbench.two_dimensional.bubbly_world import (
 )
 from rpbench.two_dimensional.dummy import (
     DummyConfig,
+    DummyMeshTask,
     DummySolver,
     DummyTask,
     ProbDummyTask,
@@ -478,6 +479,16 @@ class DummyDomain(DomainProtocol):
     )  # somehow, if 500, classifier is not trained well probably due to the positive-negative sample inbalance
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
+
+
+class DummyMeshDomain(DomainProtocol):
+    task_type = DummyMeshTask
+    solver_type = DummySolver
+    solver_config = DummyConfig(
+        n_max_call=800, random_scale=0.25, random_force_failure_rate=0.0
+    )  # somehow, if 500, classifier is not trained well probably due to the positive-negative sample inbalance
+    auto_encoder_project_name = None
+    auto_encoder_type = PixelAutoEncoder
 
 
 class ProbDummyDomain(DomainProtocol):

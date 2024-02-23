@@ -1130,10 +1130,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         )
         logger.info(coverage_result)
 
-        debug_file_path = self.debug_data_parent_path / "hifuku_coverage_debug.pkl"
-        with debug_file_path.open(mode="wb") as f:
-            pickle.dump(coverage_result, f)
-
         assert self.library.coverage_results is not None
 
         if not self.adjust_margins:
@@ -1150,20 +1146,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                     )
                 )
 
-                # save the problem desciptors for debugging
-                data = {
-                    "coverages": coverages_new,
-                    "threshold": self.solver_config.n_max_call,
-                    "fprate": self.config.acceptable_false_positive_rate,
-                    "cma_std": cma_std,
-                    "minimum_coverage": self.library._optimal_coverage_estimate,
-                }
-                fp = self.debug_data_parent_path / "debug_margin_determination.pkl"
-                with fp.open(mode="wb") as f:
-                    pickle.dump(data, f)
-                logger.debug("saved debug data to {}".format(fp))
-
-                # main
                 results = self.determinant.determine_batch(
                     self.config.n_determine_batch,
                     coverages_new,
@@ -1266,7 +1248,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             # https://github.com/HiroIshida/hifuku/issues/28
             # assert False  # 2024/01/22
 
-            # 2024/02/21: changed weighting scheme refering Tanimoto, Akira, et al. "Improving imbalanced classification using near-miss instances." Expert Systems with Applications 201 (2022): 117130. 
+            # 2024/02/21: changed weighting scheme refering Tanimoto, Akira, et al. "Improving imbalanced classification using near-miss instances." Expert Systems with Applications 201 (2022): 117130.
             # NOTE about the performance: with_weightning
             # [INFO] 2024-02-21 00:52:47,981 hifuku.library.core: current coverage est history: [0.1137, 0.2119, 0.2149, 0.2209, 0.2574, 0.3029, 0.3264, 0.3277, 0.3328, 0.3385, 0.3385, 0.3455]
             # [INFO] 2024-02-21 01:12:58,221 hifuku.library.core: optimal coverage estimate is set to 0.3455
