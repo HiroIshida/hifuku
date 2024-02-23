@@ -101,23 +101,40 @@ class ProfileInfo:  # per each iteration
 class ActiveSamplerState:
     # states
     sampling_number_factor: float
-    optimal_coverage_estimate: float
 
     # the below are not states but history for postmortem analysis
-    coverage_results: List[CoverageResult]
     margins_history: List[List[float]]
+    coverage_results: List[CoverageResult]
     candidates_history: List[List[Trajectory]]
     elapsed_time_history: List[ProfileInfo]
     coverage_est_history: List[float]
+    failure_count: int
 
     def __init__(self, sampling_number_factor: float):
         self.sampling_number_factor = sampling_number_factor
-        self.optimal_coverage_estimate = 0.0
         self.coverage_results = []
         self.margins_history = []
         self.candidates_history = []
         self.elapsed_time_history = []
         self.coverage_est_history = []
+        self.failure_count = 0
+
+    def check_consistency(self) -> None:
+        if len(self.elapsed_time_history) == 0:
+            return
+        assert len(self.coverage_results) == len(self.margins_history)
+        total_iter = len(self.coverage_results) + self.failure_count
+        assert len(self.candidates_history) == total_iter
+        assert len(self.elapsed_time_history) == total_iter
+        for elapsed_time in self.elapsed_time_history:
+            assert elapsed_time.is_valid
+        assert len(self.coverage_est_history) == total_iter
+        assert all(
+            [
+                self.coverage_est_history[i] <= self.coverage_est_history[i + 1]
+                for i in range(len(self.coverage_est_history) - 1)
+            ]
+        )
 
 
 @dataclass
@@ -867,6 +884,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         return False if failed
         """
         prof_info = ProfileInfo()
+        self.sampler_state.check_consistency()
 
         logger.info("active sampling step")
         ts = time.time()
@@ -908,9 +926,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                     self.sampler_state.sampling_number_factor
                 )
             )
+            self.sampler_state.failure_count += 1
             return False
 
-        margins, coverage_result = ret
+        margins, coverage_result, coverage_est = ret
         logger.info("margin for latest iterpred is {}".format(margins[-1]))
         logger.debug("determined margins {}".format(margins))
 
@@ -918,8 +937,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         self.library.predictors.append(predictor)
         self.library.margins = margins
 
-        coverage_est = self.library.measure_coverage(self.problems_validation)
-        logger.info("current library's coverage estimate: {}".format(coverage_est))
+        coverage_est = self.library.measure_coverage(self.problems_validation)  # double check
+        assert np.abs(coverage_est - coverage_est) < 1e-6  # doulbe check
 
         elapsed_time = time.time() - ts
         logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
@@ -927,13 +946,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("prof_info: {}".format(prof_info))
 
         # udpate sampler state
-        if len(self.sampler_state.coverage_est_history) > 1:
-            coverage_previous = self.sampler_state.coverage_est_history[-2]
-            coverage_this = self.sampler_state.coverage_est_history[-1]
-            if (coverage_this - coverage_previous) < gain_expected * 0.2:
+        if len(self.sampler_state.coverage_est_history) > 0:
+            coverage_previous = self.sampler_state.coverage_est_history[-1]
+            if (coverage_est - coverage_previous) < gain_expected * 0.2:
                 self.sampler_state.sampling_number_factor *= 1.1
                 logger.info(
-                    f"expected gain is {gain_expected}, but actual gain is {coverage_this - coverage_previous}. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
+                    f"expected gain is {gain_expected}, but actual gain is {coverage_est - coverage_previous}. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
                 )
         self.sampler_state.coverage_results.append(coverage_result)
         self.sampler_state.margins_history.append(copy.deepcopy(margins))
@@ -945,7 +963,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(
             "current coverage est history: {}".format(self.sampler_state.coverage_est_history)
         )
-
         self.library.dump(self.project_path)
         return True
 
@@ -957,7 +974,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
     def _determine_margins(
         self, predictor: Union[IterationPredictorWithEncoder, IterationPredictor]
-    ) -> Optional[Tuple[List[float], CoverageResult]]:
+    ) -> Optional[Tuple[List[float], CoverageResult, float]]:
         # TODO: move this whole "adjusting" operation to a different method
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
@@ -985,23 +1002,18 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 # determine margin using cmaes
                 cma_std = self.solver_config.n_max_call * 0.5
                 coverages_new = self.sampler_state.coverage_results + [coverage_result]
-                logger.info(
-                    "optimal coverage estimate is set to {}".format(
-                        self.sampler_state.optimal_coverage_estimate
-                    )
-                )
-
+                coverage_est_last = self.sampler_state.coverage_est_history[-1]
                 results = self.determinant.determine_batch(
                     self.config.n_determine_batch,
                     coverages_new,
                     self.solver_config.n_max_call,
                     self.config.acceptable_false_positive_rate,
                     cma_std,
-                    minimum_coverage=self.sampler_state.optimal_coverage_estimate,
+                    minimum_coverage=coverage_est_last,
                 )
 
                 best_margins = None
-                max_coverage = self.sampler_state.optimal_coverage_estimate
+                max_coverage = coverage_est_last
                 for result in results:
                     if result is None:
                         continue
@@ -1027,9 +1039,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 margins = [margin]
 
         assert max_coverage is not None
-        self.sampler_state.optimal_coverage_estimate = max_coverage
         logger.info("optimal coverage estimate is set to {}".format(max_coverage))
-        return margins, coverage_result
+        return margins, coverage_result, max_coverage
 
     def _train_predictor(
         self,
