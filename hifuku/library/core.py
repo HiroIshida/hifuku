@@ -136,6 +136,17 @@ class ActiveSamplerState:
             ]
         )
 
+    def dump(self, base_path: Path) -> None:
+        with (base_path / "state.pkl").open(mode="wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, base_path: Path) -> "ActiveSamplerState":
+        with (base_path / "state.pkl").open(mode="rb") as f:
+            state: ActiveSamplerState = pickle.load(f)
+        state.check_consistency()
+        return state
+
 
 @dataclass
 class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
@@ -882,6 +893,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         """
         prof_info = ProfileInfo()
         self.sampler_state.check_consistency()
+        assert len(self.sampler_state.coverage_results) == len(self.library.predictors)
 
         logger.info("active sampling step")
         ts = time.time()
@@ -949,6 +961,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             "current coverage est history: {}".format(self.sampler_state.coverage_est_history)
         )
         self.library.dump(self.project_path)
+        self.sampler_state.dump(self.project_path)
         return True
 
     @property
