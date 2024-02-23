@@ -912,37 +912,27 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             logger.info("prof_info: {}".format(prof_info))
             prof_info.t_total = elapsed_time
             self.sampler_state.elapsed_time_history.append(prof_info)
-            self.sampler_state.coverage_est_history.append(
-                self.sampler_state.coverage_est_history[-1]
-            )
-            self.library.dump(self.project_path)
-
-            self.sampler_state.sampling_number_factor *= 1.1
-            logger.info(
-                "coverage gain is 0.0. increase sampling number factor to {}".format(
-                    self.sampler_state.sampling_number_factor
-                )
-            )
+            coverage_est = self.sampler_state.coverage_est_history[-1]
             self.sampler_state.failure_count += 1
-            return False
+        else:
+            margins, coverage_result, coverage_est = ret
+            logger.info("margin for latest iterpred is {}".format(margins[-1]))
+            logger.debug("determined margins {}".format(margins))
 
-        margins, coverage_result, coverage_est = ret
-        logger.info("margin for latest iterpred is {}".format(margins[-1]))
-        logger.debug("determined margins {}".format(margins))
+            # update library
+            self.library.predictors.append(predictor)
+            self.library.margins = margins
 
-        # update library
-        self.library.predictors.append(predictor)
-        self.library.margins = margins
+            coverage_est = self.library.measure_coverage(self.problems_validation)  # double check
+            assert np.abs(coverage_est - coverage_est) < 1e-6  # doulbe check
+            prof_info.t_total = time.time() - ts
 
-        coverage_est = self.library.measure_coverage(self.problems_validation)  # double check
-        assert np.abs(coverage_est - coverage_est) < 1e-6  # doulbe check
+            self.sampler_state.coverage_results.append(coverage_result)
+            self.sampler_state.margins_history.append(copy.deepcopy(margins))
 
-        elapsed_time = time.time() - ts
-        logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
-        prof_info.t_total = elapsed_time
-        logger.info("prof_info: {}".format(prof_info))
+        self.sampler_state.elapsed_time_history.append(prof_info)
+        self.sampler_state.coverage_est_history.append(coverage_est)
 
-        # udpate sampler state
         if len(self.sampler_state.coverage_est_history) > 0:
             coverage_previous = self.sampler_state.coverage_est_history[-1]
             if (coverage_est - coverage_previous) < gain_expected * 0.2:
@@ -950,11 +940,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 logger.info(
                     f"expected gain is {gain_expected}, but actual gain is {coverage_est - coverage_previous}. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
                 )
-        self.sampler_state.coverage_results.append(coverage_result)
-        self.sampler_state.margins_history.append(copy.deepcopy(margins))
-        self.sampler_state.elapsed_time_history.append(prof_info)
-        self.sampler_state.coverage_est_history.append(coverage_est)
 
+        logger.info("elapsed time in active sampling: {} min".format(prof_info.t_total / 60.0))
+        logger.info("prof_info: {}".format(prof_info))
         t_total_list = [e.t_total for e in self.sampler_state.elapsed_time_history]
         logger.info("current elapsed time history: {}".format(t_total_list))
         logger.info(
