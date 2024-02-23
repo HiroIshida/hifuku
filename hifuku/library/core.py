@@ -166,7 +166,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     predictors: List[Union[IterationPredictor, IterationPredictorWithEncoder]]
     init_solutions: List[Trajectory]
     margins: List[float]
-    solvable_threshold_factor: float
     uuidval: str
     meta_data: Dict
     limit_thread: bool = False
@@ -193,7 +192,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         config,
         ae_model: Optional[AutoEncoderBase],
-        solvable_threshold_factor: float,
         meta_data: Optional[Dict] = None,
     ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
         uuidval = str(uuid.uuid4())[-8:]
@@ -208,7 +206,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             [],
             [],
             [],
-            solvable_threshold_factor,
             uuidval,
             meta_data,
         )
@@ -349,8 +346,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         return result_list
 
     def success_iter_threshold(self) -> float:
-        threshold = self.solver_config.n_max_call * self.solvable_threshold_factor
-        return threshold
+        return self.solver_config.n_max_call
 
     def measure_full_coverage(
         self, tasks: List[ProblemT], solver: BatchProblemSolver
@@ -487,7 +483,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 predictors=[predictor],
                 init_solutions=[init_solution],
                 margins=[margin],
-                solvable_threshold_factor=self.solvable_threshold_factor,
                 uuidval="dummy",
                 meta_data={},
             )
@@ -512,7 +507,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             predictors=predictors,
             init_solutions=init_solutions,
             margins=margins,
-            solvable_threshold_factor=singleton.solvable_threshold_factor,
             uuidval="dummy",
             meta_data={},
         )
@@ -528,7 +522,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             predictors=[self.predictors[idx]],
             init_solutions=[self.init_solutions[idx]],
             margins=[self.margins[idx]],
-            solvable_threshold_factor=self.solvable_threshold_factor,
             uuidval="dummy",
             meta_data={},
         )
@@ -682,26 +675,29 @@ class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
 
 @dataclass
 class LibrarySamplerConfig:
+    # you have to tune
+    sampling_number_factor: float = 50.0
+    acceptable_false_positive_rate: float = 0.1
+
+    # maybe you have to tune maybe ...
+    inc_coef_mult_snf: float = 1.1  # snf stands for sampling_number_factor
+    threshold_inc_snf: float = 0.2  # if gain < expected * this, then increase snf
     n_problem_inner: int = 80
-    train_config: TrainConfig = TrainConfig()
     n_solution_candidate: int = 100
     n_difficult: int = 500
-    solvable_threshold_factor: float = 1.0
-    difficult_threshold_factor: float = 1.0  # should equal to solvable_threshold_factor
-    acceptable_false_positive_rate: float = 0.1
-    sample_from_difficult_region: bool = (
-        True  # In test, classifier cannot be wel trained. So this should be False
-    )
+    n_problem_max: int = 30000
+
+    # same for all settings (you dont have to tune)
+    sample_from_difficult_region: bool = True
+    train_config: TrainConfig = TrainConfig()
     ignore_useless_traj: bool = True
     iterpred_model_config: Optional[Dict] = None
-    n_validation: int = 1000
-    n_validation_inner: int = 10
+    n_validation: int = 10000
+    n_validation_inner: int = 1
     n_determine_batch: int = 2000
     candidate_sample_scale: int = 4
     train_with_encoder: bool = False
-    n_problem_max: int = 30000
     tmp_n_max_call_mult_factor: float = 1.5
-    sampling_number_factor: float = 50.0
 
 
 @dataclass
@@ -791,7 +787,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             solver_t,
             solver_config,
             None if config.train_with_encoder else ae_model,
-            config.solvable_threshold_factor,
             meta_data,
         )
         sampler_state = ActiveSamplerState(config.sampling_number_factor)
@@ -951,8 +946,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         if len(self.sampler_state.coverage_est_history) > 0:
             coverage_previous = self.sampler_state.coverage_est_history[-1]
-            if (coverage_est - coverage_previous) < gain_expected * 0.2:
-                self.sampler_state.sampling_number_factor *= 1.1
+            if (coverage_est - coverage_previous) < gain_expected * self.config.threshold_inc_snf:
+                self.sampler_state.sampling_number_factor *= self.config.inc_coef_mult_snf
                 logger.info(
                     f"expected gain is {gain_expected}, but actual gain is {coverage_est - coverage_previous}. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
                 )
@@ -970,9 +965,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
     @property
     def difficult_iter_threshold(self) -> float:
-        maxiter = self.library.solver_config.n_max_call
-        difficult_iter_threshold = maxiter * self.config.difficult_threshold_factor
-        return difficult_iter_threshold
+        return self.library.solver_config.n_max_call
 
     def _determine_margins(
         self,
@@ -990,7 +983,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             predictors=[predictor],
             init_solutions=[init_solution],
             margins=[0.0],
-            solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
             meta_data={},
         )
