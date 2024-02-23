@@ -130,7 +130,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     _optimal_coverage_estimate: Optional[
         float
     ] = None  # the cached optimal coverage after margins optimization
-    _n_problem_now: Optional[int] = None
     _n_difficult_now: Optional[int] = None
     _sampling_number_factor_now: Optional[float] = None
     _elapsed_time_history: Optional[List[ProfileInfo]] = None
@@ -197,7 +196,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             True,  # assume that we are gonna build library and not in eval time.
             [],
             [],
-            None,
             None,
             None,
             None,
@@ -673,7 +671,6 @@ class DifficultProblemPredicate(Generic[ProblemT, ConfigT, ResultT]):
 
 @dataclass
 class LibrarySamplerConfig:
-    n_problem_init: int = 1000
     n_problem_inner: int = 80
     train_config: TrainConfig = TrainConfig()
     n_solution_candidate: int = 100
@@ -691,7 +688,6 @@ class LibrarySamplerConfig:
     n_determine_batch: int = 2000
     candidate_sample_scale: int = 4
     train_with_encoder: bool = False
-    n_problem_mult_factor: float = 1.05
     n_problem_max: int = 30000
     tmp_n_max_call_mult_factor: float = 1.5
     sampling_number_factor: float = 50.0
@@ -788,7 +784,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             config.solvable_threshold_factor,
             meta_data,
         )
-        library._n_problem_now = config.n_problem_init
         library._n_difficult_now = config.n_difficult_init
         library._sampling_number_factor_now = config.sampling_number_factor
 
@@ -915,7 +910,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(f"sampling nuber factor: {self.library._sampling_number_factor_now}")
         assert self.library._sampling_number_factor_now is not None
         n_problem_now = int((1.0 / gain_expected) * self.library._sampling_number_factor_now)
-        self.library._n_problem_now = n_problem_now
         logger.info(f"n_problem_now: {n_problem_now}")
         prof_info.t_determine_cand = time.time() - ts_determine_cand
 
@@ -923,9 +917,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             dataset_cache_path = Path(td) / hashlib.md5(pickle.dumps(init_solution)).hexdigest()
 
             self.reset_pool()
-            logger.info("current n_problem_now: {}".format(self.library._n_problem_now))
             predictor = self._train_predictor(
-                init_solution, self.project_path, dataset_cache_path, prof_info
+                init_solution, self.project_path, dataset_cache_path, n_problem_now, prof_info
             )
 
             ts_margin = time.time()
@@ -1099,10 +1092,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         init_solution: Trajectory,
         project_path: Path,
         dataset_cache_path: Path,
+        n_problem: int,
         profile_info: ProfileInfo,
     ) -> Union[IterationPredictorWithEncoder, IterationPredictor]:
         pp = project_path
-        assert self.library._n_problem_now is not None
 
         ts_dataset = time.time()
         dataset: Optional[IterationPredictorDataset]
@@ -1112,11 +1105,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 dataset = pickle.load(fr)
             assert isinstance(dataset, IterationPredictorDataset)
             logger.debug("loaded dataset is created from {} tasks".format(dataset.n_task))
-            n_require = self.library._n_problem_now - dataset.n_task
+            n_require = n_problem - dataset.n_task
         else:
             logger.debug("create dataset from scratch")
             dataset = None
-            n_require = self.library._n_problem_now
+            n_require = n_problem
 
         predicated_pool = self.pool_multiple.as_predicated()
 
