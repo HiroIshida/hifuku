@@ -1,3 +1,4 @@
+import pickle
 from math import floor
 from typing import List, Tuple
 
@@ -130,6 +131,16 @@ def test_compute_coverage_and_fp():
     coverage_rate_truth, fp_rate_truth = compute_coverage_and_fp_naive(margins, cr_list, threshold)
     np.testing.assert_almost_equal(coverage_jit, coverage_rate_truth)
     np.testing.assert_almost_equal(fp_rate_jit, fp_rate_truth)
+
+
+def test_coverage_result_serialization():
+    reals_random = np.random.rand(100)
+    ests_random = np.random.rand(100)
+    threshold = 0.5
+    cr = CoverageResult(reals_random, ests_random, threshold)
+    cr_again = CoverageResult.loads(cr.dumps())
+    # compare pickled
+    assert pickle.dumps(cr) == pickle.dumps(cr_again)
 
 
 if __name__ == "__main__":

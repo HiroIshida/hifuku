@@ -1,4 +1,5 @@
 import copy
+import json
 import logging
 from dataclasses import dataclass
 from functools import cached_property
@@ -18,14 +19,21 @@ class CoverageResult:
     ests: np.ndarray
     threshold: float
 
-    def __setstate__(self, state):
-        # NOTE: for backward compatibility
-        is_old_version = "values_estimation" in state
-        if is_old_version:
-            state["ests"] = state["values_estimation"]
-            state["reals"] = state["values_ground_truth"]
+    def dumps(self) -> str:
+        d = {
+            "reals": self.reals.tolist(),
+            "ests": self.ests.tolist(),
+            "threshold": self.threshold,
+        }
+        return json.dumps(d)
 
-        self.__dict__.update(state)
+    @classmethod
+    def loads(cls, s: str) -> "CoverageResult":
+        d = json.loads(s)
+        reals = np.array(d["reals"])
+        ests = np.array(d["ests"])
+        threshold = d["threshold"]
+        return cls(reals, ests, threshold)
 
     def __post_init__(self):
         assert len(self.reals) == len(self.ests)
