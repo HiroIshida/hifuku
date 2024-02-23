@@ -130,7 +130,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     _optimal_coverage_estimate: Optional[
         float
     ] = None  # the cached optimal coverage after margins optimization
-    _n_difficult_now: Optional[int] = None
     _sampling_number_factor_now: Optional[float] = None
     _elapsed_time_history: Optional[List[ProfileInfo]] = None
     _coverage_est_history: Optional[List[float]] = None
@@ -196,7 +195,6 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             True,  # assume that we are gonna build library and not in eval time.
             [],
             [],
-            None,
             None,
             None,
             [],
@@ -674,7 +672,7 @@ class LibrarySamplerConfig:
     n_problem_inner: int = 80
     train_config: TrainConfig = TrainConfig()
     n_solution_candidate: int = 100
-    n_difficult_init: int = 500
+    n_difficult: int = 500
     solvable_threshold_factor: float = 1.0
     difficult_threshold_factor: float = 1.0  # should equal to solvable_threshold_factor
     acceptable_false_positive_rate: float = 0.1
@@ -784,7 +782,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             config.solvable_threshold_factor,
             meta_data,
         )
-        library._n_difficult_now = config.n_difficult_init
         library._sampling_number_factor_now = config.sampling_number_factor
 
         # setup solver, sampler, determinant
@@ -893,20 +890,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         ts = time.time()
         assert self.library._elapsed_time_history is not None
 
-        assert self.library._n_difficult_now is not None
-        if not self.at_first_iteration():
-            logger.info("new active sampling step. increase n_problem_now??")
-            # self.library._n_problem_now = min(
-            #     int(self.library._n_problem_now * self.config.n_problem_mult_factor),
-            #     self.config.n_problem_max,
-            # )
-            # self.library._n_difficult_now = int(
-            #     self.library._n_difficult_now * self.config.n_problem_mult_factor
-            # )
-
         ts_determine_cand = time.time()
-        logger.info(f"n_difficult_now: {self.library._n_difficult_now}")
-        init_solution, gain_expected = self._determine_init_solution(self.library._n_difficult_now)
+        init_solution, gain_expected = self._determine_init_solution(self.config.n_difficult)
         logger.info(f"sampling nuber factor: {self.library._sampling_number_factor_now}")
         assert self.library._sampling_number_factor_now is not None
         n_problem_now = int((1.0 / gain_expected) * self.library._sampling_number_factor_now)
