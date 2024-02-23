@@ -1,6 +1,5 @@
 import copy
 import datetime
-import hashlib
 import inspect
 import json
 import logging
@@ -906,11 +905,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         prof_info.t_determine_cand = time.time() - ts_determine_cand
 
         with TemporaryDirectory() as td:
-            dataset_cache_path = Path(td) / hashlib.md5(pickle.dumps(init_solution)).hexdigest()
-
             self.reset_pool()
             predictor = self._train_predictor(
-                init_solution, self.project_path, dataset_cache_path, n_problem_now, prof_info
+                init_solution, self.project_path, n_problem_now, prof_info
             )
 
             ts_margin = time.time()
@@ -1038,36 +1035,22 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         self,
         init_solution: Trajectory,
         project_path: Path,
-        dataset_cache_path: Path,
         n_problem: int,
         profile_info: ProfileInfo,
     ) -> Union[IterationPredictorWithEncoder, IterationPredictor]:
         pp = project_path
 
         ts_dataset = time.time()
-        dataset: Optional[IterationPredictorDataset]
-        if dataset_cache_path.exists():
-            logger.debug("loading from cached dataset from {}".format(dataset_cache_path))
-            with dataset_cache_path.open(mode="rb") as fr:
-                dataset = pickle.load(fr)
-            assert isinstance(dataset, IterationPredictorDataset)
-            logger.debug("loaded dataset is created from {} tasks".format(dataset.n_task))
-            n_require = n_problem - dataset.n_task
-        else:
-            logger.debug("create dataset from scratch")
-            dataset = None
-            n_require = n_problem
-
         predicated_pool = self.pool_multiple.as_predicated()
 
         # NOTE: to my future self: you can't use presampled problems if you'd like to
         # sample tasks using some predicate!!
-        logger.info("generate {} tasks".format(n_require))
+        logger.info("generate {} tasks".format(n_problem))
         if self.presampled_train_problems is None:
-            problems = self.sampler.sample_batch(n_require, predicated_pool, self.delete_cache)
+            problems = self.sampler.sample_batch(n_problem, predicated_pool, self.delete_cache)
         else:
             logger.debug("use presampled tasks")
-            problems = self.presampled_train_problems[:n_require]
+            problems = self.presampled_train_problems[:n_problem]
 
         logger.info("start generating dataset")
         # create dataset. Dataset creation by a large problem set often causes
@@ -1159,10 +1142,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             weights,
             self.library.ae_model_shared,
         )
-        assert dataset is not None
-        logger.info("save dataset to {}".format(dataset_cache_path))
-        with dataset_cache_path.open(mode="wb") as fw:
-            pickle.dump(dataset, fw)
 
         profile_info.t_dataset = time.time() - ts_dataset
 
