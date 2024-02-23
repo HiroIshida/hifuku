@@ -1,7 +1,6 @@
 import argparse
 import multiprocessing
 import resource
-import threading
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
