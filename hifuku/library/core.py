@@ -700,7 +700,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     sampler: BatchProblemSampler
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
-    adjust_margins: bool
     delete_cache: bool
     project_path: Path
     sampler_state: ActiveSamplerState
@@ -757,7 +756,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         use_distributed: bool = False,
         reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
-        adjust_margins: bool = True,
         delete_cache: bool = False,
         n_limit_batch_solver: Optional[int] = None,
         presample_train_problems: bool = False,
@@ -871,7 +869,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             sampler,
             determinant,
             test_false_positive_rate,
-            adjust_margins,
             delete_cache,
             project_path,
             sampler_state,
@@ -994,49 +991,43 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         )
         logger.info(coverage_result)
 
-        if not self.adjust_margins:
-            margins = self.library.margins + [0.0]
-            max_coverage = None  # TODO: actually max_coverage can be computable
+        if len(self.library.predictors) > 0:
+            # determine margin using cmaes
+            cma_std = self.solver_config.n_max_call * 0.5
+            coverages_new = self.sampler_state.coverage_results + [coverage_result]
+            coverage_est_last = self.sampler_state.coverage_est_history[-1]
+            results = self.determinant.determine_batch(
+                self.config.n_determine_batch,
+                coverages_new,
+                self.solver_config.n_max_call,
+                self.config.acceptable_false_positive_rate,
+                cma_std,
+                minimum_coverage=coverage_est_last,
+            )
+
+            best_margins = None
+            max_coverage = coverage_est_last
+            for result in results:
+                if result is None:
+                    continue
+                if result.coverage > max_coverage:
+                    max_coverage = result.coverage
+                    best_margins = result.best_margins
+
+            if best_margins is None:
+                return None
+            margins = best_margins
         else:
-            if len(self.library.predictors) > 0:
-                # determine margin using cmaes
-                cma_std = self.solver_config.n_max_call * 0.5
-                coverages_new = self.sampler_state.coverage_results + [coverage_result]
-                coverage_est_last = self.sampler_state.coverage_est_history[-1]
-                results = self.determinant.determine_batch(
-                    self.config.n_determine_batch,
-                    coverages_new,
-                    self.solver_config.n_max_call,
-                    self.config.acceptable_false_positive_rate,
-                    cma_std,
-                    minimum_coverage=coverage_est_last,
-                )
+            logger.info("determine margin using exact method")
+            margin, max_coverage = coverage_result.determine_margin(
+                self.config.acceptable_false_positive_rate
+            )
 
-                best_margins = None
-                max_coverage = coverage_est_last
-                for result in results:
-                    if result is None:
-                        continue
-                    if result.coverage > max_coverage:
-                        max_coverage = result.coverage
-                        best_margins = result.best_margins
-
-                if best_margins is None:
-                    return None
-                margins = best_margins
-            else:
-                logger.info("determine margin using exact method")
-                margin, max_coverage = coverage_result.determine_margin(
-                    self.config.acceptable_false_positive_rate
-                )
-
-                if not np.isfinite(margin) and self.config.ignore_useless_traj:
-                    message = "margin value {} is invalid. retrun from active_sampling".format(
-                        margin
-                    )
-                    logger.info(message)
-                    return None
-                margins = [margin]
+            if not np.isfinite(margin) and self.config.ignore_useless_traj:
+                message = "margin value {} is invalid. retrun from active_sampling".format(margin)
+                logger.info(message)
+                return None
+            margins = [margin]
 
         assert max_coverage is not None
         logger.info("optimal coverage estimate is set to {}".format(max_coverage))
