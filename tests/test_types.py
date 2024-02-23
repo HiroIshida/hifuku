@@ -4,21 +4,23 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from skmp.solver.ompl_solver import OMPLSolverConfig, OMPLSolverResult, TerminateState
+from rpbench.two_dimensional.dummy import (
+    DummyConfig,
+    DummyMeshTask,
+    DummyResult,
+    DummyTask,
+)
 from skmp.trajectory import Trajectory
 
-from hifuku.domain import TabletopOvenRightArmReachingTask
 from hifuku.types import RawData
 
 
 def test_rawdata_dump_and_load():
     n_desc = 10
-    task = TabletopOvenRightArmReachingTask.sample(n_desc)
-    results = [
-        OMPLSolverResult(None, 1.0, 10, TerminateState.SUCCESS) for _ in range(n_desc)
-    ]  # dummy
+    task = DummyMeshTask.sample(n_desc)
+    results = [DummyResult(None, 1.0, 10) for _ in range(n_desc)]
     traj_dummy = Trajectory([np.zeros(2)])
-    data = RawData(traj_dummy, task.export_table(), tuple(results), OMPLSolverConfig())
+    data = RawData(traj_dummy, task.export_table(), tuple(results), DummyConfig(5))
 
     with tempfile.TemporaryDirectory() as td:
         fp = Path(td) / "hoge.pkl"
@@ -35,34 +37,34 @@ def test_rawdata_dump_and_load():
 
 def test_rawdata_to_tensor():
     n_desc = 10
-    task = TabletopOvenRightArmReachingTask.sample(n_desc)
-    traj_dummy = Trajectory([np.zeros(2)])
-    results = [
-        OMPLSolverResult(None, 1.0, 10, TerminateState.SUCCESS) for _ in range(n_desc)
-    ]  # dummy
-    data = RawData(traj_dummy, task.export_table(), tuple(results), OMPLSolverConfig())
+    for task_type in [DummyMeshTask, DummyTask]:
+        task = task_type.sample(n_desc)
+        results = [DummyResult(None, 1.0, 10) for _ in range(n_desc)]
+        traj_dummy = Trajectory([np.zeros(2)])
+        data = RawData(traj_dummy, task.export_table(), tuple(results), DummyConfig(5))
 
-    meshes, descriptions, nits, failed = data.to_tensors()
+        meshes, descriptions, nits, failed = data.to_tensors()
 
-    assert meshes.ndim == 4
-    assert descriptions.shape == (n_desc, 6 + 6)
-    assert nits.shape == (n_desc,)
-    assert failed.shape == (n_desc,)
+        if task_type == DummyMeshTask:
+            assert meshes.ndim == 3
+        else:
+            assert meshes.shape == (0,)
+        assert descriptions.shape == (n_desc, 2)
+        assert nits.shape == (n_desc,)
+        assert failed.shape == (n_desc,)
 
 
 def test_rawdata_to_tensor_iternum_clamp():
-    task = TabletopOvenRightArmReachingTask.sample(4)
+    task = DummyMeshTask.sample(4)
     traj_dummy = Trajectory([np.zeros(2)])
     n_max_call = 5
     results = [
-        OMPLSolverResult(traj_dummy, 1.0, 1, TerminateState.FAIL_PLANNING),
-        OMPLSolverResult(traj_dummy, 1.0, 5, TerminateState.FAIL_PLANNING),
-        OMPLSolverResult(None, 1.0, 1, TerminateState.SUCCESS),
-        OMPLSolverResult(None, 1.0, 5, TerminateState.SUCCESS),
+        DummyResult(traj_dummy, 1.0, 1),
+        DummyResult(traj_dummy, 1.0, 5),
+        DummyResult(None, 1.0, 1),
+        DummyResult(None, 1.0, 5),
     ]  # dummy
-    data = RawData(
-        traj_dummy, task.export_table(), tuple(results), OMPLSolverConfig(n_max_call=n_max_call)
-    )
+    data = RawData(traj_dummy, task.export_table(), tuple(results), DummyConfig(n_max_call))
     _, _, torch_nits, _ = data.to_tensors()
     assert list(torch_nits.numpy()) == [1, 5, n_max_call * 2, n_max_call * 2]
 
