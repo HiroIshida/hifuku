@@ -164,6 +164,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         AutoEncoderBase
     ]  # if None, when each predictor does not share autoencoder
     predictors: List[Union[IterationPredictor, IterationPredictorWithEncoder]]
+    init_solutions: List[Trajectory]
     margins: List[float]
     solvable_threshold_factor: float
     uuidval: str
@@ -204,6 +205,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             solver_type,
             config,
             ae_model,
+            [],
             [],
             [],
             solvable_threshold_factor,
@@ -340,7 +342,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
         result_list = []
         for nit, idx in zip(nits_min, indices_min):
-            init_solution = self.predictors[idx].initial_solution
+            init_solution = self.init_solutions[idx]
             assert init_solution is not None
             res = self.InferenceResult(nit, idx, init_solution)
             result_list.append(res)
@@ -473,9 +475,9 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     def unbundle(self) -> List["SolutionLibrary[ProblemT, ConfigT, ResultT]"]:
         # split into list of singleton libraries
         singleton_list = []
-        for predictor, margin in zip(self.predictors, self.margins):
-            assert predictor.initial_solution is not None
-
+        for predictor, init_solution, margin in zip(
+            self.predictors, self.init_solutions, self.margins
+        ):
             singleton = SolutionLibrary(
                 task_type=self.task_type,
                 task_distribution_hash=self.task_distribution_hash,
@@ -483,6 +485,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
                 solver_config=self.solver_config,
                 ae_model_shared=self.ae_model_shared,
                 predictors=[predictor],
+                init_solutions=[init_solution],
                 margins=[margin],
                 solvable_threshold_factor=self.solvable_threshold_factor,
                 uuidval="dummy",
@@ -497,6 +500,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
     ) -> "SolutionLibrary[ProblemT, ConfigT, ResultT]":
         singleton = singletons[0]
         predictors = [e.predictors[0] for e in singletons]
+        init_solutions = [e.init_solutions[0] for e in singletons]
         margins = [e.margins[0] for e in singletons]
 
         library = SolutionLibrary(
@@ -506,6 +510,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             solver_config=singleton.solver_config,
             ae_model_shared=singleton.ae_model_shared,
             predictors=predictors,
+            init_solutions=init_solutions,
             margins=margins,
             solvable_threshold_factor=singleton.solvable_threshold_factor,
             uuidval="dummy",
@@ -521,6 +526,7 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             solver_config=self.solver_config,
             ae_model_shared=self.ae_model_shared,
             predictors=[self.predictors[idx]],
+            init_solutions=[self.init_solutions[idx]],
             margins=[self.margins[idx]],
             solvable_threshold_factor=self.solvable_threshold_factor,
             uuidval="dummy",
@@ -911,7 +917,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             )
 
             ts_margin = time.time()
-            ret = self._determine_margins(predictor)
+            ret = self._determine_margins(predictor, init_solution)
             prof_info.t_margin = time.time() - ts_margin
 
         if ret is None:
@@ -930,6 +936,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
             # update library
             self.library.predictors.append(predictor)
+            self.library.init_solutions.append(init_solution)
             self.library.margins = margins
 
             coverage_est = self.library.measure_coverage(self.problems_validation)  # double check
@@ -968,7 +975,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         return difficult_iter_threshold
 
     def _determine_margins(
-        self, predictor: Union[IterationPredictorWithEncoder, IterationPredictor]
+        self,
+        predictor: Union[IterationPredictorWithEncoder, IterationPredictor],
+        init_solution: Trajectory,
     ) -> Optional[Tuple[List[float], CoverageResult, float]]:
         # TODO: move this whole "adjusting" operation to a different method
         logger.info("start measuring coverage")
@@ -979,6 +988,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             solver_config=self.solver_config,
             ae_model_shared=self.library.ae_model_shared,
             predictors=[predictor],
+            init_solutions=[init_solution],
             margins=[0.0],
             solvable_threshold_factor=self.config.solvable_threshold_factor,
             uuidval="dummy",
@@ -1184,7 +1194,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         else:
             model = IterationPredictor(iterpred_model_conf)
 
-        model.initial_solution = init_solution
         tcache = TrainCache.from_model(model)
 
         def is_stoppable(tcache: TrainCache) -> bool:
