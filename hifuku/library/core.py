@@ -235,19 +235,19 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         if self.limit_thread:
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
                 with num_torch_thread(1):
-                    desc_table = task.export_table()
-                    mesh_np = desc_table.get_mesh()
+                    desc_table = task.export_table(use_matrix=True)
+                    mesh_np = desc_table.world_mat
                     assert mesh_np is not None
                     mesh_np = np.expand_dims(mesh_np, axis=(0, 1))
-                    descs_np = np.array(desc_table.get_vector_descs())
+                    descs_np = np.array(desc_table.get_desc_vecs())
                     mesh_torch = torch.from_numpy(mesh_np).float().to(self.device)
                     descs_torch = torch.from_numpy(descs_np).float().to(self.device)
         else:
-            desc_table = task.export_table()
-            mesh_np = desc_table.get_mesh()
+            desc_table = task.export_table(use_matrix=True)
+            mesh_np = desc_table.world_mat
             assert mesh_np is not None
             mesh_np = np.expand_dims(mesh_np, axis=(0, 1))
-            descs_np = np.array(desc_table.get_vector_descs())
+            descs_np = np.array(desc_table.get_desc_vecs())
             mesh_torch = torch.from_numpy(mesh_np).float().to(self.device)
             descs_torch = torch.from_numpy(descs_np).float().to(self.device)
 
@@ -276,13 +276,13 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
                 # limiting numpy thread seems to make stable. but not sure why..
-                desc_table = task.export_table()
-                mesh_np_tmp = desc_table.get_mesh()
+                desc_table = task.export_table(use_matrix=True)
+                mesh_np_tmp = desc_table.world_mat
                 if mesh_np_tmp is None:
                     mesh_np = None
                 else:
                     mesh_np = np.expand_dims(mesh_np_tmp, axis=(0, 1))
-                desc_np = np.array(desc_table.get_vector_descs())
+                desc_np = np.array(desc_table.get_desc_vecs())
 
             with num_torch_thread(1):
                 # float() must be run in single (cpp-layer) thread
@@ -298,12 +298,12 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             # usually, calling threadpoolctl and num_torch_thread function
             # is constly. So if you are sure that you are running program in
             # a single process. Then set limit_thread = False
-            desc_table = task.export_table()
-            desc_np = np.array(desc_table.get_vector_descs())
+            desc_table = task.export_table(use_matrix=True)
+            desc_np = np.array(desc_table.get_desc_vecs())
             desc = torch.from_numpy(desc_np)
             desc = desc.float().to(self.device)
 
-            mesh_np_tmp = desc_table.get_mesh()
+            mesh_np_tmp = desc_table.world_mat
             if mesh_np_tmp is None:
                 mesh = torch.empty((1, 0))
             else:
@@ -1149,8 +1149,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # determine 1dim tensor dimension by temp creation of a problem
         # TODO: should I implement this as a method?
         problem = self.problem_type.sample(1, standard=True)
-        table = problem.export_table()
-        vector_desc = table.get_vector_descs()[0]
+        table = problem.export_table(use_matrix=True)
+        vector_desc = table.get_desc_vecs()[0]
         n_dim_vector_description = vector_desc.shape[0]
 
         # train

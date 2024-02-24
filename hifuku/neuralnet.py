@@ -172,14 +172,14 @@ class IterationPredictorDataset(Dataset):
     def _create_raw_data(pair):  # used in ProcessPool
         task, results = pair
         global _init_solution_, _solver_config_
-        raw_data = RawData(_init_solution_, task.export_table(), results, _solver_config_)  # type: ignore
+        raw_data = RawData(_init_solution_, task.export_table(use_matrix=True), results, _solver_config_)  # type: ignore
         return raw_data
 
     @classmethod
     def _compute_expected_raw_data_size(cls, tasks, resultss, solver_config) -> int:
         task = tasks[0]
         results = resultss[0]
-        raw_data = RawData(None, task.export_table(), results, solver_config)  # type: ignore
+        raw_data = RawData(None, task.export_table(use_matrix=True), results, solver_config)  # type: ignore
         dump_path = Path(f"/tmp/expected_raw_data_{uuid.uuid4()}.pkl")
         logger.debug(f"dumping raw data to {dump_path}")
         with dump_path.open("wb") as f:
