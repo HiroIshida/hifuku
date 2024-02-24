@@ -921,7 +921,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
             logger.info("prof_info: {}".format(prof_info))
             prof_info.t_total = elapsed_time
-            self.sampler_state.elapsed_time_history.append(prof_info)
             coverage_est = self.sampler_state.coverage_est_history[-1]
             self.sampler_state.failure_count += 1
         else:
