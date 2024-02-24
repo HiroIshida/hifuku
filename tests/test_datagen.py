@@ -28,7 +28,7 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSolver,
 )
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
-from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
+from hifuku.pool import PredicatedProblemPool, ProblemPool
 from hifuku.script_utils import create_default_logger
 from hifuku.testing_asset import SimplePredicate
 from hifuku.types import RawData
@@ -155,7 +155,7 @@ def test_consistency_of_all_batch_sampler(server):
 
     n_problem_inner = 5
     pool_list: List[PredicatedProblemPool] = []
-    pool_base = TrivialProblemPool(task_type, n_problem_inner)
+    pool_base = ProblemPool(task_type, n_problem_inner)
     pool_list.append(pool_base.as_predicated())
     pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
 
@@ -181,7 +181,7 @@ def _test_batch_sampler_with_delete_cache_option(server):
     sampler_list.append(MultiProcessBatchProblemSampler(2))
     sampler_list.append(DistributeBatchProblemSampler[task_type](specs))
 
-    pool = TrivialProblemPool(task_type, 1).as_predicated()
+    pool = ProblemPool(task_type, 1).as_predicated()
 
     for sampler in sampler_list:
         tasks = sampler.sample_batch(10, pool, False)

@@ -52,7 +52,7 @@ from hifuku.neuralnet import (
     IterationPredictorWithEncoderConfig,
     NullAutoEncoder,
 )
-from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
+from hifuku.pool import ProblemPool, ProblemT
 from hifuku.types import get_clamped_iter
 from hifuku.utils import num_torch_thread
 
@@ -723,9 +723,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     def solver_config(self) -> ConfigT:
         return self.library.solver_config
 
-    def __post_init__(self):
-        self.reset_pool()
-
     @property
     def train_pred_with_encoder(self) -> bool:
         return self.ae_model_pretrained is not None
@@ -737,11 +734,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             shutil.rmtree(path)
         path.mkdir()
         return path
-
-    def reset_pool(self) -> None:
-        logger.info("resetting pool")
-        self.pool_single.reset()
-        self.pool_multiple.reset()
 
     def at_first_iteration(self) -> bool:
         return len(self.library.predictors) == 0
@@ -813,14 +805,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # setup pools
         if pool_single is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
-            pool_single = TrivialProblemPool(problem_type, 1)
+            pool_single = ProblemPool(problem_type, 1)
         assert pool_single.n_problem_inner == 1
 
         if pool_multiple is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
             # TODO: smelling! n_problem_inner should not be set here
-            pool_multiple = TrivialProblemPool(problem_type, config.n_problem_inner)
-        assert pool_multiple.parallelizable()
+            pool_multiple = ProblemPool(problem_type, config.n_problem_inner)
 
         # create validation problems
         project_path.mkdir(exist_ok=True)
@@ -841,7 +832,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
                 problems_validation = sampler.sample_batch(
                     config.n_validation,
-                    TrivialProblemPool(problem_type, config.n_validation_inner).as_predicated(),
+                    ProblemPool(problem_type, config.n_validation_inner).as_predicated(),
                 )
 
                 with validation_cache_path.open(mode="wb") as f:
@@ -895,7 +886,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(f"n_problem_now: {n_problem_now}")
         prof_info.t_determine_cand = time.time() - ts_determine_cand
 
-        self.reset_pool()
         predictor = self._train_predictor(
             init_solution, self.project_path, n_problem_now, prof_info
         )
