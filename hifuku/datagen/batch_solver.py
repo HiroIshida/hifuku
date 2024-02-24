@@ -125,7 +125,6 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
             logger.debug("n_limit_batch is not set. detremine now...")
             max_ram_usage = 16 * 10**9
             problem_for_measuring = problems[0]
-            problem_for_measuring.cache  # access cache because it's created lazily
             serialize_ram_size_each = len(pickle.dumps(problem_for_measuring)) * 2
             max_size = int(max_ram_usage // serialize_ram_size_each)
             logger.debug(
@@ -314,7 +313,6 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
         task_idx, task, init_solutions = args
         # NOTE: this function is used only in process pool
         # NOTE: a lot of type: ignore due to global variables
-        has_cache = task._cache is not None
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             global _use_default_solver
@@ -329,9 +327,6 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
                     solver.setup(problem)  # type: ignore
                     result = solver.solve(init_solution)  # type: ignore
                     results.append(result)
-
-            if has_cache:
-                task.delete_cache()
         return task_idx, tuple(results)
 
 

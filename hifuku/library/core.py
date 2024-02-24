@@ -712,7 +712,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     sampler: BatchProblemSampler
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
-    delete_cache: bool
     project_path: Path
     sampler_state: ActiveSamplerState
     ae_model_pretrained: Optional[
@@ -768,7 +767,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         use_distributed: bool = False,
         reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
-        delete_cache: bool = False,
         n_limit_batch_solver: Optional[int] = None,
         presample_train_problems: bool = False,
     ) -> "SimpleSolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
@@ -848,7 +846,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 problems_validation = sampler.sample_batch(
                     config.n_validation,
                     TrivialProblemPool(problem_type, config.n_validation_inner).as_predicated(),
-                    delete_cache=delete_cache,
                 )
 
                 with validation_cache_path.open(mode="wb") as f:
@@ -862,9 +859,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             predicated_pool = pool_multiple.as_predicated()
             n_require = config.n_problem_max
             logger.info("presample {} tasks".format(n_require))
-            presampled_train_problems = sampler.sample_batch(
-                n_require, predicated_pool, delete_cache
-            )
+            presampled_train_problems = sampler.sample_batch(n_require, predicated_pool)
         else:
             presampled_train_problems = None
 
@@ -880,7 +875,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             sampler,
             determinant,
             test_false_positive_rate,
-            delete_cache,
             project_path,
             sampler_state,
             ae_model if config.train_with_encoder else None,
@@ -1054,7 +1048,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # sample tasks using some predicate!!
         logger.info("generate {} tasks".format(n_problem))
         if self.presampled_train_problems is None:
-            problems = self.sampler.sample_batch(n_problem, predicated_pool, self.delete_cache)
+            problems = self.sampler.sample_batch(n_problem, predicated_pool)
         else:
             logger.debug("use presampled tasks")
             problems = self.presampled_train_problems[:n_problem]
@@ -1253,8 +1247,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             )
             problems2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
             problems = problems1 + problems2
-            for prob in problems:
-                prob.delete_cache()
 
             # NOTE: shuffling is required asin the following sectino, for loop is existed
             # as soon as number of candidates exceeds n_sample
