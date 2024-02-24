@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from multiprocessing import get_context
 from pathlib import Path
-from typing import Generic, List, Optional, Tuple
+from typing import Generic, Optional, Tuple
 
 import numpy as np
 import threadpoolctl
@@ -32,7 +32,7 @@ HostPortPair = Tuple[str, int]
 @dataclass
 class BatchProblemSampler(Generic[ProblemT], ABC):
     @abstractmethod
-    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> List[ProblemT]:
+    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
         ...
 
 
@@ -48,7 +48,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         self.n_process = n_process
         self.n_thread = n_thread
 
-    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> List[ProblemT]:
+    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
 
@@ -58,12 +58,15 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
             initargs=(pool, self.n_thread),
             mp_context=get_context("fork"),
         ) as executor:
-            problems_sampled = list(
+            tmp = list(
                 tqdm.tqdm(
                     executor.map(self._process_pool_sample_task, range(n_sample)), total=n_sample
                 )
             )
-        return problems_sampled
+        intr_descs_sampled = np.array(tmp)
+        assert intr_descs_sampled.ndim == 3
+        assert intr_descs_sampled.shape[0] == n_sample
+        return intr_descs_sampled
 
     @staticmethod
     def _process_pool_setup(_pool: PredicatedProblemPool[ProblemT], _n_thread: int):
@@ -104,7 +107,7 @@ class DistributeBatchProblemSampler(
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
-    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> List[ProblemT]:
+    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
         assert n_sample > 0
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
@@ -132,9 +135,12 @@ class DistributeBatchProblemSampler(
             for p in process_list:
                 p.join()
 
-            problems = []
+            intr_descs = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    problems_part = pickle.load(f)
-                    problems.extend(problems_part)
-        return problems
+                    intr_descs_part = pickle.load(f)
+                    intr_descs.extend(intr_descs_part)
+        intr_desc_arr = np.array(intr_descs)
+        assert intr_desc_arr.ndim == 3
+        assert intr_desc_arr.shape[0] == n_sample
+        return intr_desc_arr

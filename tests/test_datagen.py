@@ -163,14 +163,16 @@ def test_consistency_of_all_batch_sampler(server):
         for pool in pool_list:
             for sampler in sampler_list:
                 samples = sampler.sample_batch(n_sample, pool)
-                assert len(samples) == n_sample
-                assert len(samples[0].descriptions) == n_problem_inner
+                assert samples.shape == (n_sample, n_problem_inner, task_type.get_task_dof())
 
                 # in the parallel processing, the typical but difficult-to-find bug is
                 # duplication of sample by forgetting to set peroper random seed.
                 # check that no duplicate samples here.
                 hash_vals = [hashlib.md5(pickle.dumps(s)).hexdigest() for s in samples]
                 assert len(set(hash_vals)) == len(hash_vals)
+
+                # Note: because different random seeds are used, the result of the sampling
+                # is different. so we cannot compare the result of the sampling directly.
 
 
 # TODO: delete this test after remove cache mechanism from rpbench

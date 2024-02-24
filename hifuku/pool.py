@@ -1,43 +1,38 @@
-"""
-This module implements the multiprocess data generation that does not
-fit into batch_solver and batch_sampler.
-
-Because I don't have time, the interface is much different from batch_sampler
-and batch_solvers. will be fixed someday.
-"""
-
 import logging
 from dataclasses import dataclass
-from typing import Callable, Iterator, Optional, Type, TypeVar, Union, cast
+from typing import Callable, Generic, Iterator, Optional, Type, TypeVar, cast
 
+import numpy as np
 from rpbench.interface import TaskBase
 
 logger = logging.getLogger(__name__)
 
 ProblemT = TypeVar("ProblemT", bound=TaskBase)
-ProblemPoolT = TypeVar("ProblemPoolT", bound=Union["PredicatedProblemPool", "ProblemPool"])
 
 
 @dataclass
-class PredicatedProblemPool(Iterator[Optional[ProblemT]]):
+class PredicatedProblemPool(Generic[ProblemT], Iterator[Optional[np.ndarray]]):
     problem_type: Type[ProblemT]
     n_problem_inner: int
     predicate: Callable[[ProblemT], bool]
     max_trial_factor: int
 
-    def __next__(self) -> Optional[ProblemT]:
-        return self.problem_type.predicated_sample(
+    def __next__(self) -> Optional[np.ndarray]:
+        ret = self.problem_type.predicated_sample(
             self.n_problem_inner, self.predicate, self.max_trial_factor
         )
+        if ret is None:
+            return None
+        return ret.to_intrinsic_desc_vecs()
 
 
 @dataclass
-class ProblemPool(Iterator[ProblemT]):
+class ProblemPool(Generic[ProblemT], Iterator[np.ndarray]):
     problem_type: Type[ProblemT]
     n_problem_inner: int
 
-    def __next__(self) -> ProblemT:
-        return self.problem_type.sample(self.n_problem_inner)
+    def __next__(self) -> np.ndarray:
+        return self.problem_type.sample(self.n_problem_inner).to_intrinsic_desc_vecs()
 
     def as_predicated(self) -> PredicatedProblemPool[ProblemT]:
         return cast(PredicatedProblemPool[ProblemT], self)
