@@ -11,6 +11,7 @@ from typing import List
 import numpy as np
 import pytest
 from ompl import set_ompl_random_seed
+from rpbench.articulated.pr2.minifridge import TabletopClutteredFridgeReachingTask
 from skmp.solver.nlp_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig, OMPLSolverResult
 from skmp.trajectory import Trajectory
@@ -26,7 +27,6 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
-from hifuku.domain import TabletopOvenRightArmReachingTask
 from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.pool import PredicatedProblemPool, TrivialProblemPool
 from hifuku.script_utils import create_default_logger
@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 np.random.seed(0)
 set_ompl_random_seed(0)
+task_type = TabletopClutteredFridgeReachingTask
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -58,19 +59,16 @@ def server():
 
 
 @pytest.fixture(scope="session")
-def TORR_result_traj():
-    task = TabletopOvenRightArmReachingTask.sample(1, standard=True)
-    solcon_init = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
-    solver_init = OMPLSolver.init(solcon_init)
-    solver_init.setup(task.export_problems()[0])
-    result_init = solver_init.solve()
-    assert result_init.traj is not None
-    return result_init.traj
+def init_traj():
+    task = task_type.sample(1, standard=True)
+    res = task.solve_default()[0]
+    assert res.traj is not None
+    return res.traj
 
 
-def test_batch_solver_init_solutions(TORR_result_traj: Trajectory):
+def test_batch_solver_init_solutions(init_traj: Trajectory):
     solcon = SQPBasedSolverConfig(
-        n_wp=20,
+        n_wp=40,
         n_max_call=10,
         motion_step_satisfaction="debug_ignore",
         force_deterministic=True,
@@ -79,13 +77,13 @@ def test_batch_solver_init_solutions(TORR_result_traj: Trajectory):
 
     n_task = 5
     n_inner = 2
-    tasks = [TabletopOvenRightArmReachingTask.sample(n_inner) for _ in range(n_task)]
+    tasks = [task_type.sample(n_inner) for _ in range(n_task)]
     mp_batch_solver.solve_batch(tasks, [None] * n_task)
-    mp_batch_solver.solve_batch(tasks, [TORR_result_traj] * n_task)
-    mp_batch_solver.solve_batch(tasks, [[TORR_result_traj] * n_inner] * n_task)
+    mp_batch_solver.solve_batch(tasks, [init_traj] * n_task)
+    mp_batch_solver.solve_batch(tasks, [[init_traj] * n_inner] * n_task)
 
 
-def test_consistency_of_all_batch_sovler(server, TORR_result_traj: Trajectory):
+def test_consistency_of_all_batch_sovler(server, init_traj: Trajectory):
 
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
@@ -94,11 +92,9 @@ def test_consistency_of_all_batch_sovler(server, TORR_result_traj: Trajectory):
         for n_problem in [1, 8]:  # to test edge case
             n_problem_inner = 2
 
-            init_solutions = [TORR_result_traj] * n_problem
+            init_solutions = [init_traj] * n_problem
             # set standard = True for testing purpose
-            tasks = [
-                TabletopOvenRightArmReachingTask.sample(n_problem_inner) for _ in range(n_problem)
-            ]
+            tasks = [task_type.sample(n_problem_inner) for _ in range(n_problem)]
             batch_solver_list: List[BatchProblemSolver] = []
 
             n_max_call = 10
@@ -153,13 +149,13 @@ def test_consistency_of_all_batch_sovler(server, TORR_result_traj: Trajectory):
 def test_consistency_of_all_batch_sampler(server):
     specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
 
-    sampler_list: List[BatchProblemSampler[TabletopOvenRightArmReachingTask]] = []
+    sampler_list: List[BatchProblemSampler[task_type]] = []
     sampler_list.append(MultiProcessBatchProblemSampler(1))
-    sampler_list.append(DistributeBatchProblemSampler[TabletopOvenRightArmReachingTask](specs))
+    sampler_list.append(DistributeBatchProblemSampler[task_type](specs))
 
     n_problem_inner = 5
     pool_list: List[PredicatedProblemPool] = []
-    pool_base = TrivialProblemPool(TabletopOvenRightArmReachingTask, n_problem_inner)
+    pool_base = TrivialProblemPool(task_type, n_problem_inner)
     pool_list.append(pool_base.as_predicated())
     pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
 
@@ -177,14 +173,15 @@ def test_consistency_of_all_batch_sampler(server):
                 assert len(set(hash_vals)) == len(hash_vals)
 
 
-def test_batch_sampler_with_delete_cache_option(server):
+# TODO: delete this test after remove cache mechanism from rpbench
+def _test_batch_sampler_with_delete_cache_option(server):
     specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
 
-    sampler_list: List[BatchProblemSampler[TabletopOvenRightArmReachingTask]] = []
+    sampler_list: List[BatchProblemSampler[task_type]] = []
     sampler_list.append(MultiProcessBatchProblemSampler(2))
-    sampler_list.append(DistributeBatchProblemSampler[TabletopOvenRightArmReachingTask](specs))
+    sampler_list.append(DistributeBatchProblemSampler[task_type](specs))
 
-    pool = TrivialProblemPool(TabletopOvenRightArmReachingTask, 1).as_predicated()
+    pool = TrivialProblemPool(task_type, 1).as_predicated()
 
     for sampler in sampler_list:
         tasks = sampler.sample_batch(10, pool, False)
@@ -196,20 +193,14 @@ def test_batch_sampler_with_delete_cache_option(server):
             assert task._cache is None
 
 
-def test_create_dataset():
+def test_create_dataset(init_traj: Trajectory):
     n_task = 4
     n_problem_inner = 2
-
-    task = TabletopOvenRightArmReachingTask.sample(1, standard=True)
     solcon = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
-    solver = OMPLSolver.init(solcon)
-    solver.setup(task.export_problems()[0])
-    result = solver.solve()
-    assert result.traj is not None
 
-    init_solutions = [result.traj] * n_task
+    init_solutions = [init_traj] * n_task
 
-    problems = [TabletopOvenRightArmReachingTask.sample(n_problem_inner) for _ in range(n_task)]
+    problems = [task_type.sample(n_problem_inner) for _ in range(n_task)]
 
     batch_solver = MultiProcessBatchProblemSolver[OMPLSolverConfig, OMPLSolverResult](
         OMPLSolver, solcon, 2
