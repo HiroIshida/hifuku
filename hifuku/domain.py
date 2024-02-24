@@ -14,11 +14,7 @@ from rpbench.articulated.pr2.jskfridge import (
     JskFridgeVerticalReachingTask,
     JskFridgeVerticalReachingTask2,
 )
-from rpbench.articulated.pr2.minifridge import (
-    TabletopClutteredFridgeReachingManyContentsTask,
-    TabletopClutteredFridgeReachingRealisticTask,
-    TabletopClutteredFridgeReachingTask,
-)
+from rpbench.articulated.pr2.minifridge import TabletopClutteredFridgeReachingTask
 from rpbench.interface import TaskBase
 from rpbench.two_dimensional.bubbly_world import (
     BubblyComplexMeshPointConnectTask,
@@ -98,24 +94,24 @@ class ClutteredFridge_SQP(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
-class ClutteredFridgeRealistic_SQP(DomainProtocol):
-    task_type = TabletopClutteredFridgeReachingRealisticTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
-    )
-    auto_encoder_project_name = "TabletopClutteredFridgeWorldWithRealisticContents-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class ClutteredFridgeManyContents_SQP(DomainProtocol):
-    task_type = TabletopClutteredFridgeReachingManyContentsTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
-    )
-    auto_encoder_project_name = "TODO"  # train this
-    auto_encoder_type = PixelAutoEncoder
+# class ClutteredFridgeRealistic_SQP(DomainProtocol):
+#     task_type = TabletopClutteredFridgeReachingRealisticTask
+#     solver_type = SQPBasedSolver
+#     solver_config = SQPBasedSolverConfig(
+#         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
+#     )
+#     auto_encoder_project_name = "TabletopClutteredFridgeWorldWithRealisticContents-AutoEncoder"
+#     auto_encoder_type = PixelAutoEncoder
+#
+#
+# class ClutteredFridgeManyContents_SQP(DomainProtocol):
+#     task_type = TabletopClutteredFridgeReachingManyContentsTask
+#     solver_type = SQPBasedSolver
+#     solver_config = SQPBasedSolverConfig(
+#         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
+#     )
+#     auto_encoder_project_name = "TODO"  # train this
+#     auto_encoder_type = PixelAutoEncoder
 
 
 class ClutteredFridge_RRT250(DomainProtocol):
@@ -435,8 +431,6 @@ def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> f
 def select_domain(domain_name: str) -> Type[DomainProtocol]:
     class DomainCollection(Enum):
         cluttered_fridge_sqp = ClutteredFridge_SQP
-        cluttered_fridge_many_sqp = ClutteredFridgeManyContents_SQP
-        cluttered_fridge_realistic_sqp = ClutteredFridgeRealistic_SQP
         cluttered_fridge_rrt250 = ClutteredFridge_RRT250
         cluttered_fridge_rrt500 = ClutteredFridge_RRT500
         cluttered_fridge_rrt1000 = ClutteredFridge_RRT1000

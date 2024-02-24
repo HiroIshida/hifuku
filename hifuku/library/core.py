@@ -14,7 +14,6 @@ from abc import abstractmethod
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Callable, Dict, Generic, List, Optional, Tuple, Type, Union
 
 import numpy as np
@@ -899,15 +898,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(f"n_problem_now: {n_problem_now}")
         prof_info.t_determine_cand = time.time() - ts_determine_cand
 
-        with TemporaryDirectory() as td:
-            self.reset_pool()
-            predictor = self._train_predictor(
-                init_solution, self.project_path, n_problem_now, prof_info
-            )
+        self.reset_pool()
+        predictor = self._train_predictor(
+            init_solution, self.project_path, n_problem_now, prof_info
+        )
 
-            ts_margin = time.time()
-            ret = self._determine_margins(predictor, init_solution)
-            prof_info.t_margin = time.time() - ts_margin
+        ts_margin = time.time()
+        ret = self._determine_margins(predictor, init_solution)
+        prof_info.t_margin = time.time() - ts_margin
 
         if ret is None:
             logger.info("determine margin failed. returning None")
