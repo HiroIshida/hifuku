@@ -12,14 +12,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Iterator, List, Optional, Type, TypeVar, cast
 
-from rpbench.interface import SamplableBase, TaskBase
+from rpbench.interface import TaskBase
 
 logger = logging.getLogger(__name__)
 
 ProblemT = TypeVar("ProblemT", bound=TaskBase)
-SamplableT = TypeVar("SamplableT", bound=SamplableBase)
-OtherSamplableT = TypeVar("OtherSamplableT", bound=TaskBase)
-CachedProblemT = TypeVar("CachedProblemT", bound=SamplableBase)  # TODO: rename to CacheTaskT
 ProblemPoolT = TypeVar("ProblemPoolT", bound="ProblemPoolLike")
 T = TypeVar("T")
 
@@ -50,60 +47,60 @@ class TypicalProblemPoolMixin:
 
 
 @dataclass
-class PredicatedProblemPool(ProblemPoolLike, Iterator[Optional[SamplableT]]):
-    problem_type: Type[SamplableT]
+class PredicatedProblemPool(ProblemPoolLike, Iterator[Optional[ProblemT]]):
+    problem_type: Type[ProblemT]
     n_problem_inner: int
 
 
 @dataclass
-class ProblemPool(ProblemPoolLike, Iterator[SamplableT]):
-    problem_type: Type[SamplableT]
+class ProblemPool(ProblemPoolLike, Iterator[ProblemT]):
+    problem_type: Type[ProblemT]
     n_problem_inner: int
 
     @abstractmethod
     def make_predicated(
-        self, predicate: Callable[[SamplableT], bool], max_trial_factor: int
-    ) -> PredicatedProblemPool[SamplableT]:
+        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
+    ) -> PredicatedProblemPool[ProblemT]:
         pass
 
-    def as_predicated(self) -> PredicatedProblemPool[SamplableT]:
-        return cast(PredicatedProblemPool[SamplableT], self)
+    def as_predicated(self) -> PredicatedProblemPool[ProblemT]:
+        return cast(PredicatedProblemPool[ProblemT], self)
 
 
 @dataclass
-class TrivialPredicatedProblemPool(TypicalProblemPoolMixin, PredicatedProblemPool[SamplableT]):
-    predicate: Callable[[SamplableT], bool]
+class TrivialPredicatedProblemPool(TypicalProblemPoolMixin, PredicatedProblemPool[ProblemT]):
+    predicate: Callable[[ProblemT], bool]
     max_trial_factor: int
 
-    def __next__(self) -> Optional[SamplableT]:
+    def __next__(self) -> Optional[ProblemT]:
         return self.problem_type.predicated_sample(
             self.n_problem_inner, self.predicate, self.max_trial_factor
         )
 
 
 @dataclass
-class TrivialProblemPool(TypicalProblemPoolMixin, ProblemPool[SamplableT]):
-    def __next__(self) -> SamplableT:
+class TrivialProblemPool(TypicalProblemPoolMixin, ProblemPool[ProblemT]):
+    def __next__(self) -> ProblemT:
         return self.problem_type.sample(self.n_problem_inner)
 
     def make_predicated(
-        self, predicate: Callable[[SamplableT], bool], max_trial_factor: int
-    ) -> TrivialPredicatedProblemPool[SamplableT]:
+        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
+    ) -> TrivialPredicatedProblemPool[ProblemT]:
         return TrivialPredicatedProblemPool(
             self.problem_type, self.n_problem_inner, predicate, max_trial_factor
         )
 
 
 @dataclass
-class PseudoIteratorPool(TypicalProblemPoolMixin, ProblemPool[SamplableT]):
-    iterator: Iterator[SamplableT]
+class PseudoIteratorPool(TypicalProblemPoolMixin, ProblemPool[ProblemT]):
+    iterator: Iterator[ProblemT]
 
-    def __next__(self) -> SamplableT:
+    def __next__(self) -> ProblemT:
         return next(self.iterator)
 
     def make_predicated(
-        self, predicate: Callable[[SamplableT], bool], max_trial_factor: int
-    ) -> PredicatedProblemPool[SamplableT]:
+        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
+    ) -> PredicatedProblemPool[ProblemT]:
         raise NotImplementedError("under construction")
 
     def reset(self) -> None:
