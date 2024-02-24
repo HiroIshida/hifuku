@@ -1,24 +1,11 @@
 import tempfile
 from pathlib import Path
-from typing import Optional, Type
+from typing import Type
 
 import torch
 from mohou.trainer import TrainConfig
-from skmp.solver.nlp_solver import (
-    SQPBasedSolver,
-    SQPBasedSolverConfig,
-    SQPBasedSolverResult,
-)
-from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
-from skmp.trajectory import Trajectory
 
-from hifuku.datagen import MultiProcessBatchProblemSolver
-from hifuku.domain import (
-    DomainProtocol,
-    DummyDomain,
-    DummyMeshDomain,
-    TabletopOvenRightArmReachingTask,
-)
+from hifuku.domain import DomainProtocol, DummyDomain, DummyMeshDomain
 from hifuku.library import (
     ActiveSamplerState,
     LibrarySamplerConfig,
@@ -33,49 +20,6 @@ from hifuku.neuralnet import (
 )
 from hifuku.script_utils import create_default_logger
 from hifuku.types import _CLAMP_FACTOR
-
-
-def _test_compute_real_itervals():
-    # compute default solution
-    standard_problem = TabletopOvenRightArmReachingTask.sample(1, True).export_problems()[0]
-    init_solution: Optional[Trajectory] = None
-    solcon = OMPLSolverConfig(n_max_call=3000, n_max_satisfaction_trial=100)
-    solver = OMPLSolver.init(solcon)
-    for _ in range(10):
-        solver.setup(standard_problem)
-        res = solver.solve()
-        if res.traj is not None:
-            init_solution = res.traj
-            break
-    assert init_solution is not None
-
-    n_problem = 10
-    problems = [TabletopOvenRightArmReachingTask.sample(1) for _ in range(n_problem)]
-    init_solutions = [init_solution] * n_problem
-
-    nlp_solcon = SQPBasedSolverConfig(n_wp=15, n_max_call=10)
-    solver_mp = MultiProcessBatchProblemSolver[SQPBasedSolverConfig, SQPBasedSolverResult](
-        SQPBasedSolver, nlp_solcon, n_process=4
-    )
-    solver_sp = MultiProcessBatchProblemSolver[SQPBasedSolverConfig, SQPBasedSolverResult](
-        SQPBasedSolver, nlp_solcon, n_process=1
-    )
-    results_mp = solver_mp.solve_batch(problems, init_solutions)
-    results_sp = solver_sp.solve_batch(problems, init_solutions)
-    assert len(results_mp) == n_problem
-    assert len(results_sp) == n_problem
-
-    itervals_mp = [r[0].n_call for r in results_mp]
-    itervals_sp = [r[0].n_call for r in results_sp]
-    # NOTE: these itervals are supposed to match when nlp solver is deterministic.
-    # However, osqp solver is actualy has non-deterministic part inside, thus
-    # sometime results dont match.
-    # see: https://osqp.discourse.group/t/what-settings-to-choose-to-ensure-reproducibility/64
-    n_mismatch = 0
-    for iterval_sp, interval_mp in zip(itervals_sp, itervals_mp):
-        if itervals_sp != itervals_mp:
-            n_mismatch += 1
-    assert n_mismatch < 3
 
 
 def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encoder: bool):
