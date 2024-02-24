@@ -942,14 +942,20 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         self.sampler_state.elapsed_time_history.append(prof_info)
         self.sampler_state.coverage_est_history.append(coverage_est)
-
-        if len(self.sampler_state.coverage_est_history) > 0:
-            coverage_previous = self.sampler_state.coverage_est_history[-1]
-            if (coverage_est - coverage_previous) < gain_expected * self.config.threshold_inc_snf:
-                self.sampler_state.sampling_number_factor *= self.config.inc_coef_mult_snf
-                logger.info(
-                    f"expected gain is {gain_expected}, but actual gain is {coverage_est - coverage_previous}. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
-                )
+        coverage_this = self.sampler_state.coverage_est_history[-1]
+        if len(self.sampler_state.coverage_est_history) > 1:
+            coverage_previous = self.sampler_state.coverage_est_history[-2]
+        else:
+            coverage_previous = 0.0
+        gain = coverage_this - coverage_previous
+        logger.info(
+            f"coverage this: {coverage_this}, coverage previous: {coverage_previous}, gain: {gain}"
+        )
+        if gain < gain_expected * self.config.threshold_inc_snf:
+            self.sampler_state.sampling_number_factor *= self.config.inc_coef_mult_snf
+            logger.info(
+                f"expected gain is {gain_expected}, but actual gain is {gain}. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
+            )
 
         logger.info("elapsed time in active sampling: {} min".format(prof_info.t_total / 60.0))
         logger.info("prof_info: {}".format(prof_info))
