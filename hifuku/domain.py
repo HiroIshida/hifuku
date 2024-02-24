@@ -19,12 +19,6 @@ from rpbench.articulated.pr2.minifridge import (
     TabletopClutteredFridgeReachingRealisticTask,
     TabletopClutteredFridgeReachingTask,
 )
-from rpbench.articulated.pr2.tabletop import (
-    TabletopBoxDualArmReachingTask,
-    TabletopBoxRightArmReachingTask,
-    TabletopOvenDualArmReachingTask,
-    TabletopOvenRightArmReachingTask,
-)
 from rpbench.interface import TaskBase
 from rpbench.two_dimensional.bubbly_world import (
     BubblyComplexMeshPointConnectTask,
@@ -53,12 +47,7 @@ from hifuku.datagen.batch_solver import (
     DistributedBatchProblemSolver,
     MultiProcessBatchProblemSolver,
 )
-from hifuku.neuralnet import (
-    AutoEncoderBase,
-    NullAutoEncoder,
-    PixelAutoEncoder,
-    VoxelAutoEncoder,
-)
+from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder, PixelAutoEncoder
 
 
 class DomainProtocol(Protocol):
@@ -97,81 +86,6 @@ class DomainProtocol(Protocol):
     @classmethod
     def get_distributed_batch_sampler(cls, *args, **kwargs) -> DistributeBatchProblemSampler:
         return DistributeBatchProblemSampler(*args, **kwargs)
-
-
-class TORR_RRT_Domain(DomainProtocol):
-    task_type = TabletopOvenRightArmReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=3000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.5,
-    )
-    auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
-    auto_encoder_type = VoxelAutoEncoder
-
-
-class TORR_SQP_Domain(DomainProtocol):
-    task_type = TabletopOvenRightArmReachingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
-    auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
-    auto_encoder_type = VoxelAutoEncoder
-
-
-class TODR_SQP_Domain(DomainProtocol):
-    task_type = TabletopOvenDualArmReachingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(n_wp=50, n_max_call=5, motion_step_satisfaction="explicit")
-    auto_encoder_project_name = "hifuku-TabletopOvenWorldWrap"
-    auto_encoder_type = VoxelAutoEncoder
-
-
-class TBDR_SQP_Domain(DomainProtocol):
-    task_type = TabletopBoxDualArmReachingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
-    )
-    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
-    auto_encoder_type = VoxelAutoEncoder
-
-
-class TBDR_RRT_Domain(DomainProtocol):
-    task_type = TabletopBoxDualArmReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=1000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.5,
-    )
-    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
-    auto_encoder_type = VoxelAutoEncoder
-
-
-class TBRR_SQP_Domain(DomainProtocol):
-    task_type = TabletopBoxRightArmReachingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
-    )
-    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
-    auto_encoder_type = VoxelAutoEncoder
-
-
-class TBRR_RRT_Domain(DomainProtocol):
-    task_type = TabletopBoxRightArmReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=300,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.05,
-    )
-    auto_encoder_project_name = "hifuku-TabletopBoxWorldWrap"
-    auto_encoder_type = VoxelAutoEncoder
 
 
 class ClutteredFridge_SQP(DomainProtocol):
@@ -520,13 +434,6 @@ def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> f
 
 def select_domain(domain_name: str) -> Type[DomainProtocol]:
     class DomainCollection(Enum):
-        torr_sqp = TORR_SQP_Domain
-        torr_rrt = TORR_RRT_Domain
-        todr_sqp = TODR_SQP_Domain
-        tbdr_sqp = TBDR_SQP_Domain
-        tbdr_rrt = TBDR_RRT_Domain
-        tbrr_sqp = TBRR_SQP_Domain
-        tbrr_rrt = TBRR_RRT_Domain
         cluttered_fridge_sqp = ClutteredFridge_SQP
         cluttered_fridge_many_sqp = ClutteredFridgeManyContents_SQP
         cluttered_fridge_realistic_sqp = ClutteredFridgeRealistic_SQP
