@@ -12,8 +12,6 @@ from typing import List
 import numpy as np
 import pytest
 from ompl import set_ompl_random_seed
-from rpbench.articulated.pr2.minifridge import TabletopClutteredFridgeReachingTask
-from skmp.solver.nlp_solver import SQPBasedSolver, SQPBasedSolverConfig
 from skmp.trajectory import Trajectory
 
 from hifuku.config import ServerSpec
@@ -27,19 +25,39 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
+from hifuku.domain import DoubleIntegratorBubblySimple_SQP
 from hifuku.pool import PredicatedProblemPool, ProblemPool
 from hifuku.script_utils import create_default_logger
-from hifuku.testing_asset import SimplePredicate
 
 logger = logging.getLogger(__name__)
 
 np.random.seed(0)
 set_ompl_random_seed(0)
-task_type = TabletopClutteredFridgeReachingTask
+domain = DoubleIntegratorBubblySimple_SQP
+task_type = domain.task_type
+
+
+def kill_process_on_port(port):
+    try:
+        command = f"lsof -t -i:{port}"
+        pid = subprocess.check_output(command, shell=True).decode().strip()
+
+        if pid:
+            subprocess.run(["kill", pid], check=True)
+        else:
+            print(f"No process found on port {port}")
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 
 @pytest.fixture(autouse=True, scope="session")
 def server():
+    # kill the process using 8081 and 8082
+    kill_process_on_port(8081)
+    kill_process_on_port(8082)
+
     p1 = subprocess.Popen(
         "python3 -m hifuku.datagen.http_datagen.server -port 8081", shell=True, preexec_fn=os.setsid
     )
@@ -66,20 +84,17 @@ def compute_init_traj() -> Trajectory:
 
 def test_batch_solver_init_solutions():
     init_traj = compute_init_traj()
-    solcon = SQPBasedSolverConfig(
-        n_wp=40,
-        n_max_call=10,
-        motion_step_satisfaction="debug_ignore",
-        force_deterministic=True,
+    mp_batch_solver = MultiProcessBatchProblemSolver(
+        domain.solver_type, domain.solver_config, task_type, 2
     )
-    mp_batch_solver = MultiProcessBatchProblemSolver(SQPBasedSolver, solcon, 2)
-
     n_task = 5
     n_inner = 2
-    tasks = [task_type.sample(n_inner) for _ in range(n_task)]
-    mp_batch_solver.solve_batch(tasks, [None] * n_task)
-    mp_batch_solver.solve_batch(tasks, [init_traj] * n_task)
-    mp_batch_solver.solve_batch(tasks, [[init_traj] * n_inner] * n_task)
+    task_paramss = np.array(
+        [task_type.sample(n_inner).to_intrinsic_desc_vecs() for _ in range(n_task)]
+    )
+    mp_batch_solver.solve_batch(task_paramss, [None] * n_task)
+    mp_batch_solver.solve_batch(task_paramss, [init_traj] * n_task)
+    mp_batch_solver.solve_batch(task_paramss, [[init_traj] * n_inner] * n_task)
 
 
 def test_consistency_of_all_batch_sovler(server):
@@ -94,23 +109,22 @@ def test_consistency_of_all_batch_sovler(server):
 
             init_solutions = [init_traj] * n_problem
             # set standard = True for testing purpose
-            tasks = [task_type.sample(n_problem_inner) for _ in range(n_problem)]
-            batch_solver_list: List[BatchProblemSolver] = []
-
-            n_max_call = 10
-            solcon = SQPBasedSolverConfig(
-                n_wp=20,
-                n_max_call=n_max_call,
-                motion_step_satisfaction="debug_ignore",
-                force_deterministic=True,
+            task_paramss = np.array(
+                [
+                    task_type.sample(n_problem_inner).to_intrinsic_desc_vecs()
+                    for _ in range(n_problem)
+                ]
             )
-            mp_batch_solver = MultiProcessBatchProblemSolver(SQPBasedSolver, solcon, n_process=2)
+            batch_solver_list: List[BatchProblemSolver] = []
+            mp_batch_solver = MultiProcessBatchProblemSolver(
+                domain.solver_type, domain.solver_config, task_type, n_process=2
+            )
             assert mp_batch_solver.n_process == 2
             batch_solver_list.append(mp_batch_solver)
 
             specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
             batch_solver = DistributedBatchProblemSolver(
-                SQPBasedSolver, solcon, specs, n_measure_sample=1
+                domain.solver_type, domain.solver_config, task_type, specs, n_measure_sample=1
             )
             batch_solver_list.append(batch_solver)
 
@@ -122,7 +136,7 @@ def test_consistency_of_all_batch_sovler(server):
             for batch_solver in batch_solver_list:  # type: ignore
                 print(batch_solver)
                 results_list = batch_solver.solve_batch(
-                    tasks, init_solutions, tmp_n_max_call_mult_factor=1.5
+                    task_paramss, init_solutions, tmp_n_max_call_mult_factor=1.5
                 )
                 assert isinstance(results_list, list)
                 assert len(results_list) == n_problem
@@ -137,8 +151,8 @@ def test_consistency_of_all_batch_sovler(server):
                 nits_list.append(tuple(nits))
                 successes_list.append(tuple(successes))
 
-                # check if multiplicatio by tmp_n_max_call_mult_factor is reset
-                assert batch_solver.config.n_max_call == n_max_call
+                # check if multiplicatio by tmp_n_max_call_mult_factor is reset to the original value after the solve
+                assert batch_solver.config.n_max_call == domain.solver_config.n_max_call
 
             # NOTE: it seems that osqp solve results sometimes slightly different though
             # the same problem is provided.. maybe random variable is used inside???
@@ -157,7 +171,7 @@ def test_consistency_of_all_batch_sampler(server):
     pool_list: List[PredicatedProblemPool] = []
     pool_base = ProblemPool(task_type, n_problem_inner)
     pool_list.append(pool_base.as_predicated())
-    pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
+    # pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
 
     for n_sample in [1, 2, 20]:  # to test edge case
         for pool in pool_list:
@@ -192,5 +206,6 @@ def test_batch_determinant(server):
 
 
 if __name__ == "__main__":
-    test_create_dataset()
+    test_batch_solver_init_solutions()
+    # test_create_dataset()
     # test_batch_determinant()

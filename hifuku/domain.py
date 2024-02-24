@@ -66,7 +66,7 @@ class DomainProtocol(Protocol):
         cls, n_process: Optional[int] = None
     ) -> MultiProcessBatchProblemSolver:
         return MultiProcessBatchProblemSolver(
-            cls.solver_type, cls.solver_config, n_process=n_process
+            cls.solver_type, cls.solver_config, cls.task_type, n_process=n_process
         )
 
     @classmethod
@@ -77,7 +77,9 @@ class DomainProtocol(Protocol):
 
     @classmethod
     def get_distributed_batch_solver(cls, *args, **kwargs) -> DistributedBatchProblemSolver:
-        return DistributedBatchProblemSolver(cls.solver_type, cls.solver_config, *args, **kwargs)
+        return DistributedBatchProblemSolver(
+            cls.solver_type, cls.solver_config, cls.task_type, *args, **kwargs
+        )
 
     @classmethod
     def get_distributed_batch_sampler(cls, *args, **kwargs) -> DistributeBatchProblemSampler:

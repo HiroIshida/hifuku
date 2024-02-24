@@ -93,7 +93,7 @@ def test_dataset(sol_tasks_and_resultss):
             w_expected = 1.0
 
         # test dataset when ae is specified (encoded)
-        dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
+        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
             sol.traj, tasks, resultss, domain.solver_config, weightss, ae
         )
         assert len(dataset) == n_data
@@ -115,7 +115,7 @@ def test_dataset(sol_tasks_and_resultss):
         assert w.item() == w_expected
 
         # test dataset when ae is not specified
-        dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
+        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
             sol.traj, tasks, resultss, domain.solver_config, weightss, None
         )
         assert len(dataset) == n_data
@@ -148,7 +148,7 @@ def test_training(sol_tasks_and_resultss):
     n_dof_desc = 4
 
     # test dataset when ae is specified (encoded)
-    dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
+    dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
         sol.traj, tasks, resultss, domain.solver_config, None, ae
     )
 
@@ -161,7 +161,7 @@ def test_training(sol_tasks_and_resultss):
         train(td_path, tcache, dataset, train_config)
 
     # test dataset when ae is not specified
-    dataset_raw = IterationPredictorDataset.construct_from_tasks_and_resultss(
+    dataset_raw = IterationPredictorDataset.construct_from_paramss_and_resultss(
         sol.traj, tasks, resultss, domain.solver_config, None, None
     )
     conf = IterationPredictorWithEncoderConfig(iterpred_model, ae)

@@ -101,9 +101,9 @@ class DistributeBatchProblemSampler(
         with http_connection(*hostport) as conn:
             response = send_request(conn, request)
         file_path = tmp_path / str(uuid.uuid4())
-        assert len(response.problems) > 0
+        assert len(response.task_paramss) > 0
         with file_path.open(mode="wb") as f:
-            pickle.dump((response.problems), f)
+            pickle.dump((response.task_paramss), f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 

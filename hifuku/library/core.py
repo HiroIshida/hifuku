@@ -345,18 +345,19 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         return self.solver_config.n_max_call
 
     def measure_full_coverage(
-        self, tasks: List[ProblemT], solver: BatchProblemSolver
+        self, task_paramss: np.ndarray, solver: BatchProblemSolver
     ) -> CoverageResult:
         logger.info("**compute est values")
         iterval_est_list = []
         init_solutions_est_list = []
-        for task in tqdm.tqdm(tasks):
+        for task_params in tqdm.tqdm(task_paramss):
+            task = self.task_type.from_intrinsic_desc_vecs(task_params)
             infer_results = self.infer(task)
             iterval_est_list.extend([res.nit for res in infer_results])  # NOTE: flatten!
             init_solutions_est_list.append([res.init_solution for res in infer_results])
         logger.info("**compute real values")
 
-        resultss = solver.solve_batch(tasks, init_solutions_est_list)  # type: ignore
+        resultss = solver.solve_batch(task_paramss, init_solutions_est_list)  # type: ignore
 
         iterval_real_list = []
         for results in resultss:
@@ -370,11 +371,12 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(coverage_result)
         return coverage_result
 
-    def measure_coverage(self, tasks: List[ProblemT]) -> float:
+    def measure_coverage(self, task_paramss: np.ndarray) -> float:
         threshold = self.success_iter_threshold()
         total_count = 0
         success_count = 0
-        for task in tasks:
+        for task_params in task_paramss:
+            task = self.task_type.from_intrinsic_desc_vecs(task_params)
             infer_res_list = self.infer(task)
             for infer_res in infer_res_list:
                 total_count += 1
@@ -703,7 +705,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     config: LibrarySamplerConfig
     pool_single: ProblemPool[ProblemT]
     pool_multiple: ProblemPool[ProblemT]
-    problems_validation: List[ProblemT]
+    problems_validation: np.ndarray
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
     determinant: BatchMarginsDeterminant
@@ -713,7 +715,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     ae_model_pretrained: Optional[
         AutoEncoderBase
     ] = None  # train iteration predctor combined with encoder. Thus ae will no be shared.
-    presampled_train_problems: Optional[List[ProblemT]] = None
+    presampled_train_problems: Optional[np.ndarray] = None
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -741,7 +743,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     @classmethod
     def initialize(
         cls,
-        problem_type: Type[ProblemT],
+        task_type: Type[ProblemT],
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         solver_config: ConfigT,
         ae_model: AutoEncoderBase,
@@ -749,7 +751,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         project_path: Path,
         pool_single: Optional[ProblemPool[ProblemT]] = None,
         pool_multiple: Optional[ProblemPool[ProblemT]] = None,
-        problems_validation: Optional[List[ProblemT]] = None,
+        problems_validation: Optional[np.ndarray] = None,
         solver: Optional[BatchProblemSolver[ConfigT, ResultT]] = None,
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
         use_distributed: bool = False,
@@ -769,7 +771,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         meta_data = asdict(config)
         library = SolutionLibrary.initialize(
-            problem_type,
+            task_type,
             solver_t,
             solver_config,
             None if config.train_with_encoder else ae_model,
@@ -781,11 +783,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         if solver is None:
             solver = (
                 DistributedBatchProblemSolver(
-                    solver_t, solver_config, n_limit_batch=n_limit_batch_solver
+                    solver_t, solver_config, task_type, n_limit_batch=n_limit_batch_solver
                 )
                 if use_distributed
                 else MultiProcessBatchProblemSolver(
-                    solver_t, solver_config, n_limit_batch=n_limit_batch_solver
+                    solver_t, solver_config, task_type, n_limit_batch=n_limit_batch_solver
                 )
             )
         assert solver.solver_t == solver_t
@@ -805,19 +807,17 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # setup pools
         if pool_single is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
-            pool_single = ProblemPool(problem_type, 1)
+            pool_single = ProblemPool(task_type, 1)
         assert pool_single.n_problem_inner == 1
 
         if pool_multiple is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
             # TODO: smelling! n_problem_inner should not be set here
-            pool_multiple = ProblemPool(problem_type, config.n_problem_inner)
+            pool_multiple = ProblemPool(task_type, config.n_problem_inner)
 
         # create validation problems
         project_path.mkdir(exist_ok=True)
-        validation_cache_path = project_path / "{}-validation_set.cache".format(
-            problem_type.__name__
-        )
+        validation_cache_path = project_path / "{}-validation_set.cache".format(task_type.__name__)
 
         if reuse_cached_validation_set:
             assert problems_validation is None
@@ -832,7 +832,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
                 problems_validation = sampler.sample_batch(
                     config.n_validation,
-                    ProblemPool(problem_type, config.n_validation_inner).as_predicated(),
+                    ProblemPool(task_type, config.n_validation_inner).as_predicated(),
                 )
 
                 with validation_cache_path.open(mode="wb") as f:
@@ -852,7 +852,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         logger.info("library sampler config: {}".format(config))
         return cls(
-            problem_type,
+            task_type,
             library,
             config,
             pool_single,
@@ -1120,11 +1120,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             weights = None
 
         logger.info("creating dataset")
-        dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
+        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
             init_solution,
             problems,
             resultss,
             self.solver_config,
+            self.problem_type,
             weights,
             self.library.ae_model_shared,
         )
@@ -1253,45 +1254,46 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         self,
         n_sample: int,
         problem_pool: ProblemPool[ProblemT],
-    ) -> Tuple[List[ProblemT], List[ProblemT]]:
+    ) -> Tuple[np.ndarray, np.ndarray]:
 
-        difficult_problems: List[ProblemT] = []
-        easy_problems: List[ProblemT] = []
+        difficult_params_list: List[np.ndarray] = []
+        easy_params_list: List[np.ndarray] = []
         with tqdm.tqdm(total=n_sample) as pbar:
-            while len(difficult_problems) < n_sample:
+            while len(difficult_params_list) < n_sample:
                 logger.debug("try sampling difficutl problem...")
-                problem = next(problem_pool)
-                assert problem.n_inner_task == 1
-                infer_res = self.library.infer(problem)[0]
+                task_params = next(problem_pool)
+                assert task_params.shape[0] == 1  # inner task is 1
+                task = self.problem_type.from_intrinsic_desc_vecs(task_params)
+                infer_res = self.library.infer(task)[0]
                 iterval = infer_res.nit
                 is_difficult = iterval > self.difficult_iter_threshold
                 if is_difficult:
-                    logger.debug("sampled! number: {}".format(len(difficult_problems)))
-                    difficult_problems.append(problem)
+                    logger.debug("sampled! number: {}".format(len(difficult_params_list)))
+                    difficult_params_list.append(task_params)
                     pbar.update(1)
                 else:
-                    easy_problems.append(problem)
-        return difficult_problems, easy_problems
+                    easy_params_list.append(task_params)
+        return np.array(difficult_params_list), np.array(easy_params_list)
 
     def _select_solution_candidates(
-        self, candidates: List[Trajectory], problems: List[ProblemT]
+        self, candidates: List[Trajectory], task_paramss: np.ndarray
     ) -> Tuple[Trajectory, int]:
         logger.info("select single solution out of {} candidates".format(len(candidates)))
 
         candidates_repeated = []
-        n_problem = len(problems)
+        n_task_params = len(task_paramss)
         n_cand = len(candidates)
         for cand in candidates:
-            candidates_repeated.extend([cand] * n_problem)
-        problems_repeated = problems * n_cand
+            candidates_repeated.extend([cand] * n_task_params)
+        problems_repeated = np.repeat(task_paramss, n_cand, axis=0)
         resultss = self.solver.solve_batch(problems_repeated, candidates_repeated)
-        assert len(resultss) == n_problem * n_cand
+        assert len(resultss) == n_task_params * n_cand
 
         def split_list(lst, n):
             return [lst[i : i + n] for i in range(0, len(lst), n)]
 
         resultss_list = split_list(
-            resultss, n_problem
+            resultss, n_task_params
         )  # split the result such that each list corresponds to candidate trajectory
 
         n_solved_max = 0
@@ -1318,16 +1320,16 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
             logger.info("sample difficult problems")
             if self.at_first_iteration():
-                difficult_problems = [next(problem_pool) for _ in range(n_difficult)]
-                n_total = len(difficult_problems)
+                difficult_paramss = np.array([next(problem_pool) for _ in range(n_difficult)])
+                n_total = len(difficult_paramss)
             else:
-                difficult_problems, easy_problems = self._sample_difficult_problems(
+                difficult_paramss, easy_paramss = self._sample_difficult_problems(
                     n_difficult, problem_pool
                 )
-                n_total = len(difficult_problems) + len(easy_problems)
+                n_total = len(difficult_paramss) + len(easy_paramss)
 
             best_solution, n_solved_max = self._select_solution_candidates(
-                solution_candidates, difficult_problems
+                solution_candidates, difficult_paramss
             )
             # the rate of solved difficult problems / all
             rate_difficult_solved = n_solved_max / n_total

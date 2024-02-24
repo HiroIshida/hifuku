@@ -60,10 +60,10 @@ class PostHandler(BaseHTTPRequestHandler):
         logging.info("request: {}".format(request))
 
         gen = MultiProcessBatchProblemSolver[ConfigT, ResultT](
-            request.solver_t, request.config, request.n_process
+            request.solver_t, request.config, request.task_type, request.n_process
         )
         results_list = gen.solve_batch(
-            request.problems, request.init_solutions, request.use_default_solver
+            request.task_paramss, request.init_solutions, request.use_default_solver
         )
 
         elapsed_time = time.time() - ts
@@ -72,7 +72,7 @@ class PostHandler(BaseHTTPRequestHandler):
 
     def process_SampleProblemRequest(
         self, request: SampleProblemRequest[ProblemT]
-    ) -> SampleProblemResponse[ProblemT]:
+    ) -> SampleProblemResponse:
 
         # NOTE: by calling this line (sample()) some pre-computation
         # e.g. sdf mesh creation will running.
