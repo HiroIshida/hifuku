@@ -4,7 +4,6 @@ import inspect
 import json
 import logging
 import pickle
-import random
 import re
 import shutil
 import signal
@@ -1232,12 +1231,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 n_batch_little_difficult, predicated_pool_bit_difficult
             )
             problems2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
-            problems = problems1 + problems2
+            assert problems1.ndim == 3
+            assert problems2.ndim == 3
+            problems = np.concatenate([problems1, problems2], axis=0)
 
             # NOTE: shuffling is required asin the following sectino, for loop is existed
             # as soon as number of candidates exceeds n_sample
             # we need to "mixutre" bit-difficult and difficult problems
-            random.shuffle(problems)
+            np.random.shuffle(problems)
 
             logger.info("{} solve batch".format(prefix))
             resultss = self.solver.solve_batch(problems, [None] * n_batch, use_default_solver=True)
