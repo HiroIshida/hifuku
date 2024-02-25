@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from multiprocessing import get_context
 from pathlib import Path
-from typing import Generic, List, Optional, Tuple
+from typing import Generic, Optional, Tuple
 
 import numpy as np
 import threadpoolctl
@@ -32,9 +32,7 @@ HostPortPair = Tuple[str, int]
 @dataclass
 class BatchProblemSampler(Generic[ProblemT], ABC):
     @abstractmethod
-    def sample_batch(
-        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], delete_cache: bool = False
-    ) -> List[ProblemT]:
+    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
         ...
 
 
@@ -50,34 +48,31 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         self.n_process = n_process
         self.n_thread = n_thread
 
-    def sample_batch(
-        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], delete_cache: bool = False
-    ) -> List[ProblemT]:
-        assert pool.parallelizable()
+    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
 
         with ProcessPoolExecutor(
             n_process,
             initializer=self._process_pool_setup,
-            initargs=(pool, self.n_thread, delete_cache),
+            initargs=(pool, self.n_thread),
             mp_context=get_context("fork"),
         ) as executor:
-            problems_sampled = list(
+            tmp = list(
                 tqdm.tqdm(
                     executor.map(self._process_pool_sample_task, range(n_sample)), total=n_sample
                 )
             )
-        return problems_sampled
+        intr_descs_sampled = np.array(tmp)
+        assert intr_descs_sampled.ndim == 3
+        assert intr_descs_sampled.shape[0] == n_sample
+        return intr_descs_sampled
 
     @staticmethod
-    def _process_pool_setup(
-        _pool: PredicatedProblemPool[ProblemT], _n_thread: int, _delete_cache: bool
-    ) -> None:
-        global pool, n_thread, delete_cache  # shared in the forked process
+    def _process_pool_setup(_pool: PredicatedProblemPool[ProblemT], _n_thread: int):
+        global pool, n_thread  # shared in the forked process
         pool = _pool  # type: ignore
         n_thread = _n_thread  # type: ignore
-        delete_cache = _delete_cache  # type: ignore
 
         unique_seed = get_random_seed()
         np.random.seed(unique_seed)
@@ -85,15 +80,13 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
 
     @staticmethod
     def _process_pool_sample_task(_) -> ProblemT:
-        global pool, n_thread, delete_cache  # shared in the forked process
+        global pool, n_thread  # shared in the forked process
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             with num_torch_thread(n_thread):  # type: ignore
                 while True:
                     task = next(pool)  # type: ignore
                     if task is not None:
-                        if delete_cache:  # type: ignore
-                            task.delete_cache()
                         return task
 
 
@@ -108,20 +101,17 @@ class DistributeBatchProblemSampler(
         with http_connection(*hostport) as conn:
             response = send_request(conn, request)
         file_path = tmp_path / str(uuid.uuid4())
-        assert len(response.problems) > 0
+        assert len(response.task_paramss) > 0
         with file_path.open(mode="wb") as f:
-            pickle.dump((response.problems), f)
+            pickle.dump((response.task_paramss), f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
-    def sample_batch(
-        self, n_sample: int, pool: PredicatedProblemPool[ProblemT], delete_cache: bool = False
-    ) -> List[ProblemT]:
+    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
         assert n_sample > 0
-        assert pool.parallelizable()
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
-        request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1, True)
+        request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1)
         n_sample_table = self.create_gen_number_table(request_for_measure, n_sample)
 
         # NOTE: after commit 18c664f, process starts hang with forking.
@@ -135,7 +125,7 @@ class DistributeBatchProblemSampler(
                 n_sample_part = n_sample_table[hostport]
                 if n_sample_part > 0:
                     n_process = self.hostport_cpuinfo_map[hostport].n_cpu
-                    req = SampleProblemRequest(n_sample_part, pool, n_process, delete_cache)
+                    req = SampleProblemRequest(n_sample_part, pool, n_process)
                     p = ctx.Process(
                         target=self.send_and_recive_and_write, args=(hostport, req, td_path)
                     )
@@ -145,9 +135,12 @@ class DistributeBatchProblemSampler(
             for p in process_list:
                 p.join()
 
-            problems = []
+            intr_descs = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    problems_part = pickle.load(f)
-                    problems.extend(problems_part)
-        return problems
+                    intr_descs_part = pickle.load(f)
+                    intr_descs.extend(intr_descs_part)
+        intr_desc_arr = np.array(intr_descs)
+        assert intr_desc_arr.ndim == 3
+        assert intr_desc_arr.shape[0] == n_sample
+        return intr_desc_arr

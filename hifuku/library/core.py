@@ -14,7 +14,6 @@ from abc import abstractmethod
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Callable, Dict, Generic, List, Optional, Tuple, Type, Union
 
 import numpy as np
@@ -53,7 +52,7 @@ from hifuku.neuralnet import (
     IterationPredictorWithEncoderConfig,
     NullAutoEncoder,
 )
-from hifuku.pool import ProblemPool, ProblemT, TrivialProblemPool
+from hifuku.pool import ProblemPool, ProblemT
 from hifuku.types import get_clamped_iter
 from hifuku.utils import num_torch_thread
 
@@ -233,31 +232,30 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
             return self._infer_iteration_num_combined(task)
 
     def _infer_iteration_num_combined(self, task: ProblemT) -> np.ndarray:
+        # what the hell is this
         if self.limit_thread:
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
                 with num_torch_thread(1):
-                    desc_table = task.export_table()
-                    mesh_np = desc_table.get_mesh()
-                    assert mesh_np is not None
-                    mesh_np = np.expand_dims(mesh_np, axis=(0, 1))
-                    descs_np = np.array(desc_table.get_vector_descs())
-                    mesh_torch = torch.from_numpy(mesh_np).float().to(self.device)
-                    descs_torch = torch.from_numpy(descs_np).float().to(self.device)
+                    desc_table = task.export_table(use_matrix=True)
+                    assert desc_table.world_mat is not None
+                    world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
+                    vecs_np = np.array(desc_table.get_desc_vecs())
+                    world_mat_torch = torch.from_numpy(world_mat_np).float().to(self.device)
+                    descs_torch = torch.from_numpy(vecs_np).float().to(self.device)
         else:
-            desc_table = task.export_table()
-            mesh_np = desc_table.get_mesh()
-            assert mesh_np is not None
-            mesh_np = np.expand_dims(mesh_np, axis=(0, 1))
-            descs_np = np.array(desc_table.get_vector_descs())
-            mesh_torch = torch.from_numpy(mesh_np).float().to(self.device)
-            descs_torch = torch.from_numpy(descs_np).float().to(self.device)
+            desc_table = task.export_table(use_matrix=True)
+            assert desc_table.world_mat is not None
+            world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
+            vecs_np = np.array(desc_table.get_desc_vecs())
+            world_mat_torch = torch.from_numpy(world_mat_np).float().to(self.device)
+            descs_torch = torch.from_numpy(vecs_np).float().to(self.device)
 
         # these lines copied from _infer_iteration_num_with_shared_ae
         itervals_list = []
         for pred, margin in zip(self.predictors, self.margins):
             assert isinstance(pred, IterationPredictorWithEncoder)
             # margin is for correcting the overestimated inference
-            itervals = pred.forward_multi_inner(mesh_torch, descs_torch)  # type: ignore
+            itervals = pred.forward_multi_inner(world_mat_torch, descs_torch)  # type: ignore
             itervals = itervals.squeeze(dim=1)
             itervals_np = itervals.detach().cpu().numpy() + margin
             itervals_list.append(itervals_np)
@@ -277,50 +275,48 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
 
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
                 # limiting numpy thread seems to make stable. but not sure why..
-                desc_table = task.export_table()
-                mesh_np_tmp = desc_table.get_mesh()
-                if mesh_np_tmp is None:
-                    mesh_np = None
+                desc_table = task.export_table(use_matrix=True)
+                if desc_table.world_mat is None:
+                    world_mat_np = None
                 else:
-                    mesh_np = np.expand_dims(mesh_np_tmp, axis=(0, 1))
-                desc_np = np.array(desc_table.get_vector_descs())
+                    world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
+                vecs_np = np.array(desc_table.get_desc_vecs())
 
             with num_torch_thread(1):
                 # float() must be run in single (cpp-layer) thread
                 # see https://github.com/pytorch/pytorch/issues/89693
-                if mesh_np is None:
-                    mesh = torch.empty((1, 0))
+                if world_mat_np is None:
+                    world_mat_torch = torch.empty((1, 0))
                 else:
-                    mesh = torch.from_numpy(mesh_np)
-                    mesh = mesh.float().to(self.device)
-                desc = torch.from_numpy(desc_np)
-                desc = desc.float().to(self.device)
+                    world_mat_torch = torch.from_numpy(world_mat_np)
+                    world_mat_torch = world_mat_torch.float().to(self.device)
+                vecs_torch = torch.from_numpy(vecs_np)
+                vecs_torch = vecs_torch.float().to(self.device)
         else:
             # usually, calling threadpoolctl and num_torch_thread function
             # is constly. So if you are sure that you are running program in
             # a single process. Then set limit_thread = False
-            desc_table = task.export_table()
-            desc_np = np.array(desc_table.get_vector_descs())
-            desc = torch.from_numpy(desc_np)
-            desc = desc.float().to(self.device)
+            desc_table = task.export_table(use_matrix=True)
+            vecs_np = np.array(desc_table.get_desc_vecs())
+            vecs_torch = torch.from_numpy(vecs_np)
+            vecs_torch = vecs_torch.float().to(self.device)
 
-            mesh_np_tmp = desc_table.get_mesh()
-            if mesh_np_tmp is None:
-                mesh = torch.empty((1, 0))
+            if desc_table.world_mat is None:
+                world_mat_torch = torch.empty((1, 0))
             else:
-                mesh_np = np.expand_dims(mesh_np_tmp, axis=(0, 1))
-                mesh = torch.from_numpy(mesh_np)
-                mesh = mesh.float().to(self.device)
+                world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
+                world_mat_torch = torch.from_numpy(world_mat_np)
+                world_mat_torch = world_mat_torch.float().to(self.device)
 
-        n_batch, _ = desc_np.shape
+        n_batch, _ = vecs_np.shape
 
-        encoded: torch.Tensor = self.ae_model_shared.encode(mesh)
+        encoded: torch.Tensor = self.ae_model_shared.encode(world_mat_torch)
         encoded_repeated = encoded.repeat(n_batch, 1)
 
         itervals_list = []
         for pred, margin in zip(self.predictors, self.margins):
             # margin is for correcting the overestimated inference
-            itervals, _ = pred.forward((encoded_repeated, desc))
+            itervals, _ = pred.forward((encoded_repeated, vecs_torch))
             itervals = itervals.squeeze(dim=1)
             itervals_np = itervals.detach().cpu().numpy() + margin
             itervals_list.append(itervals_np)
@@ -349,18 +345,19 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         return self.solver_config.n_max_call
 
     def measure_full_coverage(
-        self, tasks: List[ProblemT], solver: BatchProblemSolver
+        self, task_paramss: np.ndarray, solver: BatchProblemSolver
     ) -> CoverageResult:
         logger.info("**compute est values")
         iterval_est_list = []
         init_solutions_est_list = []
-        for task in tqdm.tqdm(tasks):
+        for task_params in tqdm.tqdm(task_paramss):
+            task = self.task_type.from_intrinsic_desc_vecs(task_params)
             infer_results = self.infer(task)
             iterval_est_list.extend([res.nit for res in infer_results])  # NOTE: flatten!
             init_solutions_est_list.append([res.init_solution for res in infer_results])
         logger.info("**compute real values")
 
-        resultss = solver.solve_batch(tasks, init_solutions_est_list)  # type: ignore
+        resultss = solver.solve_batch(task_paramss, init_solutions_est_list)  # type: ignore
 
         iterval_real_list = []
         for results in resultss:
@@ -374,11 +371,12 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(coverage_result)
         return coverage_result
 
-    def measure_coverage(self, tasks: List[ProblemT]) -> float:
+    def measure_coverage(self, task_paramss: np.ndarray) -> float:
         threshold = self.success_iter_threshold()
         total_count = 0
         success_count = 0
-        for task in tasks:
+        for task_params in task_paramss:
+            task = self.task_type.from_intrinsic_desc_vecs(task_params)
             infer_res_list = self.infer(task)
             for infer_res in infer_res_list:
                 total_count += 1
@@ -707,18 +705,17 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     config: LibrarySamplerConfig
     pool_single: ProblemPool[ProblemT]
     pool_multiple: ProblemPool[ProblemT]
-    problems_validation: List[ProblemT]
+    problems_validation: np.ndarray
     solver: BatchProblemSolver
     sampler: BatchProblemSampler
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
-    delete_cache: bool
     project_path: Path
     sampler_state: ActiveSamplerState
     ae_model_pretrained: Optional[
         AutoEncoderBase
     ] = None  # train iteration predctor combined with encoder. Thus ae will no be shared.
-    presampled_train_problems: Optional[List[ProblemT]] = None
+    presampled_train_problems: Optional[np.ndarray] = None
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -727,9 +724,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     @property
     def solver_config(self) -> ConfigT:
         return self.library.solver_config
-
-    def __post_init__(self):
-        self.reset_pool()
 
     @property
     def train_pred_with_encoder(self) -> bool:
@@ -743,18 +737,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         path.mkdir()
         return path
 
-    def reset_pool(self) -> None:
-        logger.info("resetting pool")
-        self.pool_single.reset()
-        self.pool_multiple.reset()
-
     def at_first_iteration(self) -> bool:
         return len(self.library.predictors) == 0
 
     @classmethod
     def initialize(
         cls,
-        problem_type: Type[ProblemT],
+        task_type: Type[ProblemT],
         solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]],
         solver_config: ConfigT,
         ae_model: AutoEncoderBase,
@@ -762,13 +751,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         project_path: Path,
         pool_single: Optional[ProblemPool[ProblemT]] = None,
         pool_multiple: Optional[ProblemPool[ProblemT]] = None,
-        problems_validation: Optional[List[ProblemT]] = None,
+        problems_validation: Optional[np.ndarray] = None,
         solver: Optional[BatchProblemSolver[ConfigT, ResultT]] = None,
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
         use_distributed: bool = False,
         reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
-        delete_cache: bool = False,
         n_limit_batch_solver: Optional[int] = None,
         presample_train_problems: bool = False,
     ) -> "SimpleSolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
@@ -783,7 +771,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         meta_data = asdict(config)
         library = SolutionLibrary.initialize(
-            problem_type,
+            task_type,
             solver_t,
             solver_config,
             None if config.train_with_encoder else ae_model,
@@ -795,11 +783,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         if solver is None:
             solver = (
                 DistributedBatchProblemSolver(
-                    solver_t, solver_config, n_limit_batch=n_limit_batch_solver
+                    solver_t, solver_config, task_type, n_limit_batch=n_limit_batch_solver
                 )
                 if use_distributed
                 else MultiProcessBatchProblemSolver(
-                    solver_t, solver_config, n_limit_batch=n_limit_batch_solver
+                    solver_t, solver_config, task_type, n_limit_batch=n_limit_batch_solver
                 )
             )
         assert solver.solver_t == solver_t
@@ -819,20 +807,17 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # setup pools
         if pool_single is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
-            pool_single = TrivialProblemPool(problem_type, 1)
+            pool_single = ProblemPool(task_type, 1)
         assert pool_single.n_problem_inner == 1
 
         if pool_multiple is None:
             logger.info("problem pool is not specified. use SimpleProblemPool")
             # TODO: smelling! n_problem_inner should not be set here
-            pool_multiple = TrivialProblemPool(problem_type, config.n_problem_inner)
-        assert pool_multiple.parallelizable()
+            pool_multiple = ProblemPool(task_type, config.n_problem_inner)
 
         # create validation problems
         project_path.mkdir(exist_ok=True)
-        validation_cache_path = project_path / "{}-validation_set.cache".format(
-            problem_type.__name__
-        )
+        validation_cache_path = project_path / "{}-validation_set.cache".format(task_type.__name__)
 
         if reuse_cached_validation_set:
             assert problems_validation is None
@@ -847,8 +832,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
                 problems_validation = sampler.sample_batch(
                     config.n_validation,
-                    TrivialProblemPool(problem_type, config.n_validation_inner).as_predicated(),
-                    delete_cache=delete_cache,
+                    ProblemPool(task_type, config.n_validation_inner).as_predicated(),
                 )
 
                 with validation_cache_path.open(mode="wb") as f:
@@ -862,15 +846,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             predicated_pool = pool_multiple.as_predicated()
             n_require = config.n_problem_max
             logger.info("presample {} tasks".format(n_require))
-            presampled_train_problems = sampler.sample_batch(
-                n_require, predicated_pool, delete_cache
-            )
+            presampled_train_problems = sampler.sample_batch(n_require, predicated_pool)
         else:
             presampled_train_problems = None
 
         logger.info("library sampler config: {}".format(config))
         return cls(
-            problem_type,
+            task_type,
             library,
             config,
             pool_single,
@@ -880,7 +862,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             sampler,
             determinant,
             test_false_positive_rate,
-            delete_cache,
             project_path,
             sampler_state,
             ae_model if config.train_with_encoder else None,
@@ -905,15 +886,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(f"n_problem_now: {n_problem_now}")
         prof_info.t_determine_cand = time.time() - ts_determine_cand
 
-        with TemporaryDirectory() as td:
-            self.reset_pool()
-            predictor = self._train_predictor(
-                init_solution, self.project_path, n_problem_now, prof_info
-            )
+        predictor = self._train_predictor(
+            init_solution, self.project_path, n_problem_now, prof_info
+        )
 
-            ts_margin = time.time()
-            ret = self._determine_margins(predictor, init_solution)
-            prof_info.t_margin = time.time() - ts_margin
+        ts_margin = time.time()
+        ret = self._determine_margins(predictor, init_solution)
+        prof_info.t_margin = time.time() - ts_margin
 
         if ret is None:
             logger.info("determine margin failed. returning None")
@@ -1054,7 +1033,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # sample tasks using some predicate!!
         logger.info("generate {} tasks".format(n_problem))
         if self.presampled_train_problems is None:
-            problems = self.sampler.sample_batch(n_problem, predicated_pool, self.delete_cache)
+            problems = self.sampler.sample_batch(n_problem, predicated_pool)
         else:
             logger.debug("use presampled tasks")
             problems = self.presampled_train_problems[:n_problem]
@@ -1141,11 +1120,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             weights = None
 
         logger.info("creating dataset")
-        dataset = IterationPredictorDataset.construct_from_tasks_and_resultss(
+        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
             init_solution,
             problems,
             resultss,
             self.solver_config,
+            self.problem_type,
             weights,
             self.library.ae_model_shared,
         )
@@ -1157,8 +1137,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         # determine 1dim tensor dimension by temp creation of a problem
         # TODO: should I implement this as a method?
         problem = self.problem_type.sample(1, standard=True)
-        table = problem.export_table()
-        vector_desc = table.get_vector_descs()[0]
+        table = problem.export_table(use_matrix=True)
+        vector_desc = table.get_desc_vecs()[0]
         n_dim_vector_description = vector_desc.shape[0]
 
         # train
@@ -1253,8 +1233,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             )
             problems2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
             problems = problems1 + problems2
-            for prob in problems:
-                prob.delete_cache()
 
             # NOTE: shuffling is required asin the following sectino, for loop is existed
             # as soon as number of candidates exceeds n_sample
@@ -1276,45 +1254,46 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         self,
         n_sample: int,
         problem_pool: ProblemPool[ProblemT],
-    ) -> Tuple[List[ProblemT], List[ProblemT]]:
+    ) -> Tuple[np.ndarray, np.ndarray]:
 
-        difficult_problems: List[ProblemT] = []
-        easy_problems: List[ProblemT] = []
+        difficult_params_list: List[np.ndarray] = []
+        easy_params_list: List[np.ndarray] = []
         with tqdm.tqdm(total=n_sample) as pbar:
-            while len(difficult_problems) < n_sample:
+            while len(difficult_params_list) < n_sample:
                 logger.debug("try sampling difficutl problem...")
-                problem = next(problem_pool)
-                assert problem.n_inner_task == 1
-                infer_res = self.library.infer(problem)[0]
+                task_params = next(problem_pool)
+                assert task_params.shape[0] == 1  # inner task is 1
+                task = self.problem_type.from_intrinsic_desc_vecs(task_params)
+                infer_res = self.library.infer(task)[0]
                 iterval = infer_res.nit
                 is_difficult = iterval > self.difficult_iter_threshold
                 if is_difficult:
-                    logger.debug("sampled! number: {}".format(len(difficult_problems)))
-                    difficult_problems.append(problem)
+                    logger.debug("sampled! number: {}".format(len(difficult_params_list)))
+                    difficult_params_list.append(task_params)
                     pbar.update(1)
                 else:
-                    easy_problems.append(problem)
-        return difficult_problems, easy_problems
+                    easy_params_list.append(task_params)
+        return np.array(difficult_params_list), np.array(easy_params_list)
 
     def _select_solution_candidates(
-        self, candidates: List[Trajectory], problems: List[ProblemT]
+        self, candidates: List[Trajectory], task_paramss: np.ndarray
     ) -> Tuple[Trajectory, int]:
         logger.info("select single solution out of {} candidates".format(len(candidates)))
 
         candidates_repeated = []
-        n_problem = len(problems)
+        n_task_params = len(task_paramss)
         n_cand = len(candidates)
         for cand in candidates:
-            candidates_repeated.extend([cand] * n_problem)
-        problems_repeated = problems * n_cand
+            candidates_repeated.extend([cand] * n_task_params)
+        problems_repeated = np.repeat(task_paramss, n_cand, axis=0)
         resultss = self.solver.solve_batch(problems_repeated, candidates_repeated)
-        assert len(resultss) == n_problem * n_cand
+        assert len(resultss) == n_task_params * n_cand
 
         def split_list(lst, n):
             return [lst[i : i + n] for i in range(0, len(lst), n)]
 
         resultss_list = split_list(
-            resultss, n_problem
+            resultss, n_task_params
         )  # split the result such that each list corresponds to candidate trajectory
 
         n_solved_max = 0
@@ -1341,16 +1320,16 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
             logger.info("sample difficult problems")
             if self.at_first_iteration():
-                difficult_problems = [next(problem_pool) for _ in range(n_difficult)]
-                n_total = len(difficult_problems)
+                difficult_paramss = np.array([next(problem_pool) for _ in range(n_difficult)])
+                n_total = len(difficult_paramss)
             else:
-                difficult_problems, easy_problems = self._sample_difficult_problems(
+                difficult_paramss, easy_paramss = self._sample_difficult_problems(
                     n_difficult, problem_pool
                 )
-                n_total = len(difficult_problems) + len(easy_problems)
+                n_total = len(difficult_paramss) + len(easy_paramss)
 
             best_solution, n_solved_max = self._select_solution_candidates(
-                solution_candidates, difficult_problems
+                solution_candidates, difficult_paramss
             )
             # the rate of solved difficult problems / all
             rate_difficult_solved = n_solved_max / n_total

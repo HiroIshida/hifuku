@@ -75,9 +75,10 @@ class GetModuleHashValueResponse(Response):
 
 @dataclass
 class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
-    problems: List[ProblemT]
+    task_paramss: np.ndarray
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
+    task_type: Type[ProblemT]
     init_solutions: Sequence  # Actually, Sequence[Optional[TrajectoryMaybeList]]
     n_process: Optional[int]
     use_default_solver: bool
@@ -100,15 +101,14 @@ class SampleProblemRequest(Generic[ProblemT], MainRequest):
     n_sample: int
     pool: PredicatedProblemPool[ProblemT]
     n_process: int
-    delete_cache: bool
 
     def ignore_fields(self) -> Tuple[str, ...]:
         return ("pool",)
 
 
 @dataclass
-class SampleProblemResponse(Generic[ProblemT], MainResponse):
-    problems: List[ProblemT]
+class SampleProblemResponse(MainResponse):
+    task_paramss: np.ndarray
     elapsed_time: float
 
     def ignore_fields(self) -> Tuple[str, ...]:

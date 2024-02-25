@@ -1,10 +1,10 @@
 from rpbench.two_dimensional.dummy import DummyTask
 
-from hifuku.pool import TrivialProblemPool
+from hifuku.pool import ProblemPool
 
 
 def test_simple_pool():
-    pool = TrivialProblemPool(DummyTask, 10)
+    pool = ProblemPool(DummyTask, 10)
 
     for _ in range(5):
         next(pool)
