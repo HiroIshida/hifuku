@@ -5,6 +5,7 @@ import pickle
 import subprocess
 import tempfile
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import List
 
@@ -13,7 +14,6 @@ import pytest
 from ompl import set_ompl_random_seed
 from rpbench.articulated.pr2.minifridge import TabletopClutteredFridgeReachingTask
 from skmp.solver.nlp_solver import SQPBasedSolver, SQPBasedSolverConfig
-from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig, OMPLSolverResult
 from skmp.trajectory import Trajectory
 
 from hifuku.config import ServerSpec
@@ -27,11 +27,9 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
-from hifuku.llazy.dataset import LazyDecomplessDataLoader, LazyDecomplessDataset
 from hifuku.pool import PredicatedProblemPool, ProblemPool
 from hifuku.script_utils import create_default_logger
 from hifuku.testing_asset import SimplePredicate
-from hifuku.types import RawData
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +56,16 @@ def server():
     logger.info("killed servers")
 
 
-@pytest.fixture(scope="session")
-def init_traj():
+@lru_cache(maxsize=1)
+def compute_init_traj() -> Trajectory:
     task = task_type.sample(1, standard=True)
     res = task.solve_default()[0]
     assert res.traj is not None
     return res.traj
 
 
-def test_batch_solver_init_solutions(init_traj: Trajectory):
+def test_batch_solver_init_solutions():
+    init_traj = compute_init_traj()
     solcon = SQPBasedSolverConfig(
         n_wp=40,
         n_max_call=10,
@@ -83,7 +82,8 @@ def test_batch_solver_init_solutions(init_traj: Trajectory):
     mp_batch_solver.solve_batch(tasks, [[init_traj] * n_inner] * n_task)
 
 
-def test_consistency_of_all_batch_sovler(server, init_traj: Trajectory):
+def test_consistency_of_all_batch_sovler(server):
+    init_traj = compute_init_traj()
 
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
@@ -175,54 +175,6 @@ def test_consistency_of_all_batch_sampler(server):
                 # is different. so we cannot compare the result of the sampling directly.
 
 
-# TODO: delete this test after remove cache mechanism from rpbench
-def _test_batch_sampler_with_delete_cache_option(server):
-    specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
-
-    sampler_list: List[BatchProblemSampler[task_type]] = []
-    sampler_list.append(MultiProcessBatchProblemSampler(2))
-    sampler_list.append(DistributeBatchProblemSampler[task_type](specs))
-
-    pool = ProblemPool(task_type, 1).as_predicated()
-
-    for sampler in sampler_list:
-        tasks = sampler.sample_batch(10, pool, False)
-        for task in tasks:
-            assert task._cache is not None
-
-        tasks = sampler.sample_batch(10, pool, True)
-        for task in tasks:
-            assert task._cache is None
-
-
-def test_create_dataset(init_traj: Trajectory):
-    n_task = 4
-    n_problem_inner = 2
-    solcon = OMPLSolverConfig(10000, n_max_satisfaction_trial=100)
-
-    init_solutions = [init_traj] * n_task
-
-    problems = [task_type.sample(n_problem_inner) for _ in range(n_task)]
-
-    batch_solver = MultiProcessBatchProblemSolver[OMPLSolverConfig, OMPLSolverResult](
-        OMPLSolver, solcon, 2
-    )
-    with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        batch_solver.dump_compressed_dataset_to_cachedir(
-            problems, init_solutions, td_path, n_process=None
-        )
-
-        dataset = LazyDecomplessDataset.load(td_path, RawData)
-        assert len(dataset) == n_task
-        for i in range(n_task):
-            data = dataset.get_data(np.array([i]))[0]
-            assert len(data.results) == n_problem_inner
-        loader = LazyDecomplessDataLoader(dataset, batch_size=1)
-        for sample in loader:
-            pass
-
-
 def test_batch_determinant(server):
     coverage_results_path = Path(__file__).resolve().parent / "data" / "coverage_results.pkl"
     with coverage_results_path.open(mode="rb") as f:
@@ -240,4 +192,5 @@ def test_batch_determinant(server):
 
 
 if __name__ == "__main__":
-    test_batch_determinant()
+    test_create_dataset()
+    # test_batch_determinant()
