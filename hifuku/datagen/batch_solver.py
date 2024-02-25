@@ -6,7 +6,6 @@ import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
 from multiprocessing import Process, get_context
 from pathlib import Path
 from typing import Generic, List, Optional, Sequence, Tuple, Type, Union
@@ -26,7 +25,7 @@ from hifuku.datagen.http_datagen.request import (
 )
 from hifuku.datagen.utils import split_indices
 from hifuku.pool import ProblemT
-from hifuku.types import _CLAMP_FACTOR, RawData
+from hifuku.types import _CLAMP_FACTOR
 
 logger = logging.getLogger(__name__)
 
@@ -42,33 +41,6 @@ def duplicate_init_solution_if_not_list(
     else:
         init_solutions = [init_solution] * n_inner_task
     return init_solutions
-
-
-@dataclass
-class DumpDatasetWorker(Generic[ProblemT, ConfigT, ResultT]):
-    problems: List[ProblemT]
-    solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
-    solver_config: ConfigT
-    init_solutions: Sequence[Optional[Trajectory]]
-    results_list: List[Tuple[ResultT, ...]]
-    cache_path: Path
-    show_progress_bar: bool
-
-    def __len__(self) -> int:
-        return len(self.problems)
-
-    def run(self):
-        if self.show_progress_bar:
-            logger.info("dump dataset")
-        disable_progress_bar = not self.show_progress_bar
-        for i in tqdm.tqdm(range(len(self)), disable=disable_progress_bar):
-            problem = self.problems[i]
-            init_solution = self.init_solutions[i]
-            results = self.results_list[i]
-            raw_data = RawData(init_solution, problem.export_table(), results, self.solver_config)
-            name = str(uuid.uuid4()) + ".pkl"
-            path = self.cache_path / name
-            raw_data.dump(path)
 
 
 class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
@@ -157,55 +129,6 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
         ...
-
-    def dump_compressed_dataset_to_cachedir(
-        self,
-        problems: List[ProblemT],
-        init_solutions: Sequence[TrajectoryMaybeList],
-        cache_dir_path: Path,
-        n_process: Optional[int],
-    ) -> None:
-
-        logger.debug("run self.solve_batch")
-        results_list = self.solve_batch(problems, init_solutions)
-
-        if n_process is None:
-            cpu_count = os.cpu_count()
-            assert cpu_count is not None
-            n_process = int(0.5 * cpu_count)
-
-        n_problem = len(problems)
-        indices = np.array(list(range(n_problem)))
-        indices_list = np.array_split(indices, n_process)
-
-        logger.debug("dump results")
-        process_list = []
-        for i, indices_part in enumerate(indices_list):
-
-            if len(indices_part) == 0:
-                continue
-
-            show_progress_bar = i == 0
-
-            problems_part = [problems[i] for i in indices_part]
-            init_solutions_part = [init_solutions[i] for i in indices_part]
-            results_list_part = [results_list[i] for i in indices_part]
-
-            worker = DumpDatasetWorker[ProblemT, ConfigT, ResultT](
-                problems_part,
-                self.solver_t,
-                self.config,
-                init_solutions_part,
-                results_list_part,
-                cache_dir_path,
-                show_progress_bar,
-            )
-            p = Process(target=worker.run, args=())
-            p.start()
-            process_list.append(p)
-
-        for p in process_list:
-            p.join()
 
 
 class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
