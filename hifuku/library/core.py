@@ -1286,7 +1286,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         n_cand = len(candidates)
         for cand in candidates:
             candidates_repeated.extend([cand] * n_task_params)
-        problems_repeated = np.repeat(task_paramss, n_cand, axis=0)
+        problems_repeated = np.array(list(task_paramss) * n_cand)
         resultss = self.solver.solve_batch(problems_repeated, candidates_repeated)
         assert len(resultss) == n_task_params * n_cand
 
