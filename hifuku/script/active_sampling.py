@@ -117,14 +117,13 @@ if __name__ == "__main__":
     if not isinstance(ae_model, NullAutoEncoder) and use_pretrained_ae:
         # check if the autoencoder is properly trained
         task = domain.task_type.sample(1)
-        table = task.export_table()
-        mesh_np = table.get_mesh()
-        assert mesh_np is not None
-        mesh_np = np.expand_dims(mesh_np, axis=(0, 1)).astype(float)
-        mesh_torch = torch.from_numpy(mesh_np).float().to(ae_model.get_device())
+        table = task.export_table(use_matrix=True)
+        assert table.world_mat is not None
+        world_mat_np = np.expand_dims(table.world_mat, axis=(0, 1)).astype(float)
+        world_mat_torch = torch.from_numpy(world_mat_np).float().to(ae_model.get_device())
         assert isinstance(ae_model, PixelAutoEncoder)
-        decoded = ae_model.decoder(ae_model.encoder(mesh_torch))
-        mesh_reconstructed = decoded.detach().cpu().squeeze().numpy()
+        decoded = ae_model.decoder(ae_model.encoder(world_mat_torch))
+        mat_reconstructed = decoded.detach().cpu().squeeze().numpy()
 
         # compare mesh and mesh_reconstructed side by side in matplotlib
         # import matplotlib.pyplot as plt
@@ -153,7 +152,6 @@ if __name__ == "__main__":
         pool_single=None,
         use_distributed=use_distributed,
         reuse_cached_validation_set=warm_start,
-        delete_cache=True,
         n_limit_batch_solver=args.n_limit_batch,
         presample_train_problems=True,
     )
