@@ -99,48 +99,72 @@ def test_dataset():
             w_expected = 1.0
 
         # test dataset when ae is specified (encoded)
-        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
+        dataset1 = IterationPredictorDataset.construct_from_paramss_and_resultss(
             sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, weightss, ae
         )
-        assert len(dataset) == n_data
-        assert dataset.n_inner == 3
-        mesh, desc, it, w = dataset[0]
-        assert len(mesh.shape) == 1
-        assert len(desc.shape) == 1
-        assert len(it.shape) == 0
-        assert len(w.shape) == 0
-        assert w.item() == w_expected
+        dataset2 = (
+            IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
+                sol.traj,
+                task_paramss,
+                resultss,
+                domain.solver_config,
+                domain.task_type,
+                weightss,
+                ae,
+            )
+        )
+        for dataset in [dataset1, dataset2]:
+            assert len(dataset) == n_data
+            assert dataset.n_inner == 3
+            mesh, desc, it, w = dataset[0]
+            assert len(mesh.shape) == 1
+            assert len(desc.shape) == 1
+            assert len(it.shape) == 0
+            assert len(w.shape) == 0
+            assert w.item() == w_expected
 
-        dataset.add(dataset)
-        assert len(dataset) == n_data * 2
-        mesh, desc, it, w = dataset[0]
-        assert len(mesh.shape) == 1
-        assert len(desc.shape) == 1
-        assert len(it.shape) == 0
-        assert len(w.shape) == 0
-        assert w.item() == w_expected
+            dataset.add(dataset)
+            assert len(dataset) == n_data * 2
+            mesh, desc, it, w = dataset[0]
+            assert len(mesh.shape) == 1
+            assert len(desc.shape) == 1
+            assert len(it.shape) == 0
+            assert len(w.shape) == 0
+            assert w.item() == w_expected
 
         # test dataset when ae is not specified
-        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
+        dataset1 = IterationPredictorDataset.construct_from_paramss_and_resultss(
             sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, weightss, None
         )
-        assert len(dataset) == n_data
-        assert dataset.n_inner == 3
-        mesh, desc, it, w = dataset[0]
-        assert len(mesh.shape) == 3
-        assert len(desc.shape) == 1
-        assert len(it.shape) == 0
-        assert len(w.shape) == 0
-        assert w.item() == w_expected
+        dataset2 = (
+            IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
+                sol.traj,
+                task_paramss,
+                resultss,
+                domain.solver_config,
+                domain.task_type,
+                weightss,
+                None,
+            )
+        )
+        for dataset in [dataset1, dataset2]:
+            assert len(dataset) == n_data
+            assert dataset.n_inner == 3
+            mesh, desc, it, w = dataset[0]
+            assert len(mesh.shape) == 3
+            assert len(desc.shape) == 1
+            assert len(it.shape) == 0
+            assert len(w.shape) == 0
+            assert w.item() == w_expected
 
-        dataset.add(dataset)
-        assert len(dataset) == n_data * 2
-        mesh, desc, it, w = dataset[0]
-        assert len(mesh.shape) == 3
-        assert len(desc.shape) == 1
-        assert len(it.shape) == 0
-        assert len(w.shape) == 0
-        assert w.item() == w_expected
+            dataset.add(dataset)
+            assert len(dataset) == n_data * 2
+            mesh, desc, it, w = dataset[0]
+            assert len(mesh.shape) == 3
+            assert len(desc.shape) == 1
+            assert len(it.shape) == 0
+            assert len(w.shape) == 0
+            assert w.item() == w_expected
 
 
 def test_training():

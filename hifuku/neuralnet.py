@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, List, Literal, Optional, Tuple, Type
 
+import dill
 import numpy as np
 import torch
 import torch.nn as nn
@@ -125,6 +126,8 @@ class IterationPredictorDataset(Dataset):
 
     # TODO: __add__
     def add(self, other: "IterationPredictorDataset") -> None:
+        import torch  # I don't know why but this is necessary if used in dill
+
         if self.mesh_likes is not None:
             assert other.mesh_likes is not None
             mesh_likes = torch.vstack([self.mesh_likes, other.mesh_likes])
@@ -236,10 +239,11 @@ class IterationPredictorDataset(Dataset):
                 shell=True,
                 check=True,
             )
-            # then load
-            dump_path = temp_dir_path / "dataset.pkl"
+            # then load. need dill as we pickle __main__ object
+            # https://stackoverflow.com/a/19428760/7624196
+            dump_path = temp_dir_path / "dataset.dill"
             with dump_path.open("rb") as f:
-                dataset = pickle.load(f)
+                dataset = dill.load(f)
         return dataset
 
     @staticmethod
@@ -267,9 +271,11 @@ class IterationPredictorDataset(Dataset):
             batch_size,
         )
         # save the dataset to a temporary file
-        dump_path = temp_dir / "dataset.pkl"
+        # need dill as we pickle __main__ object
+        # https://stackoverflow.com/a/19428760/7624196
+        dump_path = temp_dir / "dataset.dill"
         with dump_path.open("wb") as f:
-            pickle.dump(dataset, f)
+            dill.dump(dataset, f)
 
     @classmethod
     def construct_from_paramss_and_resultss(
