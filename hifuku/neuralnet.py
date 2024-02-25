@@ -1,11 +1,13 @@
 import logging
 import os
 import pickle
+import subprocess
 import uuid
 from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, List, Literal, Optional, Tuple, Type
 
 import numpy as np
@@ -193,6 +195,81 @@ class IterationPredictorDataset(Dataset):
             pickle.dump(raw_data, f)
         expected_total_size = len(pickle.dumps(raw_data)) * len(task_paramss)  # in bytes
         return expected_total_size
+
+    @classmethod
+    def construct_from_paramss_and_resultss_in_isolated_process(
+        cls,
+        init_solution,
+        task_paramss: np.ndarray,
+        resultss,
+        solver_config,
+        task_type: Type[TaskBase],
+        weightss: Optional[Tensor],
+        ae_model: Optional[AutoEncoderBase],
+        batch_size: int = 500,
+    ) -> "IterationPredictorDataset":
+        # somehow construct_from_paramss_and_resultss causes memory leak
+        # so, by isolating the function, we can avoid the memory leak at least in the main process
+        with TemporaryDirectory() as tempdir:
+            temp_dir_path = Path(tempdir)
+            temp_path = temp_dir_path / "args.pkl"
+            with temp_path.open("wb") as f:
+                pickle.dump(
+                    (
+                        init_solution,
+                        task_paramss,
+                        resultss,
+                        solver_config,
+                        task_type,
+                        weightss,
+                        ae_model,
+                        batch_size,
+                    ),
+                    f,
+                )
+            # because we cannot create child process in child process. we call the function
+            # from the shell and dump it. see __main__ below
+            # this is a super dirty hack
+            # this method works fine but somehow pytest fails...
+            subprocess.run(
+                f"python -m hifuku.neuralnet --path {temp_dir_path}",
+                shell=True,
+                check=True,
+            )
+            # then load
+            dump_path = temp_dir_path / "dataset.pkl"
+            with dump_path.open("rb") as f:
+                dataset = pickle.load(f)
+        return dataset
+
+    @staticmethod
+    def _isolated_construct_from_paramss_and_resultss_then_save(temp_dir: Path) -> None:
+        temp_arg_path = temp_dir / "args.pkl"
+        with temp_arg_path.open("rb") as f:
+            (
+                init_solution,
+                task_paramss,
+                resultss,
+                solver_config,
+                task_type,
+                weightss,
+                ae_model,
+                batch_size,
+            ) = pickle.load(f)
+        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
+            init_solution,
+            task_paramss,
+            resultss,
+            solver_config,
+            task_type,
+            weightss,
+            ae_model,
+            batch_size,
+        )
+        # save the dataset to a temporary file
+        dump_path = temp_dir / "dataset.pkl"
+        with dump_path.open("wb") as f:
+            pickle.dump(dataset, f)
 
     @classmethod
     def construct_from_paramss_and_resultss(
@@ -689,3 +766,17 @@ class FusingIterationPredictor(ModelBase[FusingIterationPredictorConfig]):
         iter_loss = torch.mean(weihted_iter_loss)
         dic = {"iter": iter_loss}
         return LossDict(dic)
+
+
+if __name__ == "__main__":
+    # this is actually called inside IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process
+    # don't delete this
+    # don't delete this
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--path", type=str)
+    args = parser.parse_args()
+    path = Path(args.path)
+    IterationPredictorDataset._isolated_construct_from_paramss_and_resultss_then_save(path)

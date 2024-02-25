@@ -1119,7 +1119,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             weights = None
 
         logger.info("creating dataset")
-        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
+        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
             init_solution,
             problems,
             resultss,
