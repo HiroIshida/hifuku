@@ -9,7 +9,7 @@ import mohou.file
 import psutil
 import torch
 from mohou.trainer import TrainCache
-from mohou.utils import log_package_version_info
+from mohou.utils import detect_device, log_package_version_info
 
 from hifuku.domain import DomainProtocol, select_domain
 from hifuku.library import ActiveSamplerState, SolutionLibrary
@@ -36,6 +36,7 @@ def load_compatible_autoencoder(
             ae_model = TrainCache.load_all(ae_pp)[0].best_model
             logger.info("load from {}".format(ae_pp))
             assert isinstance(ae_model, AutoEncoderBase)
+            ae_model.put_on_device(detect_device())
         return ae_model
     else:
         logger.info("use untrained autoencoder")
