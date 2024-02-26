@@ -682,6 +682,7 @@ class LibrarySamplerConfig:
     n_solution_candidate: int = 100
     n_difficult: int = 500
     n_problem_max: int = 1000000
+    early_stopping_patience: int = 10
 
     # same for all settings (you dont have to tune)
     n_problem_inner: int = 1  # this should be 1 always (2024/02/24)
@@ -1172,15 +1173,13 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         tcache = TrainCache.from_model(model)
 
-        def is_stoppable(tcache: TrainCache) -> bool:
-            valid_losses = tcache.reduce_to_lossseq(tcache.validate_lossseq_table)
-            n_step = len(valid_losses)
-            idx_min = np.argmin(valid_losses)
-            t_acceptable = 20
-            no_improvement_for_long = bool((n_step - idx_min) > t_acceptable)
-            return no_improvement_for_long
-
-        train(pp, tcache, dataset, self.config.train_config, is_stoppable=is_stoppable)
+        train(
+            pp,
+            tcache,
+            dataset,
+            self.config.train_config,
+            early_stopping_patience=self.config.early_stopping_patience,
+        )
         model.eval()
         profile_info.t_train = time.time() - ts_train
         return model
