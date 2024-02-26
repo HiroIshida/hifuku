@@ -679,7 +679,9 @@ class LibrarySamplerConfig:
 
     # maybe you have to tune maybe ...
     inc_coef_mult_snf: float = 1.1  # snf stands for sampling_number_factor
+    dec_coef_mult_snf: float = 0.9
     threshold_inc_snf: float = 0.2  # if gain < expected * this, then increase snf
+    threshold_dec_snf: float = 0.5  # if gain > expected * this, then decrease snf
     n_solution_candidate: int = 100
     n_difficult: int = 500
     n_problem_max: int = 1000000
@@ -937,10 +939,19 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info(
             f"coverage this: {coverage_this}, coverage previous: {coverage_previous}, gain: {gain}"
         )
-        if gain < gain_expected * self.config.threshold_inc_snf:
+        achievement_rate = gain / gain_expected
+        logger.info(
+            f"expected gain: {gain_expected}, actual gain: {gain}, achievement rate: {achievement_rate}"
+        )
+        if achievement_rate < self.config.threshold_inc_snf:
             self.sampler_state.sampling_number_factor *= self.config.inc_coef_mult_snf
             logger.info(
-                f"expected gain is {gain_expected}, but actual gain is {gain}. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
+                f"expected gain is {gain_expected} is too small. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
+            )
+        elif gain > gain_expected * self.config.threshold_dec_snf:
+            self.sampler_state.sampling_number_factor *= self.config.dec_coef_mult_snf
+            logger.info(
+                f"expected gain is high enough. decrease sampling number factor to {self.sampler_state.sampling_number_factor}"
             )
 
         logger.info("elapsed time in active sampling: {} min".format(prof_info.t_total / 60.0))
@@ -1034,15 +1045,24 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         pp = project_path
 
         ts_dataset = time.time()
-        predicated_pool = self.pool_multiple.as_predicated()
 
         # NOTE: to my future self: you can't use presampled problems if you'd like to
         # sample tasks using some predicate!!
         logger.info("generate {} tasks".format(n_problem))
+        predicated_pool = self.pool_multiple.as_predicated()
         if self.presampled_train_problems is None:
             problems = self.sampler.sample_batch(n_problem, predicated_pool)
         else:
             logger.debug("use presampled tasks")
+            if len(self.presampled_train_problems) < n_problem:
+                logger.info("presampled tasks are not enough. populate more")
+                n_problem - len(self.presampled_train_problems)
+                problems = self.sampler.sample_batch(n_problem, predicated_pool)
+                self.presampled_train_problems = np.concatenate(
+                    [self.presampled_train_problems, problems]
+                )
+            assert self.presampled_train_problems is None  # mypy, are you stupid?
+            assert len(self.presampled_train_problems) >= n_problem
             problems = self.presampled_train_problems[:n_problem]
 
         logger.info("start generating dataset")
