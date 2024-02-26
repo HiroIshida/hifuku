@@ -1,9 +1,12 @@
+import copy
 import logging
+import multiprocessing
 import os
 import pickle
 import subprocess
 import uuid
 from abc import ABC, abstractmethod
+from collections import namedtuple
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,18 +15,20 @@ from typing import Any, List, Literal, Optional, Tuple, Type
 
 import dill
 import numpy as np
+import threadpoolctl
 import torch
 import torch.nn as nn
 import tqdm
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from mohou.utils import detect_device
 from rpbench.interface import TaskBase
+from skmp.solver.interface import ResultProtocol
 from skmp.trajectory import Trajectory
 from torch import Tensor
 from torch.utils.data import Dataset, default_collate
 
 from hifuku.types import RawData
-from hifuku.utils import determine_process_thread
+from hifuku.utils import determine_process_thread, num_torch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -85,44 +90,12 @@ class IterationPredictorDataset(Dataset):
     mesh_likes: Optional[torch.Tensor]
     descriptions: torch.Tensor
     itervals: torch.Tensor
-    bools_fail: torch.Tensor
     weights: torch.Tensor
     n_inner: int
-    encoded: bool
-    indices_remain: Optional[torch.Tensor] = None
     """
     mesh_likes can be either a of stack of feature vectors (n_elem, n_feature)
     or stack of meshes (n_elem, ...) depending on `encoded".
     """
-
-    def reduce(self, target_ratio: float = 0.7) -> None:
-        indices_fails = torch.where(self.bools_fail)[0]
-        false_rate_now = len(indices_fails) / len(self)
-        logger.info(f"current false rate: {false_rate_now}")
-        if false_rate_now < target_ratio:
-            return
-
-        n_success_now = len(self) - len(indices_fails)
-        target_n_false = int(target_ratio * n_success_now / (1 - target_ratio))
-        n_false_reduce = len(indices_fails) - target_n_false
-
-        # randomize indices_fail
-        indices_fails = indices_fails[torch.randperm(len(indices_fails))]
-        indices_remove = indices_fails[:n_false_reduce]
-
-        # show first 100 indices removed
-        logger.info(f"indices removed: {indices_remove[:100]}...{indices_remove[-1]}")
-
-        bools_remain = torch.ones(len(self), dtype=torch.bool)
-        bools_remain[indices_remove] = False
-        indices_remain = torch.where(bools_remain)[0]
-        self.indices_remain = indices_remain
-
-        # compute current false rate
-        indices_fails = torch.where(self.bools_fail[indices_remain])[0]
-        false_rate_now = len(indices_fails) / len(indices_remain)
-        logger.info(f"reduced to {torch.sum(self.bools_fail)} sample from {len(self.bools_fail)}")
-        logger.info(f"false rate: {false_rate_now}")
 
     # TODO: __add__
     def add(self, other: "IterationPredictorDataset") -> None:
@@ -136,24 +109,21 @@ class IterationPredictorDataset(Dataset):
             mesh_likes = None
         descriptions = torch.vstack([self.descriptions, other.descriptions])
         itervals = torch.hstack([self.itervals, other.itervals])
+        weights = torch.hstack([self.weights, other.weights])
 
         self.mesh_likes = mesh_likes
         self.descriptions = descriptions
         self.itervals = itervals
+        self.weights = weights
 
     @property
     def n_task(self) -> int:
         return int(len(self) / self.n_inner)
 
     def __len__(self) -> int:
-        if self.indices_remain is not None:
-            return len(self.indices_remain)
         return len(self.descriptions)
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor, ...]:
-        if self.indices_remain is not None:
-            idx = self.indices_remain[idx]
-
         if self.mesh_likes is None:
             mesh_like_here = torch.empty(0)
         else:
@@ -355,10 +325,8 @@ class IterationPredictorDataset(Dataset):
             torch.concat(meshes_list),
             torch.concat(descriptions_stacked_list),
             torch.hstack(iterval_stacked_list),
-            torch.hstack(bools_fail_stacked_list),
             weightss.flatten(),
             n_inner,
-            False,
         )
 
     @classmethod
@@ -418,6 +386,141 @@ class IterationPredictorDataset(Dataset):
             n_problem,
             True,
         )
+
+
+def create_dataset_from_paramss_and_resultss(
+    task_paramss: np.ndarray,
+    resultss: List[Tuple[ResultProtocol, ...]],
+    solver_config,
+    task_type: Type[TaskBase],
+    weightss: Optional[Tensor],
+    ae_model: Optional[AutoEncoderBase],
+) -> IterationPredictorDataset:
+
+    n_process = 6
+    # use multiprocessing.
+    # split the data for each process
+    n_data = len(task_paramss)
+    n_data // n_process
+
+    split_indices_list = np.array_split(np.arange(n_data), n_process)
+    task_paramss_list = [task_paramss[indices] for indices in split_indices_list]
+    # resultss_list = [resultss[indices] for indices in split_indices_list]
+    resultss_list = [list(np.array(resultss)[indices]) for indices in split_indices_list]
+    if weightss is None:
+        weightss_list = [None] * n_process
+    else:
+        weightss_list = [weightss[indices] for indices in split_indices_list]
+
+    if ae_model is not None:
+        ae_model_copied = copy.deepcopy(ae_model)
+        ae_model_copied.put_on_device(torch.device("cpu"))
+    else:
+        ae_model_copied = None
+
+    # spawn is maybe necessary to avoid the error in torch multiprocessing
+    with multiprocessing.get_context("spawn").Pool(n_process) as pool:
+        dataset_list = pool.starmap(
+            _create_dataset_from_paramss_and_resultss,
+            [
+                (
+                    task_params,
+                    results,
+                    solver_config,
+                    task_type,
+                    weights,
+                    ae_model_copied,
+                )
+                for task_params, results, weights in zip(
+                    task_paramss_list, resultss_list, weightss_list
+                )
+            ],
+        )
+
+    dataset = dataset_list[0]
+    for d in dataset_list[1:]:
+        dataset.add(d)
+    return dataset
+
+
+def _create_dataset_from_paramss_and_resultss(  # used in Multiprocessing
+    task_paramss: np.ndarray,
+    resultss,
+    solver_config,
+    task_type: Type[TaskBase],
+    weightss: Optional[Tensor],
+    ae_model: Optional[AutoEncoderBase],
+    batch_size: int = 500,
+) -> IterationPredictorDataset:
+
+    from hifuku.types import get_clamped_iter
+
+    with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
+        with num_torch_thread(1):
+            if ae_model is not None:
+                assert ae_model.get_device() == torch.device("cpu"), "to parallelize"
+
+            if weightss is None:
+                weightss = torch.ones((len(task_paramss), task_paramss.shape[1]))
+
+            Processed = namedtuple("processed", ["encoded", "vectors", "costs", "weights"])
+
+            processed_list = []
+            for task_params, results, weights in tqdm.tqdm(zip(task_paramss, resultss, weightss)):
+                task = task_type.from_intrinsic_desc_vecs(task_params)
+                table = task.export_table(use_matrix=True)
+                encoded: Optional[torch.Tensor] = None
+                if table.world_mat is not None:
+                    mat_torch = torch.from_numpy(table.world_mat).float().unsqueeze(0)
+                    if ae_model is None:
+                        encoded = mat_torch  # just don't encode
+                    else:
+                        encoded = ae_model.encode(mat_torch.unsqueeze(0)).squeeze(0).detach()
+
+                vector_parts = table.get_desc_vecs()
+                assert len(vector_parts) > 0, "This should not happen"
+
+                vector_parts_torch = torch.from_numpy(np.array(vector_parts)).float()
+                costs = np.array([get_clamped_iter(r, solver_config) for r in results])
+                costs_torch = torch.from_numpy(costs).float()
+                weights_torch = weights
+
+                processed = Processed(encoded, vector_parts_torch, costs_torch, weights_torch)
+                processed_list.append(processed)
+
+            # convert all
+            no_world_mat = processed_list[0].encoded is None
+            if no_world_mat:
+                mesh_likes = None
+            else:
+                mesh_likes = torch.stack([p.encoded for p in processed_list], dim=0)
+                if ae_model is None:
+                    assert mesh_likes.ndim == 4
+                else:
+                    assert mesh_likes.ndim == 2
+            # vectorss = torch.vstack([p.vectors for p in processed_list])
+            vectorss = torch.stack([p.vectors for p in processed_list], dim=0)
+            assert vectorss.ndim == 3
+            vectors = vectorss.reshape(  # n_data x n_problem x n_feature
+                vectorss.shape[0] * vectorss.shape[1], vectorss.shape[2]
+            )
+            assert vectors.ndim == 2
+            # costss = torch.vstack([p.costs for p in processed_list])
+            costss = torch.stack([p.costs for p in processed_list], dim=0)
+            assert costss.ndim == 2
+            costs = costss.flatten()
+
+            weightss = torch.stack([p.weights for p in processed_list], dim=0)
+            assert weightss.ndim == 2
+            weights = weightss.flatten()
+            n_inner = vectorss.shape[1]
+            return IterationPredictorDataset(
+                mesh_likes,
+                vectors,
+                costs,
+                weights,
+                n_inner,
+            )
 
 
 @dataclass

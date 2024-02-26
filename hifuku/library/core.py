@@ -47,10 +47,10 @@ from hifuku.neuralnet import (
     AutoEncoderBase,
     IterationPredictor,
     IterationPredictorConfig,
-    IterationPredictorDataset,
     IterationPredictorWithEncoder,
     IterationPredictorWithEncoderConfig,
     NullAutoEncoder,
+    create_dataset_from_paramss_and_resultss,
 )
 from hifuku.pool import ProblemPool, ProblemT
 from hifuku.types import get_clamped_iter
@@ -1127,8 +1127,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             weights = None
 
         logger.info("creating dataset")
-        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
-            init_solution,
+        dataset = create_dataset_from_paramss_and_resultss(
             problems,
             resultss,
             self.solver_config,

@@ -1,3 +1,4 @@
+import copy
 from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -17,6 +18,7 @@ from hifuku.neuralnet import (
     IterationPredictorWithEncoderConfig,
     PixelAutoEncoder,
     VoxelAutoEncoder,
+    create_dataset_from_paramss_and_resultss,
 )
 
 
@@ -98,22 +100,26 @@ def test_dataset():
             weightss = None
             w_expected = 1.0
 
+        ae = copy.deepcopy(ae)
         # test dataset when ae is specified (encoded)
-        dataset1 = IterationPredictorDataset.construct_from_paramss_and_resultss(
-            sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, weightss, ae
+        dataset0 = create_dataset_from_paramss_and_resultss(
+            task_paramss, resultss, domain.solver_config, domain.task_type, weightss, ae
         )
-        dataset2 = (
-            IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
-                sol.traj,
-                task_paramss,
-                resultss,
-                domain.solver_config,
-                domain.task_type,
-                weightss,
-                ae,
-            )
-        )
-        for dataset in [dataset1, dataset2]:
+        # dataset1 = IterationPredictorDataset.construct_from_paramss_and_resultss(
+        #     sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, weightss, ae
+        # )
+        # dataset2 = (
+        #     IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
+        #         sol.traj,
+        #         task_paramss,
+        #         resultss,
+        #         domain.solver_config,
+        #         domain.task_type,
+        #         weightss,
+        #         ae,
+        #     )
+        # )
+        for dataset in [dataset0]:
             assert len(dataset) == n_data
             assert dataset.n_inner == 3
             mesh, desc, it, w = dataset[0]
@@ -133,21 +139,24 @@ def test_dataset():
             assert w.item() == w_expected
 
         # test dataset when ae is not specified
-        dataset1 = IterationPredictorDataset.construct_from_paramss_and_resultss(
-            sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, weightss, None
+        dataset0 = create_dataset_from_paramss_and_resultss(
+            task_paramss, resultss, domain.solver_config, domain.task_type, weightss, None
         )
-        dataset2 = (
-            IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
-                sol.traj,
-                task_paramss,
-                resultss,
-                domain.solver_config,
-                domain.task_type,
-                weightss,
-                None,
-            )
-        )
-        for dataset in [dataset1, dataset2]:
+        # dataset1 = IterationPredictorDataset.construct_from_paramss_and_resultss(
+        #     sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, weightss, None
+        # )
+        # dataset2 = (
+        #     IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
+        #         sol.traj,
+        #         task_paramss,
+        #         resultss,
+        #         domain.solver_config,
+        #         domain.task_type,
+        #         weightss,
+        #         None,
+        #     )
+        # )
+        for dataset in [dataset0]:
             assert len(dataset) == n_data
             assert dataset.n_inner == 3
             mesh, desc, it, w = dataset[0]
@@ -179,8 +188,11 @@ def test_training():
     n_dof_desc = 2
 
     # test dataset when ae is specified (encoded)
-    dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
-        sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
+    # dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
+    #     sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
+    # )
+    dataset = create_dataset_from_paramss_and_resultss(
+        task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
     )
 
     conf = IterationPredictorConfig(n_dof_desc, ae_config.dim_bottleneck, (10, 10, 10))
@@ -205,5 +217,5 @@ def test_training():
 
 
 if __name__ == "__main__":
-    test_dataset()
-    # test_training(sol_tasks_and_resultss())
+    # test_dataset()
+    test_training()
