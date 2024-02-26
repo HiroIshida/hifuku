@@ -213,6 +213,9 @@ class IterationPredictorDataset(Dataset):
     ) -> "IterationPredictorDataset":
         # somehow construct_from_paramss_and_resultss causes memory leak
         # so, by isolating the function, we can avoid the memory leak at least in the main process
+        device_original = None
+        if ae_model is not None:
+            device_original = ae_model.get_device()
         with TemporaryDirectory() as tempdir:
             temp_dir_path = Path(tempdir)
             temp_path = temp_dir_path / "args.pkl"
@@ -244,6 +247,8 @@ class IterationPredictorDataset(Dataset):
             dump_path = temp_dir_path / "dataset.dill"
             with dump_path.open("rb") as f:
                 dataset = dill.load(f)
+        if ae_model is not None and device_original is not None:
+            ae_model.put_on_device(device_original)
         return dataset
 
     @staticmethod
