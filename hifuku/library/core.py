@@ -20,6 +20,7 @@ import threadpoolctl
 import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
+from mohou.utils import detect_device
 from ompl import set_ompl_random_seed
 from rpbench.interface import AbstractTaskSolver
 from skmp.solver.interface import (
@@ -712,6 +713,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     test_false_positive_rate: bool
     project_path: Path
     sampler_state: ActiveSamplerState
+    device: torch.device
     ae_model_pretrained: Optional[
         AutoEncoderBase
     ] = None  # train iteration predctor combined with encoder. Thus ae will no be shared.
@@ -759,6 +761,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         test_false_positive_rate: bool = False,
         n_limit_batch_solver: Optional[int] = None,
         presample_train_problems: bool = False,
+        device: Optional[torch.device] = None,
     ) -> "SimpleSolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -770,6 +773,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         logger.info("arg of initialize: {}".format(values))
 
         meta_data = asdict(config)
+        if device is None:
+            device = detect_device()
+        assert ae_model.get_device() == device
         library = SolutionLibrary.initialize(
             task_type,
             solver_t,
@@ -864,6 +870,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             test_false_positive_rate,
             project_path,
             sampler_state,
+            device,
             ae_model if config.train_with_encoder else None,
             presampled_train_problems,
         )
@@ -1158,7 +1165,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         if self.train_pred_with_encoder:
             assert self.ae_model_pretrained is not None
-            iterpred_model = IterationPredictor(iterpred_model_conf)
+            iterpred_model = IterationPredictor(iterpred_model_conf, self.device)
             ae_model_pretrained = copy.deepcopy(self.ae_model_pretrained)
             ae_model_pretrained.put_on_device(iterpred_model.device)
             assert not isinstance(ae_model_pretrained, NullAutoEncoder)
@@ -1169,7 +1176,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 IterationPredictorWithEncoder, IterationPredictor
             ] = IterationPredictorWithEncoder(conf)
         else:
-            model = IterationPredictor(iterpred_model_conf)
+            model = IterationPredictor(iterpred_model_conf, self.device)
 
         tcache = TrainCache.from_model(model)
 
@@ -1179,6 +1186,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             dataset,
             self.config.train_config,
             early_stopping_patience=self.config.early_stopping_patience,
+            device=self.device,
         )
         model.eval()
         profile_info.t_train = time.time() - ts_train

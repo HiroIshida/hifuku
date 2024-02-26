@@ -37,6 +37,8 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
         train_config=TrainConfig(n_epoch=20, learning_rate=0.01),
         iterpred_model_config={"layers": [64, 64, 64]},
         n_determine_batch=50,
+        n_validation=1000,
+        n_validation_inner=1,
     )
     _CLAMP_FACTOR[0] = 1.5
 
@@ -48,6 +50,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
         ae_model: AutoEncoderBase
         if domain.auto_encoder_type is NullAutoEncoder:
             ae_model = NullAutoEncoder()
+            ae_model.put_on_device(device)
         else:
             ae_model = PixelAutoEncoder(AutoEncoderConfig(n_grid=56))
             ae_model.loss_called = True  # mock that model is already trained
@@ -65,6 +68,7 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
                 td_path,
                 solver=solver,
                 sampler=sampler,
+                device=device,
             )
             lib_sampler.step_active_sampling()
             lib_sampler.step_active_sampling()
