@@ -1,4 +1,3 @@
-import copy
 from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -8,7 +7,7 @@ import torch
 from mohou.trainer import TrainCache, TrainConfig, train
 
 from hifuku.datagen.batch_solver import MultiProcessBatchProblemSolver
-from hifuku.domain import DoubleIntegratorBubblySimple_SQP
+from hifuku.domain import DummyDomain, DummyMeshDomain
 from hifuku.neuralnet import (
     AutoEncoderConfig,
     IterationPredictor,
@@ -55,12 +54,11 @@ def test_network():
         model.loss(sample)
 
 
-@lru_cache(maxsize=1)
-def get_sol_tasks_and_resultss():
-    domain = DoubleIntegratorBubblySimple_SQP
+@lru_cache(maxsize=None)
+def get_sol_tasks_and_resultss(domain):
     task_type = domain.task_type
-
     task_default = task_type.sample(1, True)
+    # get a valid solution until it is found
     trial_count = 0
     while True:
         sol = task_default.solve_default()[0]
@@ -82,103 +80,80 @@ def get_sol_tasks_and_resultss():
     return sol, task_paramss, resultss
 
 
-def test_dataset():
-    sol_tasks_and_resultss = get_sol_tasks_and_resultss()
-    domain = DoubleIntegratorBubblySimple_SQP
+def _test_dataset(domain, use_weight: bool, encode_image: bool):
+    # for domain in [DummyMeshDomain, DummyDomain]:
+    sol_tasks_and_resultss = get_sol_tasks_and_resultss(domain)
     device = torch.device("cpu")
-    ae_config = AutoEncoderConfig(n_grid=56)
-    ae = PixelAutoEncoder(ae_config, device=device)
+    if domain == DummyMeshDomain:
+        ae_config = AutoEncoderConfig(n_grid=56)
+        ae = PixelAutoEncoder(ae_config, device=device)
+    else:
+        ae = None
     sol, task_paramss, resultss = sol_tasks_and_resultss
 
     n_data = len(task_paramss) * len(task_paramss[0])
 
-    for use_weight in [True, False]:
-        if use_weight:
-            weightss = torch.ones(len(task_paramss), len(task_paramss[0])) * 2.0
-            w_expected = 2.0
-        else:
-            weightss = None
-            w_expected = 1.0
+    # for use_weight in [True, False]:
+    if use_weight:
+        weightss = torch.ones(len(task_paramss), len(task_paramss[0])) * 2.0
+        w_expected = 2.0
+    else:
+        weightss = None
+        w_expected = 1.0
 
-        ae = copy.deepcopy(ae)
-        # test dataset when ae is specified (encoded)
-        dataset0 = create_dataset_from_paramss_and_resultss(
+    # for encode_image in [True, False]:
+    if encode_image:
+        dataset = create_dataset_from_paramss_and_resultss(
             task_paramss, resultss, domain.solver_config, domain.task_type, weightss, ae
         )
-        # dataset1 = IterationPredictorDataset.construct_from_paramss_and_resultss(
-        #     sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, weightss, ae
-        # )
-        # dataset2 = (
-        #     IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
-        #         sol.traj,
-        #         task_paramss,
-        #         resultss,
-        #         domain.solver_config,
-        #         domain.task_type,
-        #         weightss,
-        #         ae,
-        #     )
-        # )
-        for dataset in [dataset0]:
-            assert len(dataset) == n_data
-            assert dataset.n_inner == 3
-            mesh, desc, it, w = dataset[0]
-            assert len(mesh.shape) == 1
-            assert len(desc.shape) == 1
-            assert len(it.shape) == 0
-            assert len(w.shape) == 0
-            assert w.item() == w_expected
-
-            dataset.add(dataset)
-            assert len(dataset) == n_data * 2
-            mesh, desc, it, w = dataset[0]
-            assert len(mesh.shape) == 1
-            assert len(desc.shape) == 1
-            assert len(it.shape) == 0
-            assert len(w.shape) == 0
-            assert w.item() == w_expected
-
-        # test dataset when ae is not specified
-        dataset0 = create_dataset_from_paramss_and_resultss(
+    else:
+        dataset = create_dataset_from_paramss_and_resultss(
             task_paramss, resultss, domain.solver_config, domain.task_type, weightss, None
         )
-        # dataset1 = IterationPredictorDataset.construct_from_paramss_and_resultss(
-        #     sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, weightss, None
-        # )
-        # dataset2 = (
-        #     IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process(
-        #         sol.traj,
-        #         task_paramss,
-        #         resultss,
-        #         domain.solver_config,
-        #         domain.task_type,
-        #         weightss,
-        #         None,
-        #     )
-        # )
-        for dataset in [dataset0]:
-            assert len(dataset) == n_data
-            assert dataset.n_inner == 3
-            mesh, desc, it, w = dataset[0]
-            assert len(mesh.shape) == 3
-            assert len(desc.shape) == 1
-            assert len(it.shape) == 0
-            assert len(w.shape) == 0
-            assert w.item() == w_expected
+    assert len(dataset) == n_data
+    assert dataset.n_inner == 3
+    mesh, desc, it, w = dataset[0]
+    if domain == DummyMeshDomain:
+        assert mesh.ndim == 1 if encode_image else 3
+    else:
+        assert mesh.numel() == 0
+    assert len(desc.shape) == 1
+    assert len(it.shape) == 0
+    assert len(w.shape) == 0
+    assert w.item() == w_expected
 
-            dataset.add(dataset)
-            assert len(dataset) == n_data * 2
-            mesh, desc, it, w = dataset[0]
-            assert len(mesh.shape) == 3
-            assert len(desc.shape) == 1
-            assert len(it.shape) == 0
-            assert len(w.shape) == 0
-            assert w.item() == w_expected
+    dataset.add(dataset)
+    assert len(dataset) == n_data * 2
+    mesh, desc, it, w = dataset[0]
+    if domain == DummyMeshDomain:
+        assert len(mesh.shape) == 1 if encode_image else 3
+    else:
+        assert mesh.numel() == 0
+    assert len(desc.shape) == 1
+    assert len(it.shape) == 0
+    assert len(w.shape) == 0
+    assert w.item() == w_expected
+
+
+def test_dataset_without_mat():
+    domain = DummyDomain
+    _test_dataset(domain, True, True)
+    _test_dataset(domain, True, False)
+    _test_dataset(domain, False, True)
+    _test_dataset(domain, False, False)
+
+
+def test_dataset_with_mat():
+    domain = DummyMeshDomain
+    _test_dataset(domain, True, True)
+    _test_dataset(domain, True, False)
+    _test_dataset(domain, False, True)
+    _test_dataset(domain, False, False)
 
 
 def test_training():
-    sol_tasks_and_resultss = get_sol_tasks_and_resultss()
-    domain = DoubleIntegratorBubblySimple_SQP
+    domain = DummyMeshDomain
+    sol_tasks_and_resultss = get_sol_tasks_and_resultss(domain)
     device = torch.device("cpu")
     ae_config = AutoEncoderConfig(n_grid=56)
     ae = PixelAutoEncoder(ae_config, device=device)
@@ -187,10 +162,6 @@ def test_training():
     train_config = TrainConfig(5, n_epoch=2)
     n_dof_desc = 2
 
-    # test dataset when ae is specified (encoded)
-    # dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
-    #     sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
-    # )
     dataset = create_dataset_from_paramss_and_resultss(
         task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
     )
@@ -217,5 +188,6 @@ def test_training():
 
 
 if __name__ == "__main__":
-    # test_dataset()
-    test_training()
+    test_dataset_without_mat()
+    # test_dataset_with_mat()
+    # test_training()
