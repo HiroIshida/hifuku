@@ -153,7 +153,6 @@ if __name__ == "__main__":
         use_distributed=use_distributed,
         reuse_cached_validation_set=warm_start,
         n_limit_batch_solver=args.n_limit_batch,
-        presample_train_problems=True,
     )
 
     if warm_start:

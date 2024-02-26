@@ -5,15 +5,13 @@ import json
 import logging
 import pickle
 import re
-import shutil
 import signal
 import time
 import uuid
 from abc import abstractmethod
 from dataclasses import asdict, dataclass
-from functools import cached_property
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Optional, Tuple, Type, Union
+from typing import Callable, ClassVar, Dict, Generic, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import threadpoolctl
@@ -716,10 +714,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     project_path: Path
     sampler_state: ActiveSamplerState
     device: torch.device
-    ae_model_pretrained: Optional[
-        AutoEncoderBase
-    ] = None  # train iteration predctor combined with encoder. Thus ae will no be shared.
-    presampled_train_problems: Optional[np.ndarray] = None
+    ae_model_pretrained: Optional[AutoEncoderBase]
+    presampled_tasks_paramss: np.ndarray
+
+    # below are class variables
+    presampled_cache_file_name: ClassVar[str] = "presampled_problems.cache"
 
     @property
     def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
@@ -732,14 +731,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     @property
     def train_pred_with_encoder(self) -> bool:
         return self.ae_model_pretrained is not None
-
-    @cached_property
-    def debug_data_parent_path(self) -> Path:
-        path = Path("/tmp") / "hifuku-debug-data"
-        if path.exists():
-            shutil.rmtree(path)
-        path.mkdir()
-        return path
 
     def at_first_iteration(self) -> bool:
         return len(self.library.predictors) == 0
@@ -762,7 +753,6 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
         n_limit_batch_solver: Optional[int] = None,
-        presample_train_problems: bool = False,
         device: Optional[torch.device] = None,
     ) -> "SimpleSolutionLibrarySampler[ProblemT, ConfigT, ResultT]":
         """
@@ -850,13 +840,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
                 )
         assert len(problems_validation) > 0
 
-        if presample_train_problems:
-            predicated_pool = pool_multiple.as_predicated()
-            n_require = config.n_problem_max
-            logger.info("presample {} tasks".format(n_require))
-            presampled_train_problems = sampler.sample_batch(n_require, predicated_pool)
+        presample_cache_path = project_path / cls.presampled_cache_file_name
+        if presample_cache_path.exists():
+            with presample_cache_path.open(mode="rb") as f:
+                presampled_task_paramss: np.ndarray = pickle.load(f)
         else:
-            presampled_train_problems = None
+            task_params = next(pool_multiple)  # sample once to get the shape
+            presampled_task_paramss = np.array([task_params])
+        assert presampled_task_paramss.ndim == 3
 
         logger.info("library sampler config: {}".format(config))
         return cls(
@@ -874,7 +865,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             sampler_state,
             device,
             ae_model if config.train_with_encoder else None,
-            presampled_train_problems,
+            presampled_task_paramss,
         )
 
     def step_active_sampling(self) -> bool:
@@ -1042,35 +1033,30 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         n_problem: int,
         profile_info: ProfileInfo,
     ) -> Union[IterationPredictorWithEncoder, IterationPredictor]:
-        pp = project_path
 
         ts_dataset = time.time()
 
         # NOTE: to my future self: you can't use presampled problems if you'd like to
         # sample tasks using some predicate!!
-        logger.info("generate {} tasks".format(n_problem))
-        predicated_pool = self.pool_multiple.as_predicated()
-        if self.presampled_train_problems is None:
-            problems = self.sampler.sample_batch(n_problem, predicated_pool)
-        else:
-            logger.debug("use presampled tasks")
-            if len(self.presampled_train_problems) < n_problem:
-                logger.info("presampled tasks are not enough. populate more")
-                n_problem - len(self.presampled_train_problems)
-                problems = self.sampler.sample_batch(n_problem, predicated_pool)
-                self.presampled_train_problems = np.concatenate(
-                    [self.presampled_train_problems, problems]
-                )
-            assert self.presampled_train_problems is None  # mypy, are you stupid?
-            assert len(self.presampled_train_problems) >= n_problem
-            problems = self.presampled_train_problems[:n_problem]
+        if len(self.presampled_tasks_paramss) < n_problem:
+            n_required = n_problem - len(self.presampled_tasks_paramss)
+            logger.info(
+                f"presampled {len(self.presampled_tasks_paramss)} problems are not enough. populate more: {n_required}"
+            )
+            predicated_pool = self.pool_multiple.as_predicated()
+            problems = self.sampler.sample_batch(n_required, predicated_pool)
+            self.presampled_tasks_paramss = np.concatenate(
+                [self.presampled_tasks_paramss, problems]
+            )
+            # save it to cache
+            presample_cache_path = project_path / self.presampled_cache_file_name
+            with presample_cache_path.open(mode="wb") as f:
+                pickle.dump(self.presampled_tasks_paramss, f)
+        assert len(self.presampled_tasks_paramss) >= n_problem
+        problems = self.presampled_tasks_paramss[:n_problem]
 
         logger.info("start generating dataset")
-        # create dataset. Dataset creation by a large problem set often causes
-        # memory error. To avoid this, we split the batch and process separately
-        # if len(problems) > n_tau.
         init_solutions = [init_solution] * len(problems)
-
         resultss = self.solver.solve_batch(
             problems,
             init_solutions,
@@ -1200,7 +1186,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         tcache = TrainCache.from_model(model)
 
         train(
-            pp,
+            project_path,
             tcache,
             dataset,
             self.config.train_config,
