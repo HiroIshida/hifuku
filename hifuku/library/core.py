@@ -868,6 +868,12 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             presampled_task_paramss,
         )
 
+    def setup_warmstart(
+        self, state: ActiveSamplerState, library: SolutionLibrary[ProblemT, ConfigT, ResultT]
+    ) -> None:
+        self.sampler_state = state
+        self.library = library
+
     def step_active_sampling(self) -> bool:
         """
         return False if failed

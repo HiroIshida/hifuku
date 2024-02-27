@@ -156,8 +156,9 @@ if __name__ == "__main__":
     )
 
     if warm_start:
-        lib_sampler.library = load_library(domain_name, "cuda", True, postfix=project_name_postfix)
-        lib_sampler.sampler_state = load_sampler_state(domain_name, postfix=project_name_postfix)
+        state = load_sampler_state(domain_name, postfix=project_name_postfix)
+        library = load_library(domain_name, "cuda", True, postfix=project_name_postfix)
+        lib_sampler.setup_warmstart(state, library)
         if use_pretrained_ae:
             assert lib_sampler.library.ae_model_shared is not None
         else:
