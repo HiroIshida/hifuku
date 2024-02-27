@@ -895,11 +895,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         prof_info.t_margin = time.time() - ts_margin
 
         if ret is None:
-            logger.info("determine margin failed. returning None")
-            elapsed_time = time.time() - ts
-            logger.info("elapsed time in active sampling: {} min".format(elapsed_time / 60.0))
-            logger.info("prof_info: {}".format(prof_info))
-            prof_info.t_total = elapsed_time
+            logger.info("no margin set could increase coverage. dont add anything to library")
             coverage_est = self.sampler_state.coverage_est_history[-1]
             self.sampler_state.failure_count += 1
         else:
@@ -907,17 +903,14 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             logger.info("margin for latest iterpred is {}".format(margins[-1]))
             logger.debug("determined margins {}".format(margins))
 
-            # update library
             self.library.predictors.append(predictor)
             self.library.init_solutions.append(init_solution)
             self.library.margins = margins
 
-            coverage_est = self.library.measure_coverage(self.problems_validation)  # double check
-            assert np.abs(coverage_est - coverage_est) < 1e-6  # doulbe check
-            prof_info.t_total = time.time() - ts
-
             self.sampler_state.coverage_results.append(coverage_result)
             self.sampler_state.margins_history.append(copy.deepcopy(margins))
+
+        prof_info.t_total = time.time() - ts
 
         self.sampler_state.elapsed_time_history.append(prof_info)
         self.sampler_state.coverage_est_history.append(coverage_est)
