@@ -7,13 +7,13 @@ import pytest
 import torch
 from mohou.trainer import TrainConfig
 
-from hifuku.domain import DomainProtocol, DummyDomain, DummyMeshDomain
-from hifuku.library import (
+from hifuku.core import (
     ActiveSamplerHistory,
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
 )
+from hifuku.domain import DomainProtocol, DummyDomain, DummyMeshDomain
 from hifuku.neuralnet import (
     AutoEncoderBase,
     AutoEncoderConfig,

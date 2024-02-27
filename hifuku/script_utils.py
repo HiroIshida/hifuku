@@ -11,8 +11,8 @@ import torch
 from mohou.trainer import TrainCache
 from mohou.utils import detect_device, log_package_version_info
 
+from hifuku.core import ActiveSamplerHistory, SolutionLibrary
 from hifuku.domain import DomainProtocol, select_domain
-from hifuku.library import ActiveSamplerHistory, SolutionLibrary
 from hifuku.neuralnet import AutoEncoderBase, AutoEncoderConfig, NullAutoEncoder
 
 logger = logging.getLogger(__name__)

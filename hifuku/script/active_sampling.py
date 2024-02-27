@@ -9,8 +9,8 @@ import torch
 import yaml
 from mohou.trainer import TrainConfig
 
+from hifuku.core import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.domain import select_domain
-from hifuku.library import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.neuralnet import (
     IterationPredictorWithEncoder,
     NeuralAutoEncoderBase,
