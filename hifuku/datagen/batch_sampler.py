@@ -109,14 +109,12 @@ class DistributeBatchProblemSampler(
 
     def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
         assert n_sample > 0
-
-        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
-        request_for_measure = SampleProblemRequest(self.n_measure_sample, pool, -1)
-        n_sample_table = self.create_gen_number_table(request_for_measure, n_sample)
+        n_sample_table = self.determine_assignment_per_server(n_sample)
 
         # NOTE: after commit 18c664f, process starts hang with forking.
         # spawn is slower than fork, but number of spawining processes is at most several
         # in this case, so it's almost no cost
+        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         ctx = multiprocessing.get_context(method="spawn")
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)

@@ -145,7 +145,7 @@ class DistributeBatchMarginsDeterminant(
     ) -> Sequence[Optional[DetermineMarginsResult]]:
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
-        n_sample_table = self.create_gen_number_table(None, n_sample)
+        n_sample_table = self.determine_assignment_per_server(n_sample)
 
         queue: Queue[Optional[DetermineMarginsResult]] = Queue()
         process_list = []

@@ -71,7 +71,7 @@ def split_number(num, div):
 
 class ClientBase(Generic[MainRequestT]):
     hostport_cpuinfo_map: Dict[HostPortPair, GetCPUInfoResponse]
-    perf_table: Optional[Dict[HostPortPair, float]] = None
+    perf_table: Dict[HostPortPair, float]
     n_measure_sample: int
     check_module_names: ClassVar[Tuple[str, ...]] = ("skplan", "voxbloxpy")
 
@@ -91,7 +91,6 @@ class ClientBase(Generic[MainRequestT]):
             hostport = (server.name, server.port)
             hostport_pairs.append(hostport)
             perf_table[hostport] = server.perf
-        # TODO: current implementation assume that perf is given
         self.perf_table = perf_table
 
         self.hostport_cpuinfo_map = self._init_get_cpu_infos(hostport_pairs, use_available_host)
@@ -143,16 +142,8 @@ class ClientBase(Generic[MainRequestT]):
             if not force_continue:
                 raise RuntimeError(message)
 
-    def create_gen_number_table(
-        self, request: Optional[MainRequestT], n_gen
-    ) -> Dict[HostPortPair, int]:
-        if self.perf_table is None:
-            assert request is not None
-            perf_table = self._measure_performance_of_each_server(request)
-            logger.info("performance table: {}".format(perf_table))
-        else:
-            perf_table = self.perf_table
-
+    def determine_assignment_per_server(self, n_gen: int) -> Dict[HostPortPair, int]:
+        perf_table = self.perf_table
         n_gen_table: Dict[HostPortPair, int] = {}
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         for hostport in hostport_pairs:

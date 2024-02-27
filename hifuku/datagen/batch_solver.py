@@ -309,23 +309,12 @@ class DistributedBatchProblemSolver(
     ) -> List[Tuple[ResultT, ...]]:
         logger.debug("use_default_solver: {}".format(use_default_solver))
 
-        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
-        task_paramss_measure = task_paramss[: self.n_measure_sample]
-        init_solutions_measure = init_solutions[: self.n_measure_sample]
-        request_for_measure = SolveProblemRequest(
-            task_paramss_measure,
-            self.solver_t,
-            self.config,
-            self.task_type,
-            init_solutions_measure,
-            -1,
-            use_default_solver,
-        )
         n_problem = len(task_paramss)
-        n_problem_table = self.create_gen_number_table(request_for_measure, n_problem)
+        n_problem_table = self.determine_assignment_per_server(n_problem)
         indices_list = split_indices(n_problem, list(n_problem_table.values()))
 
         # send request
+        hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             process_list = []
