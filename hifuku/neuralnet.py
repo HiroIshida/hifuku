@@ -76,10 +76,10 @@ class NullAutoEncoder(AutoEncoderBase):
 
 
 @dataclass
-class IterationPredictorDataset(Dataset):
+class CostPredictorDataset(Dataset):
     mesh_likes: Optional[torch.Tensor]
     descriptions: torch.Tensor
-    itervals: torch.Tensor
+    costs: torch.Tensor
     weights: torch.Tensor
     n_inner: int
     """
@@ -88,7 +88,7 @@ class IterationPredictorDataset(Dataset):
     """
 
     # TODO: __add__
-    def add(self, other: "IterationPredictorDataset") -> None:
+    def add(self, other: "CostPredictorDataset") -> None:
         import torch  # I don't know why but this is necessary if used in dill
 
         if self.mesh_likes is not None:
@@ -98,12 +98,12 @@ class IterationPredictorDataset(Dataset):
             assert other.mesh_likes is None
             mesh_likes = None
         descriptions = torch.vstack([self.descriptions, other.descriptions])
-        itervals = torch.hstack([self.itervals, other.itervals])
+        costs = torch.hstack([self.costs, other.costs])
         weights = torch.hstack([self.weights, other.weights])
 
         self.mesh_likes = mesh_likes
         self.descriptions = descriptions
-        self.itervals = itervals
+        self.costs = costs
         self.weights = weights
 
     @property
@@ -124,7 +124,7 @@ class IterationPredictorDataset(Dataset):
         return (
             mesh_like_here,
             self.descriptions[idx],
-            self.itervals[idx],
+            self.costs[idx],
             self.weights[idx],
         )
 
@@ -137,7 +137,7 @@ def create_dataset_from_paramss_and_resultss(
     weightss: Optional[Tensor],
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float = 2.0,
-) -> IterationPredictorDataset:
+) -> CostPredictorDataset:
 
     n_process = 6
     # use multiprocessing.
@@ -194,8 +194,8 @@ def _create_dataset_from_paramss_and_resultss(
     weightss: Optional[Tensor],
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float,
-) -> IterationPredictorDataset:
-    def get_clamped_iter(result) -> int:
+) -> CostPredictorDataset:
+    def get_clamped_cost(result) -> int:
         if result.traj is None:
             return int(solver_config.n_max_call * clamp_factor)
         return result.n_call
@@ -226,7 +226,7 @@ def _create_dataset_from_paramss_and_resultss(
                 assert len(vector_parts) > 0, "This should not happen"
 
                 vector_parts_torch = torch.from_numpy(np.array(vector_parts)).float()
-                costs = np.array([get_clamped_iter(r) for r in results])
+                costs = np.array([get_clamped_cost(r) for r in results])
                 costs_torch = torch.from_numpy(costs).float()
                 weights_torch = weights
 
@@ -259,7 +259,7 @@ def _create_dataset_from_paramss_and_resultss(
             assert weightss.ndim == 2
             weights = weightss.flatten()
             n_inner = vectorss.shape[1]
-            return IterationPredictorDataset(
+            return CostPredictorDataset(
                 mesh_likes,
                 vectors,
                 costs,
@@ -269,7 +269,7 @@ def _create_dataset_from_paramss_and_resultss(
 
 
 @dataclass
-class IterationPredictorConfig(ModelConfigBase):
+class CostPredictorConfig(ModelConfigBase):
     dim_task_descriptor: int
     dim_conv_bottleneck: int
     layers: Tuple[int, ...] = (500, 100, 100, 100, 50)
@@ -280,12 +280,12 @@ class IterationPredictorConfig(ModelConfigBase):
     classifier_threshold: Optional[float] = None
 
 
-class IterationPredictor(ModelBase[IterationPredictorConfig]):
+class CostPredictor(ModelBase[CostPredictorConfig]):
     linears: nn.Sequential
     description_expand_linears: Optional[nn.Sequential]
     initial_solution: Optional[Trajectory] = None
 
-    def _setup_from_config(self, config: IterationPredictorConfig) -> None:
+    def _setup_from_config(self, config: CostPredictorConfig) -> None:
         if config.as_classifier:
             assert config.classifier_threshold is not None
 
@@ -324,24 +324,24 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             descriptor = self.description_expand_linears(descriptor)
 
         vectors = torch.concat([mesh_features, descriptor], dim=1)
-        iter_pred = self.linears(vectors)
+        cost_pred = self.linears(vectors)
         solution_pred = None
-        return iter_pred, solution_pred
+        return cost_pred, solution_pred
 
     def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
-        mesh_encoded, descriptor, iterval, weight = sample
-        iter_pred, _ = self.forward((mesh_encoded, descriptor))
-        iter_pred = iter_pred.flatten()
+        mesh_encoded, descriptor, cost, weight = sample
+        cost_pred, _ = self.forward((mesh_encoded, descriptor))
+        cost_pred = cost_pred.flatten()
         if self.config.as_classifier:
-            classes = (iterval < self.config.classifier_threshold).float()
-            class_loss = nn.BCELoss()(iter_pred, classes)
+            classes = (cost < self.config.classifier_threshold).float()
+            class_loss = nn.BCELoss()(cost_pred, classes)
             dic = {"class": class_loss}
         else:
-            iterval = iterval.flatten()
+            cost = cost.flatten()
 
-            weihted_iter_loss = (iter_pred - iterval) ** 2 * weight
-            iter_loss = torch.mean(weihted_iter_loss)
-            dic = {"iter": iter_loss}
+            weihted_cost_loss = (cost_pred - cost) ** 2 * weight
+            cost_loss = torch.mean(weihted_cost_loss)
+            dic = {"cost": cost_loss}
         return LossDict(dic)
 
 
@@ -495,28 +495,28 @@ class PixelAutoEncoder(NeuralAutoEncoderBase):
 
 
 @dataclass
-class IterationPredictorWithEncoderConfig(ModelConfigBase):
+class CostPredictorWithEncoderConfig(ModelConfigBase):
     # A very bad design. but I don't have time. hahhahaha...
-    iterpred_model: IterationPredictor
+    costpred_model: CostPredictor
     ae_model: AutoEncoderBase
 
     def __post_init__(self):
         assert not isinstance(self.ae_model, NullAutoEncoder)
 
 
-class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfig]):
-    iterpred_model: IterationPredictor
+class CostPredictorWithEncoder(ModelBase[CostPredictorWithEncoderConfig]):
+    costpred_model: CostPredictor
     ae_model: AutoEncoderBase
 
     def put_on_device(self, device: Optional[torch.device] = None):
         super().put_on_device(device)
-        self.iterpred_model.put_on_device(device)
+        self.costpred_model.put_on_device(device)
 
         # NOTE: ae_model cannot be nullautoencoder thus we put type-ignore
         self.ae_model.put_on_device(device)  # type: ignore
 
-    def _setup_from_config(self, config: IterationPredictorWithEncoderConfig) -> None:
-        self.iterpred_model = config.iterpred_model
+    def _setup_from_config(self, config: CostPredictorWithEncoderConfig) -> None:
+        self.costpred_model = config.costpred_model
         self.ae_model = config.ae_model
 
     def forward_multi_inner(self, mesh: Tensor, descs: Tensor) -> Tensor:
@@ -524,42 +524,42 @@ class IterationPredictorWithEncoder(ModelBase[IterationPredictorWithEncoderConfi
         n_inner, _ = descs.shape
         encoded = self.ae_model.encode(mesh)
         encoded_repeated = encoded.repeat((n_inner, 1))
-        iters_pred, _ = self.iterpred_model.forward((encoded_repeated, descs))
-        return iters_pred
+        costs_pred, _ = self.costpred_model.forward((encoded_repeated, descs))
+        return costs_pred
 
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tensor:
         meshes, descs = sample
         encoded = self.ae_model.encode(meshes)
-        iters_pred, _ = self.iterpred_model.forward((encoded, descs))
-        iters_pred = iters_pred.flatten()
-        return iters_pred
+        costs_pred, _ = self.costpred_model.forward((encoded, descs))
+        costs_pred = costs_pred.flatten()
+        return costs_pred
 
     def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
-        meshes, descs, iters, weithtss = sample
-        iters_pred = self.forward((meshes, descs))
-        iters_pred = iters_pred.flatten()
-        iters = iters.flatten()
+        meshes, descs, costs, weithtss = sample
+        costs_pred = self.forward((meshes, descs))
+        costs_pred = costs_pred.flatten()
+        costs = costs.flatten()
 
-        weihted_iter_loss = (iters_pred - iters) ** 2 * weithtss.flatten()
-        iter_loss = torch.mean(weihted_iter_loss)
-        dic = {"iter": iter_loss}
+        weihted_cost_loss = (costs_pred - costs) ** 2 * weithtss.flatten()
+        cost_loss = torch.mean(weihted_cost_loss)
+        dic = {"cost": cost_loss}
         return LossDict(dic)
 
 
 @dataclass
-class FusingIterationPredictorConfig(ModelConfigBase):
+class FusingCostPredictorConfig(ModelConfigBase):  # don't use
     dim_vector_descriptor: int
     n_grid: int
 
 
-class FusingIterationPredictor(ModelBase[FusingIterationPredictorConfig]):
+class FusingCostPredictor(ModelBase[FusingCostPredictorConfig]):  # don't use
     ae_model: AutoEncoderBase
     conv_layers1: nn.Sequential
     fusing_layers: nn.Sequential
     conv_layers2: nn.Sequential
     linear_layers: nn.Sequential
 
-    def _setup_from_config(self, config: FusingIterationPredictorConfig) -> None:
+    def _setup_from_config(self, config: FusingCostPredictorConfig) -> None:
         assert config.n_grid == 56, "only 56 is supported now"
         conv_layers1 = nn.Sequential(
             *[
@@ -616,12 +616,12 @@ class FusingIterationPredictor(ModelBase[FusingIterationPredictorConfig]):
         return self.linear_layers(image).flatten()
 
     def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
-        image, vector, iters, weight = sample
-        iters_pred = self.forward((image, vector))
-        iters_pred = iters_pred.flatten()
-        iters = iters.flatten()
+        image, vector, costs, weight = sample
+        costs_pred = self.forward((image, vector))
+        costs_pred = costs_pred.flatten()
+        costs = costs.flatten()
 
-        weihted_iter_loss = (iters_pred - iters) ** 2 * weight
-        iter_loss = torch.mean(weihted_iter_loss)
-        dic = {"iter": iter_loss}
+        weihted_cost_loss = (costs_pred - costs) ** 2 * weight
+        cost_loss = torch.mean(weihted_cost_loss)
+        dic = {"cost": cost_loss}
         return LossDict(dic)

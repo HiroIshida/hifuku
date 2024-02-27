@@ -68,11 +68,11 @@ class BatchTaskSolver(Generic[ConfigT, ResultT], ABC):
     ) -> List[Tuple[ResultT, ...]]:
         """
         tmp_n_max_call_mult_factor is used to increase the n_max_call temporarily.
-        This is beneficiall when we want to train a iteration predictor such taht
+        This is beneficiall when we want to train a cost predictor such taht
         inference of n_call around n_max_call is accurate. Wihtout this, we will not
         have any data of n_call > n_max_call and the inference around there will be
         quite inaccurate. This technique is especially important for dataset genration
-        for iteration predictor of a randomized algorithm.
+        for cost predictor of a randomized algorithm.
         """
         # FIXME: dirty hack (A)
         # probably, making config be a function argument is cleaner

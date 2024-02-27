@@ -12,7 +12,7 @@ from mohou.trainer import TrainConfig
 from hifuku.core import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.domain import select_domain
 from hifuku.neuralnet import (
-    IterationPredictorWithEncoder,
+    CostPredictorWithEncoder,
     NeuralAutoEncoderBase,
     NullAutoEncoder,
     PixelAutoEncoder,
@@ -157,7 +157,7 @@ if __name__ == "__main__":
         else:
             assert lib_sampler.library.ae_model_shared is None
             predictor_pre = lib_sampler.library.predictors[-1]
-            assert isinstance(predictor_pre, IterationPredictorWithEncoder)
+            assert isinstance(predictor_pre, CostPredictorWithEncoder)
             assert isinstance(predictor_pre.ae_model, NeuralAutoEncoderBase)
             n_grid_pre = predictor_pre.ae_model.config.n_grid
             assert n_grid == n_grid_pre

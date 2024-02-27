@@ -11,10 +11,10 @@ from hifuku.datagen.batch_solver import MultiProcessBatchTaskSolver
 from hifuku.domain import DummyDomain, DummyMeshDomain
 from hifuku.neuralnet import (
     AutoEncoderConfig,
-    IterationPredictor,
-    IterationPredictorConfig,
-    IterationPredictorWithEncoder,
-    IterationPredictorWithEncoderConfig,
+    CostPredictor,
+    CostPredictorConfig,
+    CostPredictorWithEncoder,
+    CostPredictorWithEncoderConfig,
     PixelAutoEncoder,
     VoxelAutoEncoder,
     create_dataset_from_paramss_and_resultss,
@@ -27,19 +27,17 @@ def test_network():
     ae_config = AutoEncoderConfig()
     ae = VoxelAutoEncoder(ae_config, device=device)
 
-    # test iteration predictor
-    conf = IterationPredictorConfig(12, ae_config.dim_bottleneck, (10, 10, 10))
-    model1 = IterationPredictor(conf, device=device)
+    # test cost predictor
+    conf = CostPredictorConfig(12, ae_config.dim_bottleneck, (10, 10, 10))
+    model1 = CostPredictor(conf, device=device)
     assert len(model1.linears) == 3 * 3 + 1
 
-    conf = IterationPredictorConfig(
-        12, ae_config.dim_bottleneck, (10, 10, 10), use_batch_norm=False
-    )
-    model2 = IterationPredictor(conf, device=device)
+    conf = CostPredictorConfig(12, ae_config.dim_bottleneck, (10, 10, 10), use_batch_norm=False)
+    model2 = CostPredictor(conf, device=device)
     assert len(model2.linears) == 3 * 2 + 1
 
-    conf = IterationPredictorConfig(12, ae_config.dim_bottleneck, (5, 5, 5, 5))
-    model3 = IterationPredictor(conf, device=device)
+    conf = CostPredictorConfig(12, ae_config.dim_bottleneck, (5, 5, 5, 5))
+    model3 = CostPredictor(conf, device=device)
     assert len(model3.linears) == 3 * 4 + 1
 
     for model in [model1, model2, model3]:
@@ -159,20 +157,20 @@ def _test_training(domain, use_pretrained_ae: bool):
     train_config = TrainConfig(5, n_epoch=2)
     n_dof_desc = 2
 
-    conf = IterationPredictorConfig(n_dof_desc, ae_config.dim_bottleneck, (10, 10, 10))
-    iterpred_model = IterationPredictor(conf, device=device)
+    conf = CostPredictorConfig(n_dof_desc, ae_config.dim_bottleneck, (10, 10, 10))
+    costpred_model = CostPredictor(conf, device=device)
 
     if use_pretrained_ae:
         dataset = create_dataset_from_paramss_and_resultss(
             task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
         )
-        model = iterpred_model
+        model = costpred_model
     else:
         dataset = create_dataset_from_paramss_and_resultss(
             task_paramss, resultss, domain.solver_config, domain.task_type, None, None
         )
-        conf = IterationPredictorWithEncoderConfig(iterpred_model, ae)
-        model = IterationPredictorWithEncoder(conf, device=device)
+        conf = CostPredictorWithEncoderConfig(costpred_model, ae)
+        model = CostPredictorWithEncoder(conf, device=device)
 
     with TemporaryDirectory() as td:
         td_path = Path(td)

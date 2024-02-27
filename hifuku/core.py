@@ -43,10 +43,10 @@ from hifuku.datagen import (
 )
 from hifuku.neuralnet import (
     AutoEncoderBase,
-    IterationPredictor,
-    IterationPredictorConfig,
-    IterationPredictorWithEncoder,
-    IterationPredictorWithEncoderConfig,
+    CostPredictor,
+    CostPredictorConfig,
+    CostPredictorWithEncoder,
+    CostPredictorWithEncoderConfig,
     NullAutoEncoder,
     create_dataset_from_paramss_and_resultss,
 )
@@ -167,7 +167,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
     ae_model_shared: Optional[
         AutoEncoderBase
     ]  # if None, when each predictor does not share autoencoder
-    predictors: List[Union[IterationPredictor, IterationPredictorWithEncoder]]
+    predictors: List[Union[CostPredictor, CostPredictorWithEncoder]]
     init_solutions: List[Trajectory]
     margins: List[float]
     uuidval: str
@@ -178,14 +178,14 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         if self.ae_model_shared is not None:
             assert self.ae_model_shared.trained
             for pred in self.predictors:
-                assert isinstance(pred, IterationPredictor)
+                assert isinstance(pred, CostPredictor)
         else:
             for pred in self.predictors:
-                assert isinstance(pred, IterationPredictorWithEncoder)
+                assert isinstance(pred, CostPredictorWithEncoder)
 
     @dataclass
     class InferenceResult:
-        nit: float
+        cost: float
         idx: int  # index of selected solution in the library
         init_solution: Trajectory
 
@@ -225,18 +225,18 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         if self.ae_model_shared is not None:
             return self.ae_model_shared.get_device()
         else:
-            pred: IterationPredictorWithEncoder = self.predictors[0]  # type: ignore[assignment]
+            pred: CostPredictorWithEncoder = self.predictors[0]  # type: ignore[assignment]
             return pred.device
 
-    def _infer_iteration_num(self, task: TaskT) -> np.ndarray:
+    def _infer_cost(self, task: TaskT) -> np.ndarray:
         assert len(self.predictors) > 0
         has_shared_ae = self.ae_model_shared is not None
         if has_shared_ae:
-            return self._infer_iteration_num_with_shared_ae(task)
+            return self._infer_cost_with_shared_ae(task)
         else:
-            return self._infer_iteration_num_combined(task)
+            return self._infer_cost_combined(task)
 
-    def _infer_iteration_num_combined(self, task: TaskT) -> np.ndarray:
+    def _infer_cost_combined(self, task: TaskT) -> np.ndarray:
         # what the hell is this
         if self.limit_thread:
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
@@ -255,21 +255,21 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
             world_mat_torch = torch.from_numpy(world_mat_np).float().to(self.device)
             descs_torch = torch.from_numpy(vecs_np).float().to(self.device)
 
-        # these lines copied from _infer_iteration_num_with_shared_ae
-        itervals_list = []
+        # these lines copied from _infer_cost_with_shared_ae
+        costs_list = []
         for pred, margin in zip(self.predictors, self.margins):
-            assert isinstance(pred, IterationPredictorWithEncoder)
+            assert isinstance(pred, CostPredictorWithEncoder)
             # margin is for correcting the overestimated inference
-            itervals = pred.forward_multi_inner(world_mat_torch, descs_torch)  # type: ignore
-            itervals = itervals.squeeze(dim=1)
-            itervals_np = itervals.detach().cpu().numpy() + margin
-            itervals_list.append(itervals_np)
-        itervals_arr = np.array(itervals_list)
-        return itervals_arr
+            costs = pred.forward_multi_inner(world_mat_torch, descs_torch)  # type: ignore
+            costs = costs.squeeze(dim=1)
+            costs_np = costs.detach().cpu().numpy() + margin
+            costs_list.append(costs_np)
+        costs_arr = np.array(costs_list)
+        return costs_arr
 
-    def _infer_iteration_num_with_shared_ae(self, task: TaskT) -> np.ndarray:
+    def _infer_cost_with_shared_ae(self, task: TaskT) -> np.ndarray:
         """
-        itervals_arr: R^{n_solution, n_desc_inner}
+        costs_arr: R^{n_solution, n_desc_inner}
         """
         assert self.ae_model_shared is not None
 
@@ -318,69 +318,69 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         encoded: torch.Tensor = self.ae_model_shared.encode(world_mat_torch)
         encoded_repeated = encoded.repeat(n_batch, 1)
 
-        itervals_list = []
+        costs_list = []
         for pred, margin in zip(self.predictors, self.margins):
             # margin is for correcting the overestimated inference
-            itervals, _ = pred.forward((encoded_repeated, vecs_torch))
-            itervals = itervals.squeeze(dim=1)
-            itervals_np = itervals.detach().cpu().numpy() + margin
-            itervals_list.append(itervals_np)
-        itervals_arr = np.array(itervals_list)
-        return itervals_arr
+            costs, _ = pred.forward((encoded_repeated, vecs_torch))
+            costs = costs.squeeze(dim=1)
+            costs_np = costs.detach().cpu().numpy() + margin
+            costs_list.append(costs_np)
+        costs_arr = np.array(costs_list)
+        return costs_arr
 
     def infer(self, task: TaskT) -> List[InferenceResult]:
-        # itervals_aar: R^{n_task_inner, n_elem_in_lib}
-        itervals_arr = self._infer_iteration_num(task)
+        # costs_aar: R^{n_task_inner, n_elem_in_lib}
+        costs_arr = self._infer_cost(task)
 
         # nits_min: R^{n_desc_inner}
-        nits_min = np.min(itervals_arr, axis=0)
+        costs_min = np.min(costs_arr, axis=0)
 
         # indices_min: R^{n_desc_inner}
-        indices_min = np.argmin(itervals_arr, axis=0)
+        indices_min = np.argmin(costs_arr, axis=0)
 
         result_list = []
-        for nit, idx in zip(nits_min, indices_min):
+        for cost, idx in zip(costs_min, indices_min):
             init_solution = self.init_solutions[idx]
             assert init_solution is not None
-            res = self.InferenceResult(nit, idx, init_solution)
+            res = self.InferenceResult(cost, idx, init_solution)
             result_list.append(res)
         return result_list
 
-    def success_iter_threshold(self) -> float:
+    def cost_threshold(self) -> float:
         return self.solver_config.n_max_call
 
     def measure_full_coverage(
         self, task_paramss: np.ndarray, solver: BatchTaskSolver
     ) -> RealEstAggregate:
         logger.info("**compute est values")
-        iterval_est_list = []
+        cost_est_list = []
         init_solutions_est_list = []
         for task_params in tqdm.tqdm(task_paramss):
             task = self.task_type.from_task_params(task_params)
             infer_results = self.infer(task)
-            iterval_est_list.extend([res.nit for res in infer_results])  # NOTE: flatten!
+            cost_est_list.extend([res.cost for res in infer_results])  # NOTE: flatten!
             init_solutions_est_list.append([res.init_solution for res in infer_results])
         logger.info("**compute real values")
 
         resultss = solver.solve_batch(task_paramss, init_solutions_est_list)  # type: ignore
 
-        iterval_real_list = []
+        cost_real_list = []
         for results in resultss:
             for result in results:
                 if result.traj is None:
-                    iterval_real_list.append(np.inf)
+                    cost_real_list.append(np.inf)
                 else:
-                    iterval_real_list.append(result.n_call)
+                    cost_real_list.append(result.n_call)
 
-        success_iter = self.success_iter_threshold()
+        success_cost = self.cost_threshold()
         aggregate = RealEstAggregate(
-            np.array(iterval_real_list), np.array(iterval_est_list), success_iter
+            np.array(cost_real_list), np.array(cost_est_list), success_cost
         )
         logger.info(aggregate)
         return aggregate
 
     def measure_coverage(self, task_paramss: np.ndarray) -> float:
-        threshold = self.success_iter_threshold()
+        threshold = self.cost_threshold()
         total_count = 0
         success_count = 0
         for task_params in task_paramss:
@@ -388,7 +388,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
             infer_res_list = self.infer(task)
             for infer_res in infer_res_list:
                 total_count += 1
-                if infer_res.nit < threshold:
+                if infer_res.cost < threshold:
                     success_count += 1
         return success_count / total_count
 
@@ -621,10 +621,8 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[TaskT, ConfigT, Result
         assert len(inference_results) == 1
         inference_result = inference_results[0]
 
-        seems_infeasible = inference_result.nit > self.library.success_iter_threshold()
-        self._loginfo_fun(
-            f"nit {inference_result.nit}: the {self.library.success_iter_threshold()}"
-        )
+        seems_infeasible = inference_result.cost > self.library.cost_threshold()
+        self._loginfo_fun(f"nit {inference_result.cost}: the {self.library.cost_threshold()}")
         if seems_infeasible:
             self._logwarn_fun("seems infeasible")
             result_type = self.solver.get_result_type()
@@ -658,8 +656,8 @@ class LibraryBasedHeuristicSolver(LibraryBasedSolverBase[TaskT, ConfigT, ResultT
 class DifficultTaskPredicate(Generic[TaskT, ConfigT, ResultT]):
     task_type: Type[TaskT]
     library: SolutionLibrary[TaskT, ConfigT, ResultT]
-    th_min_iter: float
-    th_max_iter: Optional[float] = None
+    th_min_cost: float
+    th_max_cost: Optional[float] = None
 
     def __post_init__(self):
         # note: library must be put on cpu
@@ -670,13 +668,13 @@ class DifficultTaskPredicate(Generic[TaskT, ConfigT, ResultT]):
     def __call__(self, task: TaskT) -> bool:
         assert task.n_inner_task == 1
         infer_res = self.library.infer(task)[0]
-        iterval = infer_res.nit
-        if iterval < self.th_min_iter:
+        cost = infer_res.cost
+        if cost < self.th_min_cost:
             return False
-        if self.th_max_iter is None:
+        if self.th_max_cost is None:
             return True
         else:
-            return iterval < self.th_max_iter
+            return cost < self.th_max_cost
 
 
 @dataclass
@@ -699,7 +697,7 @@ class LibrarySamplerConfig:
     sample_from_difficult_region: bool = True
     train_config: TrainConfig = TrainConfig()
     ignore_useless_traj: bool = True
-    iterpred_model_config: Optional[Dict] = None
+    costpred_model_config: Optional[Dict] = None
     n_validation: int = 10000
     n_validation_inner: int = 1
     n_optimize_margin_batch: int = 2000
@@ -906,7 +904,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             self.sampler_history.failure_count += 1
         else:
             margins, aggregate, coverage_est = ret
-            logger.info("margin for latest iterpred is {}".format(margins[-1]))
+            logger.info("margin for latest costpred is {}".format(margins[-1]))
             logger.debug("determined margins {}".format(margins))
 
             self.library.predictors.append(predictor)
@@ -956,12 +954,12 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         return True
 
     @property
-    def difficult_iter_threshold(self) -> float:
+    def difficult_cost_threshold(self) -> float:
         return self.library.solver_config.n_max_call
 
     def _determine_margins(
         self,
-        predictor: Union[IterationPredictorWithEncoder, IterationPredictor],
+        predictor: Union[CostPredictorWithEncoder, CostPredictor],
         init_solution: Trajectory,
     ) -> Optional[Tuple[List[float], RealEstAggregate, float]]:
         # TODO: move this whole "adjusting" operation to a different method
@@ -1029,7 +1027,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         project_path: Path,
         n_task: int,
         profile_info: ProfileInfo,
-    ) -> Union[IterationPredictorWithEncoder, IterationPredictor]:
+    ) -> Union[CostPredictorWithEncoder, CostPredictor]:
 
         ts_dataset = time.time()
 
@@ -1099,7 +1097,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                     return np.inf
 
             this_nitss = torch.tensor([[res_to_nit(r) for r in results] for results in resultss])
-            solved_by_this = this_nitss < self.library.success_iter_threshold()
+            solved_by_this = this_nitss < self.library.cost_threshold()
             logger.info(f"rate of solved by this: {torch.sum(solved_by_this) / n_total}")
 
             # compute if each task is difficult or not
@@ -1108,7 +1106,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 infer_nitss = torch.tensor(
                     [[e.nit for e in infer_results] for infer_results in infer_resultss]
                 )
-                unsolvable_yet = infer_nitss > self.library.success_iter_threshold()
+                unsolvable_yet = infer_nitss > self.library.cost_threshold()
                 logger.info(f"rate of unsolvable yet: {torch.sum(unsolvable_yet) / n_total}")
             else:
                 unsolvable_yet = torch.ones(len(tasks), tasks[0].n_inner_task, dtype=bool)
@@ -1157,27 +1155,25 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             assert self.library.ae_model_shared is not None
             n_bottleneck = self.library.ae_model_shared.n_bottleneck
 
-        if self.config.iterpred_model_config is not None:
-            iterpred_model_conf = IterationPredictorConfig(
-                n_dim_vector_description, n_bottleneck, **self.config.iterpred_model_config
+        if self.config.costpred_model_config is not None:
+            costpred_model_conf = CostPredictorConfig(
+                n_dim_vector_description, n_bottleneck, **self.config.costpred_model_config
             )
         else:
-            iterpred_model_conf = IterationPredictorConfig(n_dim_vector_description, n_bottleneck)
+            costpred_model_conf = CostPredictorConfig(n_dim_vector_description, n_bottleneck)
 
         if self.train_pred_with_encoder:
             assert self.ae_model_pretrained is not None
-            iterpred_model = IterationPredictor(iterpred_model_conf, self.device)
+            costpred_model = CostPredictor(costpred_model_conf, self.device)
             ae_model_pretrained = copy.deepcopy(self.ae_model_pretrained)
-            ae_model_pretrained.put_on_device(iterpred_model.device)
+            ae_model_pretrained.put_on_device(costpred_model.device)
             assert not isinstance(ae_model_pretrained, NullAutoEncoder)
             # the right above assertion ensure that ae_model_pretrained has a device...
-            assert iterpred_model.device == ae_model_pretrained.device  # type: ignore[attr-defined]
-            conf = IterationPredictorWithEncoderConfig(iterpred_model, ae_model_pretrained)
-            model: Union[
-                IterationPredictorWithEncoder, IterationPredictor
-            ] = IterationPredictorWithEncoder(conf)
+            assert costpred_model.device == ae_model_pretrained.device  # type: ignore[attr-defined]
+            conf = CostPredictorWithEncoderConfig(costpred_model, ae_model_pretrained)
+            model: Union[CostPredictorWithEncoder, CostPredictor] = CostPredictorWithEncoder(conf)
         else:
-            model = IterationPredictor(iterpred_model_conf, self.device)
+            model = CostPredictor(costpred_model_conf, self.device)
 
         tcache = TrainCache.from_model(model)
 
@@ -1206,15 +1202,15 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             pred_bit_difficult = DifficultTaskPredicate(
                 task_pool.task_type,
                 self.library,
-                self.difficult_iter_threshold,
-                self.difficult_iter_threshold * 1.2,
+                self.difficult_cost_threshold,
+                self.difficult_cost_threshold * 1.2,
             )
             predicated_pool_bit_difficult = task_pool.make_predicated(pred_bit_difficult, 40)
 
             # but, we also need to sample from far-boundary because some of the possible
             # feasible regions are disjoint from the ones obtained so far
             pred_difficult = DifficultTaskPredicate(
-                task_pool.task_type, self.library, self.difficult_iter_threshold, None
+                task_pool.task_type, self.library, self.difficult_cost_threshold, None
             )
             predicated_pool_difficult = task_pool.make_predicated(pred_difficult, 40)
         else:
@@ -1274,8 +1270,8 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 assert task_params.shape[0] == 1  # inner task is 1
                 task = self.task_type.from_task_params(task_params)
                 infer_res = self.library.infer(task)[0]
-                iterval = infer_res.nit
-                is_difficult = iterval > self.difficult_iter_threshold
+                cost = infer_res.cost
+                is_difficult = cost > self.difficult_cost_threshold
                 if is_difficult:
                     logger.debug("sampled! number: {}".format(len(difficult_params_list)))
                     difficult_params_list.append(task_params)
