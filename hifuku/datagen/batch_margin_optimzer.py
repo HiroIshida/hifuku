@@ -8,11 +8,11 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 import threadpoolctl
 
-from hifuku.coverage import DetermineMarginsResult, RealEstAggregate, determine_margins
+from hifuku.coverage import OptimizeMarginsResult, RealEstAggregate, optimize_margins
 from hifuku.datagen.http_datagen.client import ClientBase
 from hifuku.datagen.http_datagen.request import (
-    DetermineMarginsRequest,
-    DetermineMarginsResponse,
+    OptimizeMarginsRequest,
+    OptimizeMarginsResponse,
     http_connection,
     send_request,
 )
@@ -25,9 +25,9 @@ HostPortPair = Tuple[str, int]
 
 
 @dataclass
-class BatchMarginsDeterminant(ABC):
+class BatchMarginsOptimizerBase(ABC):
     @abstractmethod
-    def determine_batch(
+    def optimize_batch(
         self,
         n_sample: int,
         aggregate_list: List[RealEstAggregate],
@@ -36,11 +36,11 @@ class BatchMarginsDeterminant(ABC):
         cma_sigma: float,
         margins_guess: Optional[np.ndarray] = None,
         minimum_coverage: Optional[float] = None,
-    ) -> Sequence[Optional[DetermineMarginsResult]]:
+    ) -> Sequence[Optional[OptimizeMarginsResult]]:
         ...
 
 
-class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
+class MultiProcesBatchMarginsOptimizer(BatchMarginsOptimizerBase):
     n_process: int
     n_thread: int
 
@@ -71,7 +71,7 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             for _ in range(n_sample):
-                ret = determine_margins(
+                ret = optimize_margins(
                     aggregate_list,
                     threshold,
                     target_fp_rate,
@@ -81,7 +81,7 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
                 )
                 queue.put(ret)
 
-    def determine_batch(
+    def optimize_batch(
         self,
         n_sample: int,
         aggregate_list: List[RealEstAggregate],
@@ -90,12 +90,12 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
         cma_sigma: float,
         margins_guess: Optional[np.ndarray] = None,
         minimum_coverage: Optional[float] = None,
-    ) -> Sequence[Optional[DetermineMarginsResult]]:
+    ) -> Sequence[Optional[OptimizeMarginsResult]]:
 
         ctx = get_context(method="fork")
         n_sample_list = split_number(n_sample, self.n_process)
         process_list = []
-        queue: Queue[Optional[DetermineMarginsResult]] = Queue()
+        queue: Queue[Optional[OptimizeMarginsResult]] = Queue()
 
         for idx_process, n_sample_part in enumerate(n_sample_list):
             args = (
@@ -113,27 +113,27 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
             process_list.append(p)
 
         # the result is margins, coverage, fprate order
-        result_list: List[Optional[DetermineMarginsResult]] = [queue.get() for _ in range(n_sample)]
+        result_list: List[Optional[OptimizeMarginsResult]] = [queue.get() for _ in range(n_sample)]
         for p in process_list:
             p.join()
         return result_list
 
 
-class DistributeBatchMarginsDeterminant(
-    ClientBase[DetermineMarginsRequest], BatchMarginsDeterminant
+class DistributeBatchMarginsOptimizer(
+    ClientBase[OptimizeMarginsRequest], BatchMarginsOptimizerBase
 ):
     @staticmethod  # called only in generate
     def send_and_recive_and_put(
-        hostport: HostPortPair, request: DetermineMarginsRequest, queue: Queue
+        hostport: HostPortPair, request: OptimizeMarginsRequest, queue: Queue
     ) -> None:
         logger.debug("send_and_recive_and_put called on pid: {}".format(os.getpid()))
         with http_connection(*hostport) as conn:
-            response: DetermineMarginsResponse = send_request(conn, request)  # type: ignore
+            response: OptimizeMarginsResponse = send_request(conn, request)  # type: ignore
         for result in response.results:
             queue.put(result)
         logger.debug("send_and_recive_and_put finished on pid: {}".format(os.getpid()))
 
-    def determine_batch(
+    def optimize_batch(
         self,
         n_sample: int,
         aggregate_list: List[RealEstAggregate],
@@ -142,18 +142,18 @@ class DistributeBatchMarginsDeterminant(
         cma_sigma: float,
         margins_guess: Optional[np.ndarray] = None,
         minimum_coverage: Optional[float] = None,
-    ) -> Sequence[Optional[DetermineMarginsResult]]:
+    ) -> Sequence[Optional[OptimizeMarginsResult]]:
 
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         n_sample_table = self.determine_assignment_per_server(n_sample)
 
-        queue: Queue[Optional[DetermineMarginsResult]] = Queue()
+        queue: Queue[Optional[OptimizeMarginsResult]] = Queue()
         process_list = []
         for hostport in hostport_pairs:
             n_sample_part = n_sample_table[hostport]
             if n_sample_part > 0:
                 n_process = self.hostport_cpuinfo_map[hostport].n_cpu
-                req = DetermineMarginsRequest(
+                req = OptimizeMarginsRequest(
                     n_sample_part,
                     n_process,
                     aggregate_list,
@@ -169,7 +169,7 @@ class DistributeBatchMarginsDeterminant(
                 process_list.append(p)
 
         # the result is margins, coverage, fprate order
-        result_list: List[Optional[DetermineMarginsResult]] = [queue.get() for _ in range(n_sample)]
+        result_list: List[Optional[OptimizeMarginsResult]] = [queue.get() for _ in range(n_sample)]
 
         for p in process_list:
             p.join()

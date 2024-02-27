@@ -1,9 +1,9 @@
 # flake8: noqa
 
-from hifuku.datagen.batch_margin_determiant import (
-    BatchMarginsDeterminant,
-    DistributeBatchMarginsDeterminant,
-    MultiProcesBatchMarginsDeterminant,
+from hifuku.datagen.batch_margin_optimzer import (
+    BatchMarginsOptimizerBase,
+    DistributeBatchMarginsOptimizer,
+    MultiProcesBatchMarginsOptimizer,
 )
 from hifuku.datagen.batch_sampler import (
     BatchTaskSampler,

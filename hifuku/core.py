@@ -31,13 +31,13 @@ from skmp.trajectory import Trajectory
 
 from hifuku.coverage import RealEstAggregate
 from hifuku.datagen import (
-    BatchMarginsDeterminant,
+    BatchMarginsOptimizerBase,
     BatchTaskSampler,
     BatchTaskSolver,
-    DistributeBatchMarginsDeterminant,
+    DistributeBatchMarginsOptimizer,
     DistributeBatchTaskSampler,
     DistributedBatchTaskSolver,
-    MultiProcesBatchMarginsDeterminant,
+    MultiProcesBatchMarginsOptimizer,
     MultiProcessBatchTaskSampler,
     MultiProcessBatchTaskSolver,
 )
@@ -703,7 +703,7 @@ class LibrarySamplerConfig:
     iterpred_model_config: Optional[Dict] = None
     n_validation: int = 10000
     n_validation_inner: int = 1
-    n_determine_batch: int = 2000
+    n_optimize_margin_batch: int = 2000
     candidate_sample_scale: int = 4
     train_with_encoder: bool = False
     tmp_n_max_call_mult_factor: float = 1.5
@@ -723,7 +723,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
     tasks_validation: np.ndarray
     solver: BatchTaskSolver
     sampler: BatchTaskSampler
-    determinant: BatchMarginsDeterminant
+    margin_optimizer: BatchMarginsOptimizerBase
     test_false_positive_rate: bool
     project_path: Path
     sampler_history: ActiveSamplerHistory
@@ -789,7 +789,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         )
         sampler_state = ActiveSamplerHistory(config.sampling_number_factor)
 
-        # setup solver, sampler, determinant
+        # setup solver, sampler, optimizer
         if solver is None:
             solver = (
                 DistributedBatchTaskSolver(
@@ -806,10 +806,10 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             sampler = (
                 DistributeBatchTaskSampler() if use_distributed else MultiProcessBatchTaskSampler()
             )
-        determinant = (
-            DistributeBatchMarginsDeterminant()
+        margin_optimizer = (
+            DistributeBatchMarginsOptimizer()
             if use_distributed
-            else MultiProcesBatchMarginsDeterminant()
+            else MultiProcesBatchMarginsOptimizer()
         )
 
         # setup pools
@@ -859,7 +859,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             tasks_validation,
             solver,
             sampler,
-            determinant,
+            margin_optimizer,
             test_false_positive_rate,
             project_path,
             sampler_state,
@@ -987,8 +987,8 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             cma_std = self.solver_config.n_max_call * 0.5
             coverages_new = self.sampler_history.aggregate_list + [aggregate]
             coverage_est_last = self.sampler_history.coverage_est_history[-1]
-            results = self.determinant.determine_batch(
-                self.config.n_determine_batch,
+            results = self.margin_optimizer.optimize_batch(
+                self.config.n_optimize_margin_batch,
                 coverages_new,
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,

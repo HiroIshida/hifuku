@@ -124,7 +124,7 @@ class RealEstAggregate:
 
 
 @dataclass
-class DetermineMarginsResult:
+class OptimizeMarginsResult:
     best_margins: List[float]
     coverage: float
     fprate: float
@@ -157,14 +157,14 @@ def compute_coverage_and_fp_jit(
     return coverage_rate, fp_rate
 
 
-def determine_margins(
+def optimize_margins(
     aggregate_list: List[RealEstAggregate],
     threshold: float,
     target_fp_rate: float,
     cma_sigma: float,
     margins_guess: Optional[np.ndarray] = None,
     minimum_coverage: Optional[float] = None,
-) -> Optional[DetermineMarginsResult]:
+) -> Optional[OptimizeMarginsResult]:
 
     target_fp_rate_modified = target_fp_rate - 1e-3  # because penalty method is not tight
     logger.debug("target fp_rate modified: {}".format(target_fp_rate_modified))
@@ -214,7 +214,7 @@ def determine_margins(
     logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
     if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate:
         logger.info("cma result accepted")
-        return DetermineMarginsResult(list(best_margins), coverage_est_cand, fp_rate_cand)
+        return OptimizeMarginsResult(list(best_margins), coverage_est_cand, fp_rate_cand)
     else:
         logger.info("cma result rejected. Returning None")
         return None

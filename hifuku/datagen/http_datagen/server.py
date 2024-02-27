@@ -8,17 +8,17 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from skmp.solver.interface import ConfigT, ResultT
 
 from hifuku.datagen import (
-    MultiProcesBatchMarginsDeterminant,
+    MultiProcesBatchMarginsOptimizer,
     MultiProcessBatchTaskSampler,
     MultiProcessBatchTaskSolver,
 )
 from hifuku.datagen.http_datagen.request import (
-    DetermineMarginsRequest,
-    DetermineMarginsResponse,
     GetCPUInfoRequest,
     GetCPUInfoResponse,
     GetModuleHashValueRequest,
     GetModuleHashValueResponse,
+    OptimizeMarginsRequest,
+    OptimizeMarginsResponse,
     Response,
     SampleTaskRequest,
     SampleTaskResponse,
@@ -89,12 +89,12 @@ class PostHandler(BaseHTTPRequestHandler):
         return resp
 
     def process_DetermineMarginsRequest(
-        self, request: DetermineMarginsRequest
-    ) -> DetermineMarginsResponse:
+        self, request: OptimizeMarginsRequest
+    ) -> OptimizeMarginsResponse:
         ts = time.time()
         logging.info("request: {}".format(request))
-        determinant = MultiProcesBatchMarginsDeterminant(request.n_process)
-        results = determinant.determine_batch(
+        optimizer = MultiProcesBatchMarginsOptimizer(request.n_process)
+        results = optimizer.optimize_batch(
             request.n_sample,
             request.aggregate_list,
             request.threshold,
@@ -104,7 +104,7 @@ class PostHandler(BaseHTTPRequestHandler):
             request.minimum_coverage,
         )
         elapsed_time = time.time() - ts
-        resp = DetermineMarginsResponse(results, elapsed_time)
+        resp = OptimizeMarginsResponse(results, elapsed_time)
         return resp
 
     def do_POST(self):
@@ -125,7 +125,7 @@ class PostHandler(BaseHTTPRequestHandler):
             resp = self.process_SolveTaskRequest(request)
         elif isinstance(request, SampleTaskRequest):
             resp = self.process_SampleTaskRequest(request)
-        elif isinstance(request, DetermineMarginsRequest):
+        elif isinstance(request, OptimizeMarginsRequest):
             resp = self.process_DetermineMarginsRequest(request)
         else:
             assert False, "request {} is not supported".format(type(request))

@@ -9,7 +9,7 @@ from typing import Generic, List, Optional, Sequence, Tuple, Type, TypeVar, over
 import numpy as np
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 
-from hifuku.coverage import DetermineMarginsResult, RealEstAggregate
+from hifuku.coverage import OptimizeMarginsResult, RealEstAggregate
 from hifuku.pool import PredicatedTaskPool, TaskT
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ class SampleTaskResponse(MainResponse):
 
 
 @dataclass
-class DetermineMarginsRequest(MainRequest):
+class OptimizeMarginsRequest(MainRequest):
     n_sample: int
     n_process: int
     aggregate_list: List[RealEstAggregate]
@@ -131,8 +131,8 @@ class DetermineMarginsRequest(MainRequest):
 
 
 @dataclass
-class DetermineMarginsResponse(MainResponse):
-    results: Sequence[Optional[DetermineMarginsResult]]
+class OptimizeMarginsResponse(MainResponse):
+    results: Sequence[Optional[OptimizeMarginsResult]]
     elapsed_time: float
 
 
