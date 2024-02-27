@@ -12,7 +12,6 @@ install_requires = [
     "threadpoolctl",
     "cmaes",
     "numba",
-    "dill",
 ]
 
 setup(

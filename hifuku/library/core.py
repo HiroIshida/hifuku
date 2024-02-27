@@ -51,7 +51,6 @@ from hifuku.neuralnet import (
     create_dataset_from_paramss_and_resultss,
 )
 from hifuku.pool import ProblemPool, ProblemT
-from hifuku.types import get_clamped_iter
 from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
@@ -368,7 +367,10 @@ class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
         iterval_real_list = []
         for results in resultss:
             for result in results:
-                iterval_real_list.append(get_clamped_iter(result, self.solver_config))
+                if result.traj is None:
+                    iterval_real_list.append(np.inf)
+                else:
+                    iterval_real_list.append(result.n_call)
 
         success_iter = self.success_iter_threshold()
         coverage_result = CoverageResult(
@@ -705,6 +707,10 @@ class LibrarySamplerConfig:
     candidate_sample_scale: int = 4
     train_with_encoder: bool = False
     tmp_n_max_call_mult_factor: float = 1.5
+    clamp_factor: float = 2.0
+
+    def __post_init__(self):
+        assert self.tmp_n_max_call_mult_factor <= self.clamp_factor
 
 
 @dataclass
@@ -1140,6 +1146,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             self.problem_type,
             weights,
             self.library.ae_model_shared,
+            self.config.clamp_factor,
         )
 
         profile_info.t_dataset = time.time() - ts_dataset

@@ -20,7 +20,6 @@ from hifuku.neuralnet import (
     PixelAutoEncoder,
 )
 from hifuku.script_utils import create_default_logger
-from hifuku.types import _CLAMP_FACTOR
 
 
 def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encoder: bool):
@@ -40,8 +39,8 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
         n_determine_batch=50,
         n_validation=1000,
         n_validation_inner=1,
+        clamp_factor=1.5,
     )
-    _CLAMP_FACTOR[0] = 1.5
 
     test_devices = [torch.device("cpu")]
     if torch.cuda.is_available():

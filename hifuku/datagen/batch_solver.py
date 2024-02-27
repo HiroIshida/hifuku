@@ -25,7 +25,6 @@ from hifuku.datagen.http_datagen.request import (
     send_request,
 )
 from hifuku.datagen.utils import split_indices
-from hifuku.types import _CLAMP_FACTOR
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +77,6 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         """
         # FIXME: dirty hack (A)
         # probably, making config be a function argument is cleaner
-
-        # if mult_factor is greater than _CLAMP_FACTOR, then the infeasible problem will be
-        # treated as "easier" problem than feasible problem. so...
-        assert tmp_n_max_call_mult_factor <= _CLAMP_FACTOR[0]
 
         n_max_call_original = self.config.n_max_call
         self.config.n_max_call = int(n_max_call_original * tmp_n_max_call_mult_factor)

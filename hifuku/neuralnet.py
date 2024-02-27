@@ -13,7 +13,7 @@ import torch.nn as nn
 import tqdm
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
 from rpbench.interface import TaskBase
-from skmp.solver.interface import ResultProtocol
+from skmp.solver.interface import ConfigProtocol, ResultProtocol
 from skmp.trajectory import Trajectory
 from torch import Tensor
 from torch.utils.data import Dataset
@@ -136,6 +136,7 @@ def create_dataset_from_paramss_and_resultss(
     task_type: Type[TaskBase],
     weightss: Optional[Tensor],
     ae_model: Optional[AutoEncoderBase],
+    clamp_factor: float = 2.0,
 ) -> IterationPredictorDataset:
 
     n_process = 6
@@ -171,6 +172,7 @@ def create_dataset_from_paramss_and_resultss(
                     task_type,
                     weights,
                     ae_model_copied,
+                    clamp_factor,
                 )
                 for task_params, results, weights in zip(
                     task_paramss_list, resultss_list, weightss_list
@@ -184,17 +186,19 @@ def create_dataset_from_paramss_and_resultss(
     return dataset
 
 
-def _create_dataset_from_paramss_and_resultss(  # used in Multiprocessing
+def _create_dataset_from_paramss_and_resultss(
     task_paramss: np.ndarray,
     resultss,
-    solver_config,
+    solver_config: ConfigProtocol,
     task_type: Type[TaskBase],
     weightss: Optional[Tensor],
     ae_model: Optional[AutoEncoderBase],
-    batch_size: int = 500,
+    clamp_factor: float,
 ) -> IterationPredictorDataset:
-
-    from hifuku.types import get_clamped_iter
+    def get_clamped_iter(result) -> int:
+        if result.traj is None:
+            return int(solver_config.n_max_call * clamp_factor)
+        return result.n_call
 
     with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
         with num_torch_thread(1):
@@ -222,7 +226,7 @@ def _create_dataset_from_paramss_and_resultss(  # used in Multiprocessing
                 assert len(vector_parts) > 0, "This should not happen"
 
                 vector_parts_torch = torch.from_numpy(np.array(vector_parts)).float()
-                costs = np.array([get_clamped_iter(r, solver_config) for r in results])
+                costs = np.array([get_clamped_iter(r) for r in results])
                 costs_torch = torch.from_numpy(costs).float()
                 weights_torch = weights
 
