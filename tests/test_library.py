@@ -1,4 +1,5 @@
 import tempfile
+import time
 from pathlib import Path
 from typing import Type
 
@@ -65,24 +66,44 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
 
             # main test
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
+            ts = time.time()
             lib_sampler.step_active_sampling()
             lib_sampler.step_active_sampling()
-            time.time() - ts
-            # assert lib_sampler.sampler_history
+            elapsed = time.time() - ts
+            assert (
+                abs(lib_sampler.sampler_history.total_time - elapsed) < 1.0
+            )  # sec. might depend on testing environment...
             coverage = lib_sampler.sampler_history.coverage_est_history[-1]
-            assert coverage > 0.3  # dummy domain specific
+            # as dummy domain is easy, 0.3 should be satisfied (but might not in quite small probability)
+            assert coverage > 0.3, f"coverage={coverage}"
 
             # test warm start
             lib = SolutionLibrary.load(td_path, problem_type, solver_type, device=device)[0]
             state = ActiveSamplerHistory.load(td_path)
-            assert len(state.coverage_est_history) == 2
+            assert state.total_iter == 2
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
             lib_sampler.setup_warmstart(state, lib)
+            time.sleep(2.0)  # for checking total_time
             assert len(lib_sampler.presampled_tasks_paramss) > 0, "presampled tasks are not loaded"
+            ts = time.time()
             lib_sampler.step_active_sampling()
+            elpased_warm = time.time() - ts + elapsed
+            assert (
+                abs(lib_sampler.sampler_history.total_time - elpased_warm) < 1.0
+            )  # sec. might depend on testing environment...
+            assert lib_sampler.sampler_history.total_iter == 3
+
             coverage_after_warm = lib_sampler.sampler_history.coverage_est_history[-1]
             assert coverage_after_warm > coverage, "presumably warm start did not work"
-            assert coverage_after_warm > 0.5  # dummy domain specific
+            # as dummy domain is easy, 0.5 should be satisfied (but might not in quite small probability)
+            assert coverage_after_warm > 0.5, f"coverage_after_warm={coverage_after_warm}"
+
+            # test coverage estimation's consistency
+            # diff = (
+            #     lib_sampler.library.measure_coverage(lib_sampler.problems_validation)
+            #     - coverage_after_warm
+            # )
+            # assert abs(diff) < 1e-6, f"diff={diff}"
 
 
 def test_SolutionLibrarySampler():

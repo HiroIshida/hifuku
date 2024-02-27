@@ -143,6 +143,14 @@ class ActiveSamplerHistory:
         state.check_consistency()
         return state
 
+    @property
+    def total_iter(self) -> int:
+        return len(self.coverage_results) + self.failure_count
+
+    @property
+    def total_time(self) -> float:
+        return sum([e.t_total for e in self.elapsed_time_history])  # type: ignore[operator]
+
 
 @dataclass
 class SolutionLibrary(Generic[ProblemT, ConfigT, ResultT]):
@@ -879,11 +887,11 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         return False if failed
         """
         prof_info = ProfileInfo()
+        ts = time.time()
         self.sampler_history.check_consistency()
         assert len(self.sampler_history.coverage_results) == len(self.library.predictors)
 
         logger.info("active sampling step")
-        ts = time.time()
 
         ts_determine_cand = time.time()
         init_solution, gain_expected = self._determine_init_solution(self.config.n_difficult)
