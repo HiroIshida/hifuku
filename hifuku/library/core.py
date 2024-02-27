@@ -902,7 +902,10 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         if ret is None:
             logger.info("no margin set could increase coverage. dont add anything to library")
-            coverage_est = self.sampler_history.coverage_est_history[-1]
+            if len(self.sampler_history.coverage_est_history) > 0:
+                coverage_est = self.sampler_history.coverage_est_history[-1]
+            else:
+                coverage_est = 0.0
             self.sampler_history.failure_count += 1
         else:
             margins, coverage_result, coverage_est = ret
