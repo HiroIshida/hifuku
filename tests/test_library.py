@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 from typing import Type
 
+import pytest
 import torch
 from mohou.trainer import TrainConfig
 
@@ -22,7 +23,9 @@ from hifuku.neuralnet import (
 from hifuku.script_utils import create_default_logger
 
 
-def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encoder: bool):
+def _test_SolutionLibrarySampler(
+    domain: Type[DomainProtocol], train_with_encoder: bool, device: torch.device
+):
     problem_type = domain.task_type
     solcon = domain.solver_config
     solver_type = domain.solver_type
@@ -112,10 +115,19 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
             assert abs(a - b) < 1e-6, f"coverage estimation is not consistent: {a} vs {b}"
 
 
-def test_SolutionLibrarySampler():
-    _test_SolutionLibrarySampler(DummyDomain, False)
-    _test_SolutionLibrarySampler(DummyMeshDomain, False)
+dom = [DummyDomain, DummyMeshDomain]
+encode = [False, True]
+if torch.cuda.is_available():
+    device = [torch.device("cpu"), torch.device("cuda")]
+else:
+    device = [torch.device("cpu")]  # in ci
+parameter_matrix = [(d, e, dev) for d in dom for e in encode for dev in device]
+
+
+@pytest.mark.parametrize("domain, train_with_encoder, device", parameter_matrix)
+def test_SolutionLibrarySampler(domain, train_with_encoder, device):
+    _test_SolutionLibrarySampler(domain, train_with_encoder, device)
 
 
 if __name__ == "__main__":
-    test_SolutionLibrarySampler()
+    _test_SolutionLibrarySampler(DummyDomain, False, torch.device("cpu"))
