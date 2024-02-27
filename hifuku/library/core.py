@@ -754,11 +754,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         project_path: Path,
         pool_single: Optional[ProblemPool[ProblemT]] = None,
         pool_multiple: Optional[ProblemPool[ProblemT]] = None,
-        problems_validation: Optional[np.ndarray] = None,
         solver: Optional[BatchProblemSolver[ConfigT, ResultT]] = None,
         sampler: Optional[BatchProblemSampler[ProblemT]] = None,
         use_distributed: bool = False,
-        reuse_cached_validation_set: bool = False,
         test_false_positive_rate: bool = False,
         n_limit_batch_solver: Optional[int] = None,
         device: Optional[torch.device] = None,
@@ -821,31 +819,23 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             # TODO: smelling! n_problem_inner should not be set here
             pool_multiple = ProblemPool(task_type, config.n_problem_inner)
 
-        # create validation problems
+        logger.info("start creating validation set")
         project_path.mkdir(exist_ok=True)
         validation_cache_path = project_path / "{}-validation_set.cache".format(task_type.__name__)
-
-        if reuse_cached_validation_set:
-            assert problems_validation is None
-            assert validation_cache_path.exists()
+        if validation_cache_path.exists():
             with validation_cache_path.open(mode="rb") as f:
-                problems_validation = pickle.load(f)
-                assert problems_validation is not None
-            logger.info("validation set is load from {}".format(validation_cache_path))
+                problems_validation: np.ndarray = pickle.load(f)
         else:
-            if problems_validation is None:
-                logger.info("start creating validation set")
+            problems_validation = sampler.sample_batch(
+                config.n_validation,
+                ProblemPool(task_type, config.n_validation_inner).as_predicated(),
+            )
 
-                problems_validation = sampler.sample_batch(
-                    config.n_validation,
-                    ProblemPool(task_type, config.n_validation_inner).as_predicated(),
-                )
-
-                with validation_cache_path.open(mode="wb") as f:
-                    pickle.dump(problems_validation, f)
-                logger.info(
-                    "validation set with {} elements is created".format(len(problems_validation))
-                )
+            with validation_cache_path.open(mode="wb") as f:
+                pickle.dump(problems_validation, f)
+            logger.info(
+                "validation set with {} elements is created".format(len(problems_validation))
+            )
         assert len(problems_validation) > 0
 
         presample_cache_path = project_path / cls.presampled_cache_file_name

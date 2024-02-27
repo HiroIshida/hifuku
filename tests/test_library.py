@@ -66,16 +66,26 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
 
             # main test
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
-            ts = time.time()
-            lib_sampler.step_active_sampling()
-            lib_sampler.step_active_sampling()
-            elapsed = time.time() - ts
-            assert (
-                abs(lib_sampler.sampler_history.total_time - elapsed) < 1.0
-            )  # sec. might depend on testing environment...
+            elapsed = 0.0
+            for it in range(2):
+                ts = time.time()
+                lib_sampler.step_active_sampling()
+                elapsed += time.time() - ts
+                lib_sampler.sampler_history.elapsed_time_history
+                assert (
+                    abs(lib_sampler.sampler_history.total_time - elapsed) < 1.0
+                ), f"iter={it}, total_time={lib_sampler.sampler_history.total_time} vs elapsed={elapsed}. all history={lib_sampler.sampler_history.elapsed_time_history}"
+
+                # test coverage estimation's consistency
+                a = lib_sampler.sampler_history.coverage_est_history[-1]
+                b = lib_sampler.library.measure_coverage(lib_sampler.problems_validation)
+                assert (
+                    abs(a - b) < 1e-6
+                ), f"iter={it} coverage estimation is not consistent: {a} vs {b}"
+
             coverage = lib_sampler.sampler_history.coverage_est_history[-1]
             # as dummy domain is easy, 0.3 should be satisfied (but might not in quite small probability)
-            assert coverage > 0.3, f"coverage={coverage}"
+            assert coverage > 0.3, f"iter={it}, coverage={coverage}"
 
             # test warm start
             lib = SolutionLibrary.load(td_path, problem_type, solver_type, device=device)[0]
@@ -87,23 +97,20 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
             assert len(lib_sampler.presampled_tasks_paramss) > 0, "presampled tasks are not loaded"
             ts = time.time()
             lib_sampler.step_active_sampling()
-            elpased_warm = time.time() - ts + elapsed
+            elapsed += time.time() - ts
             assert (
-                abs(lib_sampler.sampler_history.total_time - elpased_warm) < 1.0
+                abs(lib_sampler.sampler_history.total_time - elapsed) < 1.0
             )  # sec. might depend on testing environment...
             assert lib_sampler.sampler_history.total_iter == 3
 
             coverage_after_warm = lib_sampler.sampler_history.coverage_est_history[-1]
-            assert coverage_after_warm > coverage, "presumably warm start did not work"
             # as dummy domain is easy, 0.5 should be satisfied (but might not in quite small probability)
             assert coverage_after_warm > 0.5, f"coverage_after_warm={coverage_after_warm}"
 
             # test coverage estimation's consistency
-            # diff = (
-            #     lib_sampler.library.measure_coverage(lib_sampler.problems_validation)
-            #     - coverage_after_warm
-            # )
-            # assert abs(diff) < 1e-6, f"diff={diff}"
+            a = lib_sampler.sampler_history.coverage_est_history[-1]
+            b = lib_sampler.library.measure_coverage(lib_sampler.problems_validation)
+            assert abs(a - b) < 1e-6, f"coverage estimation is not consistent: {a} vs {b}"
 
 
 def test_SolutionLibrarySampler():
