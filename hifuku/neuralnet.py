@@ -246,7 +246,7 @@ def _create_dataset_from_paramss_and_resultss(
             # vectorss = torch.vstack([p.vectors for p in processed_list])
             vectorss = torch.stack([p.vectors for p in processed_list], dim=0)
             assert vectorss.ndim == 3
-            vectors = vectorss.reshape(  # n_data x n_problem x n_feature
+            vectors = vectorss.reshape(  # n_data x n_task x n_feature
                 vectorss.shape[0] * vectorss.shape[1], vectorss.shape[2]
             )
             assert vectors.ndim == 2
@@ -270,7 +270,7 @@ def _create_dataset_from_paramss_and_resultss(
 
 @dataclass
 class IterationPredictorConfig(ModelConfigBase):
-    dim_problem_descriptor: int
+    dim_task_descriptor: int
     dim_conv_bottleneck: int
     layers: Tuple[int, ...] = (500, 100, 100, 100, 50)
     dim_description_expand: Optional[int] = 50
@@ -291,7 +291,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
 
         if config.dim_description_expand is not None:
             lst: List[nn.Module] = [
-                nn.Linear(config.dim_problem_descriptor, config.dim_description_expand)
+                nn.Linear(config.dim_task_descriptor, config.dim_description_expand)
             ]
             if config.use_batch_norm:
                 lst.append(nn.BatchNorm1d(config.dim_description_expand))
@@ -304,7 +304,7 @@ class IterationPredictor(ModelBase[IterationPredictorConfig]):
             n_input = config.dim_conv_bottleneck + config.dim_description_expand
         else:
             self.description_expand_linears = None
-            n_input = config.dim_conv_bottleneck + config.dim_problem_descriptor
+            n_input = config.dim_conv_bottleneck + config.dim_task_descriptor
 
         width_list = [n_input] + list(config.layers)
         layers: List[Any] = []

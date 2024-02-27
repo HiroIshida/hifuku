@@ -16,18 +16,18 @@ from skmp.trajectory import Trajectory
 
 from hifuku.coverage import CoverageResult
 from hifuku.datagen import (
-    BatchProblemSampler,
-    BatchProblemSolver,
+    BatchTaskSampler,
+    BatchTaskSolver,
     DistributeBatchMarginsDeterminant,
-    DistributeBatchProblemSampler,
-    DistributedBatchProblemSolver,
+    DistributeBatchTaskSampler,
+    DistributedBatchTaskSolver,
     MultiProcesBatchMarginsDeterminant,
-    MultiProcessBatchProblemSampler,
-    MultiProcessBatchProblemSolver,
+    MultiProcessBatchTaskSampler,
+    MultiProcessBatchTaskSolver,
 )
 from hifuku.datagen.http_datagen.client import ServerSpec
 from hifuku.domain import DoubleIntegratorBubblySimple_SQP
-from hifuku.pool import PredicatedProblemPool, ProblemPool
+from hifuku.pool import PredicatedTaskPool, TaskPool
 from hifuku.script_utils import create_default_logger
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ def compute_init_traj() -> Trajectory:
 
 def test_batch_solver_init_solutions():
     init_traj = compute_init_traj()
-    mp_batch_solver = MultiProcessBatchProblemSolver(
+    mp_batch_solver = MultiProcessBatchTaskSolver(
         domain.solver_type, domain.solver_config, task_type, 2
     )
     n_task = 5
@@ -105,26 +105,26 @@ def test_consistency_of_all_batch_sovler(server):
         td_path = Path(td)
         create_default_logger(td_path, "test_datagen")
 
-        for n_problem in [1, 8]:  # to test edge case
-            n_problem_inner = 2
+        for n_task in [1, 8]:  # to test edge case
+            n_task_inner = 2
 
-            init_solutions = [init_traj] * n_problem
+            init_solutions = [init_traj] * n_task
             # set standard = True for testing purpose
             task_paramss = np.array(
                 [
-                    task_type.sample(n_problem_inner).to_intrinsic_desc_vecs()
-                    for _ in range(n_problem)
+                    task_type.sample(n_task_inner).to_intrinsic_desc_vecs()
+                    for _ in range(n_task)
                 ]
             )
-            batch_solver_list: List[BatchProblemSolver] = []
-            mp_batch_solver = MultiProcessBatchProblemSolver(
+            batch_solver_list: List[BatchTaskSolver] = []
+            mp_batch_solver = MultiProcessBatchTaskSolver(
                 domain.solver_type, domain.solver_config, task_type, n_process=2
             )
             assert mp_batch_solver.n_process == 2
             batch_solver_list.append(mp_batch_solver)
 
             specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
-            batch_solver = DistributedBatchProblemSolver(
+            batch_solver = DistributedBatchTaskSolver(
                 domain.solver_type, domain.solver_config, task_type, specs, n_measure_sample=1
             )
             batch_solver_list.append(batch_solver)
@@ -140,9 +140,9 @@ def test_consistency_of_all_batch_sovler(server):
                     task_paramss, init_solutions, tmp_n_max_call_mult_factor=1.5
                 )
                 assert isinstance(results_list, list)
-                assert len(results_list) == n_problem
+                assert len(results_list) == n_task
                 assert isinstance(results_list[0], tuple)
-                assert len(results_list[0]) == n_problem_inner
+                assert len(results_list[0]) == n_task_inner
 
                 nits = []
                 successes = []
@@ -156,7 +156,7 @@ def test_consistency_of_all_batch_sovler(server):
                 assert batch_solver.config.n_max_call == domain.solver_config.n_max_call
 
             # NOTE: it seems that osqp solve results sometimes slightly different though
-            # the same problem is provided.. maybe random variable is used inside???
+            # the same task is provided.. maybe random variable is used inside???
             assert len(set(nits_list)) == 1
             assert len(set(successes_list)) == 1
 
@@ -164,13 +164,13 @@ def test_consistency_of_all_batch_sovler(server):
 def test_consistency_of_all_batch_sampler(server):
     specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
 
-    sampler_list: List[BatchProblemSampler[task_type]] = []
-    sampler_list.append(MultiProcessBatchProblemSampler(1))
-    sampler_list.append(DistributeBatchProblemSampler[task_type](specs))
+    sampler_list: List[BatchTaskSampler[task_type]] = []
+    sampler_list.append(MultiProcessBatchTaskSampler(1))
+    sampler_list.append(DistributeBatchTaskSampler[task_type](specs))
 
-    n_problem_inner = 5
-    pool_list: List[PredicatedProblemPool] = []
-    pool_base = ProblemPool(task_type, n_problem_inner)
+    n_task_inner = 5
+    pool_list: List[PredicatedTaskPool] = []
+    pool_base = TaskPool(task_type, n_task_inner)
     pool_list.append(pool_base.as_predicated())
     # pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
 
@@ -178,7 +178,7 @@ def test_consistency_of_all_batch_sampler(server):
         for pool in pool_list:
             for sampler in sampler_list:
                 samples = sampler.sample_batch(n_sample, pool)
-                assert samples.shape == (n_sample, n_problem_inner, task_type.get_task_dof())
+                assert samples.shape == (n_sample, n_task_inner, task_type.get_task_dof())
 
                 # in the parallel processing, the typical but difficult-to-find bug is
                 # duplication of sample by forgetting to set peroper random seed.

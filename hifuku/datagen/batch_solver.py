@@ -19,7 +19,7 @@ from skmp.trajectory import Trajectory
 
 from hifuku.datagen.http_datagen.client import ClientBase, ServerSpec
 from hifuku.datagen.http_datagen.request import (
-    SolveProblemRequest,
+    SolveTaskRequest,
     http_connection,
     send_request,
 )
@@ -41,7 +41,7 @@ def duplicate_init_solution_if_not_list(
     return init_solutions
 
 
-class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
+class BatchTaskSolver(Generic[ConfigT, ResultT], ABC):
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     task_type: Type[TaskBase]
     config: ConfigT
@@ -88,8 +88,8 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         # When pickling-and-depickling, the procedure takes up much more memory than
         # pickled object size. I'm not sure but according to https://stackoverflow.com/a/38971446/7624196
         # the RAM usage could be two times bigger than the serialized-object size.
-        # Thus, in the following, we first measure the pickle size, and splits the problem set
-        # and then send the multiple chunk of problems sequentially.
+        # Thus, in the following, we first measure the pickle size, and splits the task set
+        # and then send the multiple chunk of tasks sequentially.
         if self.n_limit_batch is None:
             logger.debug("n_limit_batch is not set. detremine now...")
             max_ram_usage = 16 * 10**9
@@ -127,7 +127,7 @@ class BatchProblemSolver(Generic[ConfigT, ResultT], ABC):
         ...
 
 
-class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
+class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
     n_process: int
 
     def __init__(
@@ -185,10 +185,10 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
                     init_solutions_per_inner = duplicate_init_solution_if_not_list(
                         init_solution, task.n_inner_task
                     )
-                    problems = task.export_problems()
+                    tasks = task.export_problems()
                     results: List[ResultT] = []
-                    for problem, init_solution_per_inner in zip(problems, init_solutions_per_inner):
-                        solver.setup(problem)
+                    for task, init_solution_per_inner in zip(tasks, init_solutions_per_inner):
+                        solver.setup(task)
                         result = solver.solve(init_solution_per_inner)
                         results.append(result)
                     results_list.append(tuple(results))
@@ -254,8 +254,8 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
                     init_solutions, task.n_inner_task
                 )
                 results = []
-                for problem, init_solution in zip(task.export_problems(), init_solutions):
-                    _solver.setup(problem)  # type: ignore
+                for task, init_solution in zip(task.export_problems(), init_solutions):
+                    _solver.setup(task)  # type: ignore
                     result = _solver.solve(init_solution)  # type: ignore
                     results.append(result)
         return task_idx, tuple(results)
@@ -264,8 +264,8 @@ class MultiProcessBatchProblemSolver(BatchProblemSolver[ConfigT, ResultT]):
 HostPortPair = Tuple[str, int]
 
 
-class DistributedBatchProblemSolver(
-    ClientBase[SolveProblemRequest], BatchProblemSolver[ConfigT, ResultT]
+class DistributedBatchTaskSolver(
+    ClientBase[SolveTaskRequest], BatchTaskSolver[ConfigT, ResultT]
 ):
     n_process_per_server: Optional[int]
 
@@ -281,7 +281,7 @@ class DistributedBatchProblemSolver(
         n_process_per_server: Optional[int] = None,
         n_limit_batch: Optional[int] = None,
     ):
-        BatchProblemSolver.__init__(self, solver_t, config, task_type, n_limit_batch)
+        BatchTaskSolver.__init__(self, solver_t, config, task_type, n_limit_batch)
         ClientBase.__init__(
             self, server_specs, use_available_host, force_continue, n_measure_sample
         )
@@ -289,7 +289,7 @@ class DistributedBatchProblemSolver(
 
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
-        hostport: HostPortPair, request: SolveProblemRequest, indices: np.ndarray, tmp_path: Path
+        hostport: HostPortPair, request: SolveTaskRequest, indices: np.ndarray, tmp_path: Path
     ) -> None:
 
         logger.debug("send_and_recive_and_write called on pid: {}".format(os.getpid()))
@@ -309,9 +309,9 @@ class DistributedBatchProblemSolver(
     ) -> List[Tuple[ResultT, ...]]:
         logger.debug("use_default_solver: {}".format(use_default_solver))
 
-        n_problem = len(task_paramss)
-        n_problem_table = self.determine_assignment_per_server(n_problem)
-        indices_list = split_indices(n_problem, list(n_problem_table.values()))
+        n_task = len(task_paramss)
+        n_task_table = self.determine_assignment_per_server(n_task)
+        indices_list = split_indices(n_task, list(n_task_table.values()))
 
         # send request
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
@@ -325,7 +325,7 @@ class DistributedBatchProblemSolver(
                     n_process = self.n_process_per_server
                 task_paramss_part = task_paramss[indices]
                 init_solutions_part = [init_solutions[i] for i in indices]
-                req = SolveProblemRequest(
+                req = SolveTaskRequest(
                     task_paramss_part,
                     self.solver_t,
                     self.config,

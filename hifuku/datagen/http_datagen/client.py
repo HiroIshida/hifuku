@@ -147,8 +147,8 @@ class ClientBase(Generic[MainRequestT]):
         n_gen_table: Dict[HostPortPair, int] = {}
         hostport_pairs = list(self.hostport_cpuinfo_map.keys())
         for hostport in hostport_pairs:
-            n_problem_host = math.floor(n_gen * perf_table[hostport])
-            n_gen_table[hostport] = n_problem_host
+            n_task_host = math.floor(n_gen * perf_table[hostport])
+            n_gen_table[hostport] = n_task_host
 
         # allocate remainders
         remainder_sum = n_gen - sum(n_gen_table.values())

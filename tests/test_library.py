@@ -26,7 +26,7 @@ from hifuku.script_utils import create_default_logger
 def _test_SolutionLibrarySampler(
     domain: Type[DomainProtocol], train_with_encoder: bool, device: torch.device
 ):
-    problem_type = domain.task_type
+    task_type = domain.task_type
     solcon = domain.solver_config
     solver_type = domain.solver_type
     domain.auto_encoder_project_name
@@ -63,7 +63,7 @@ def _test_SolutionLibrarySampler(
             td_path = Path(td)
             create_default_logger(td_path, "test_trajectorylib")
 
-            args = (problem_type, solver_type, solcon, ae_model, lconfig, td_path)
+            args = (task_type, solver_type, solcon, ae_model, lconfig, td_path)
             kwargs = {"solver": solver, "sampler": sampler, "device": device}
 
             # main test
@@ -80,7 +80,7 @@ def _test_SolutionLibrarySampler(
 
                 # test coverage estimation's consistency
                 a = lib_sampler.sampler_history.coverage_est_history[-1]
-                b = lib_sampler.library.measure_coverage(lib_sampler.problems_validation)
+                b = lib_sampler.library.measure_coverage(lib_sampler.tasks_validation)
                 assert (
                     abs(a - b) < 1e-6
                 ), f"iter={it} coverage estimation is not consistent: {a} vs {b}"
@@ -90,7 +90,7 @@ def _test_SolutionLibrarySampler(
             assert coverage > 0.3, f"iter={it}, coverage={coverage}"
 
             # test warm start
-            lib = SolutionLibrary.load(td_path, problem_type, solver_type, device=device)[0]
+            lib = SolutionLibrary.load(td_path, task_type, solver_type, device=device)[0]
             state = ActiveSamplerHistory.load(td_path)
             assert state.total_iter == 2
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
@@ -111,7 +111,7 @@ def _test_SolutionLibrarySampler(
 
             # test coverage estimation's consistency
             a = lib_sampler.sampler_history.coverage_est_history[-1]
-            b = lib_sampler.library.measure_coverage(lib_sampler.problems_validation)
+            b = lib_sampler.library.measure_coverage(lib_sampler.tasks_validation)
             assert abs(a - b) < 1e-6, f"coverage estimation is not consistent: {a} vs {b}"
 
 

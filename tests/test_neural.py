@@ -7,7 +7,7 @@ import pytest
 import torch
 from mohou.trainer import TrainCache, TrainConfig, train
 
-from hifuku.datagen.batch_solver import MultiProcessBatchProblemSolver
+from hifuku.datagen.batch_solver import MultiProcessBatchTaskSolver
 from hifuku.domain import DummyDomain, DummyMeshDomain
 from hifuku.neuralnet import (
     AutoEncoderConfig,
@@ -73,7 +73,7 @@ def get_sol_tasks_and_resultss(domain):
     task_paramss = np.array(
         [task_type.sample(n_inner).to_intrinsic_desc_vecs() for _ in range(n_task)]
     )
-    batch_solver = MultiProcessBatchProblemSolver(
+    batch_solver = MultiProcessBatchTaskSolver(
         domain.solver_type, domain.solver_config, task_type
     )
     resultss = batch_solver.solve_batch(task_paramss, [sol.traj] * n_task)

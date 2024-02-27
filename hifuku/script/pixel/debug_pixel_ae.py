@@ -5,17 +5,17 @@ import tqdm
 from mohou.file import get_project_path
 from mohou.trainer import TrainCache
 
-from hifuku.datagen import MultiProcessBatchProblemSampler
+from hifuku.datagen import MultiProcessBatchTaskSampler
 from hifuku.domain import BubblySimpleMeshPointConnectTask
 from hifuku.neuralnet import PixelAutoEncoder
-from hifuku.pool import TrivialProblemPool
+from hifuku.pool import TrivialTaskPool
 
 if __name__ == "__main__":
     path = get_project_path("BubblyMeshPointConnectTask-AutoEncoder")
     ae_model = TrainCache.load_latest(path, PixelAutoEncoder).best_model
 
-    pool = TrivialProblemPool(BubblySimpleMeshPointConnectTask, 1).as_predicated()
-    sampler = MultiProcessBatchProblemSampler()  # type: ignore[var-annotated]
+    pool = TrivialTaskPool(BubblySimpleMeshPointConnectTask, 1).as_predicated()
+    sampler = MultiProcessBatchTaskSampler()  # type: ignore[var-annotated]
     problems = sampler.sample_batch(100, pool)
 
     mat_list = []

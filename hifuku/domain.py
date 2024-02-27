@@ -36,12 +36,12 @@ from skmp.solver.nlp_solver.sqp_based_solver import SQPBasedSolver, SQPBasedSolv
 from skmp.solver.ompl_solver import OMPLSolver, OMPLSolverConfig
 
 from hifuku.datagen.batch_sampler import (
-    DistributeBatchProblemSampler,
-    MultiProcessBatchProblemSampler,
+    DistributeBatchTaskSampler,
+    MultiProcessBatchTaskSampler,
 )
 from hifuku.datagen.batch_solver import (
-    DistributedBatchProblemSolver,
-    MultiProcessBatchProblemSolver,
+    DistributedBatchTaskSolver,
+    MultiProcessBatchTaskSolver,
 )
 from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder, PixelAutoEncoder
 
@@ -64,26 +64,26 @@ class DomainProtocol(Protocol):
     @classmethod
     def get_multiprocess_batch_solver(
         cls, n_process: Optional[int] = None
-    ) -> MultiProcessBatchProblemSolver:
-        return MultiProcessBatchProblemSolver(
+    ) -> MultiProcessBatchTaskSolver:
+        return MultiProcessBatchTaskSolver(
             cls.solver_type, cls.solver_config, cls.task_type, n_process=n_process
         )
 
     @classmethod
     def get_multiprocess_batch_sampler(
         cls, n_process: Optional[int] = None
-    ) -> MultiProcessBatchProblemSampler:
-        return MultiProcessBatchProblemSampler(n_process=n_process)
+    ) -> MultiProcessBatchTaskSampler:
+        return MultiProcessBatchTaskSampler(n_process=n_process)
 
     @classmethod
-    def get_distributed_batch_solver(cls, *args, **kwargs) -> DistributedBatchProblemSolver:
-        return DistributedBatchProblemSolver(
+    def get_distributed_batch_solver(cls, *args, **kwargs) -> DistributedBatchTaskSolver:
+        return DistributedBatchTaskSolver(
             cls.solver_type, cls.solver_config, cls.task_type, *args, **kwargs
         )
 
     @classmethod
-    def get_distributed_batch_sampler(cls, *args, **kwargs) -> DistributeBatchProblemSampler:
-        return DistributeBatchProblemSampler(*args, **kwargs)
+    def get_distributed_batch_sampler(cls, *args, **kwargs) -> DistributeBatchTaskSampler:
+        return DistributeBatchTaskSampler(*args, **kwargs)
 
 
 class ClutteredFridge_SQP(DomainProtocol):

@@ -10,7 +10,7 @@ import numpy as np
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 
 from hifuku.coverage import CoverageResult, DetermineMarginsResult
-from hifuku.pool import PredicatedProblemPool, ProblemT
+from hifuku.pool import PredicatedTaskPool, TaskT
 
 logger = logging.getLogger(__name__)
 
@@ -74,21 +74,21 @@ class GetModuleHashValueResponse(Response):
 
 
 @dataclass
-class SolveProblemRequest(Generic[ProblemT, ConfigT, ResultT], MainRequest):
+class SolveTaskRequest(Generic[TaskT, ConfigT, ResultT], MainRequest):
     task_paramss: np.ndarray
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
-    task_type: Type[ProblemT]
+    task_type: Type[TaskT]
     init_solutions: Sequence  # Actually, Sequence[Optional[TrajectoryMaybeList]]
     n_process: Optional[int]
     use_default_solver: bool
 
     def ignore_fields(self) -> Tuple[str, ...]:
-        return ("problems", "init_solutions")
+        return ("tasks", "init_solutions")
 
 
 @dataclass
-class SolveProblemResponse(Generic[ResultT], MainResponse):
+class SolveTaskResponse(Generic[ResultT], MainResponse):
     results_list: List[Tuple[ResultT, ...]]
     elapsed_time: float
 
@@ -97,9 +97,9 @@ class SolveProblemResponse(Generic[ResultT], MainResponse):
 
 
 @dataclass
-class SampleProblemRequest(Generic[ProblemT], MainRequest):
+class SampleTaskRequest(Generic[TaskT], MainRequest):
     n_sample: int
-    pool: PredicatedProblemPool[ProblemT]
+    pool: PredicatedTaskPool[TaskT]
     n_process: int
 
     def ignore_fields(self) -> Tuple[str, ...]:
@@ -107,12 +107,12 @@ class SampleProblemRequest(Generic[ProblemT], MainRequest):
 
 
 @dataclass
-class SampleProblemResponse(MainResponse):
+class SampleTaskResponse(MainResponse):
     task_paramss: np.ndarray
     elapsed_time: float
 
     def ignore_fields(self) -> Tuple[str, ...]:
-        return ("problems",)
+        return ("tasks",)
 
 
 @dataclass
@@ -149,12 +149,12 @@ def send_request(
 
 
 @overload
-def send_request(conn: HTTPConnection, request: SolveProblemRequest) -> SolveProblemResponse:
+def send_request(conn: HTTPConnection, request: SolveTaskRequest) -> SolveTaskResponse:
     ...
 
 
 @overload
-def send_request(conn: HTTPConnection, request: SampleProblemRequest) -> SampleProblemResponse:
+def send_request(conn: HTTPConnection, request: SampleTaskRequest) -> SampleTaskResponse:
     ...
 
 

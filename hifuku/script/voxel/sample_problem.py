@@ -16,8 +16,8 @@ from rpbench.articulated.pr2.tabletop import (
 )
 
 import hifuku
-from hifuku.datagen import MultiProcessBatchProblemSampler
-from hifuku.pool import TrivialProblemPool
+from hifuku.datagen import MultiProcessBatchTaskSampler
+from hifuku.pool import TrivialTaskPool
 from hifuku.script_utils import create_default_logger
 
 warnings.filterwarnings("ignore", message="Values in x were outside bounds during")
@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore", message="texture specified in URDF is not supp
 np.random.seed(0)
 
 
-class ProblemType(Enum):
+class TaskType(Enum):
     normal = TabletopOvenWorldWrap
     voxblox = TabletopOvenVoxbloxWorldWrap
 
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     mesh_type_name: str = args.type
 
-    # problem_type = ProblemType[mesh_type_name].value  # type: ignore
+    # problem_type = TaskType[mesh_type_name].value  # type: ignore
     problem_type = TabletopBoxWorldWrap
     # problem_type = TabletopOvenWorldWrap
 
@@ -50,9 +50,9 @@ if __name__ == "__main__":
     n_process = int(0.5 * n_cpu)
     n_problem = 3000
     for _ in range(100):
-        # sampler = DistributeBatchProblemSampler()  # type: ignore
-        sampler = MultiProcessBatchProblemSampler()  # type: ignore
-        pool = TrivialProblemPool(problem_type, n_problem_inner=0)
+        # sampler = DistributeBatchTaskSampler()  # type: ignore
+        sampler = MultiProcessBatchTaskSampler()  # type: ignore
+        pool = TrivialTaskPool(problem_type, n_problem_inner=0)
         problems = sampler.sample_batch(n_problem, pool.as_predicated())
 
         def f(args):

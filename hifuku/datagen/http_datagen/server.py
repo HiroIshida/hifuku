@@ -9,8 +9,8 @@ from skmp.solver.interface import ConfigT, ResultT
 
 from hifuku.datagen import (
     MultiProcesBatchMarginsDeterminant,
-    MultiProcessBatchProblemSampler,
-    MultiProcessBatchProblemSolver,
+    MultiProcessBatchTaskSampler,
+    MultiProcessBatchTaskSolver,
 )
 from hifuku.datagen.http_datagen.request import (
     DetermineMarginsRequest,
@@ -20,12 +20,12 @@ from hifuku.datagen.http_datagen.request import (
     GetModuleHashValueRequest,
     GetModuleHashValueResponse,
     Response,
-    SampleProblemRequest,
-    SampleProblemResponse,
-    SolveProblemRequest,
-    SolveProblemResponse,
+    SampleTaskRequest,
+    SampleTaskResponse,
+    SolveTaskRequest,
+    SolveTaskResponse,
 )
-from hifuku.pool import ProblemT
+from hifuku.pool import TaskT
 from hifuku.script_utils import watch_memory
 from hifuku.utils import determine_process_thread, get_module_source_hash
 
@@ -53,13 +53,13 @@ class PostHandler(BaseHTTPRequestHandler):
         resp = GetModuleHashValueResponse(hashes)
         return resp
 
-    def process_SolveProblemRequest(
-        self, request: SolveProblemRequest[ProblemT, ConfigT, ResultT]
-    ) -> SolveProblemResponse[ResultT]:
+    def process_SolveTaskRequest(
+        self, request: SolveTaskRequest[TaskT, ConfigT, ResultT]
+    ) -> SolveTaskResponse[ResultT]:
         ts = time.time()
         logging.info("request: {}".format(request))
 
-        gen = MultiProcessBatchProblemSolver[ConfigT, ResultT](
+        gen = MultiProcessBatchTaskSolver[ConfigT, ResultT](
             request.solver_t, request.config, request.task_type, request.n_process
         )
         results_list = gen.solve_batch(
@@ -67,27 +67,27 @@ class PostHandler(BaseHTTPRequestHandler):
         )
 
         elapsed_time = time.time() - ts
-        resp = SolveProblemResponse(results_list, elapsed_time)
+        resp = SolveTaskResponse(results_list, elapsed_time)
         return resp
 
-    def process_SampleProblemRequest(
-        self, request: SampleProblemRequest[ProblemT]
-    ) -> SampleProblemResponse:
+    def process_SampleTaskRequest(
+        self, request: SampleTaskRequest[TaskT]
+    ) -> SampleTaskResponse:
 
         # NOTE: by calling this line (sample()) some pre-computation
         # e.g. sdf mesh creation will running.
         # Without this line, all the processes will do pre-computation
-        # by themself in MultiProcessBatchProblemSampler which sometimes
+        # by themself in MultiProcessBatchTaskSampler which sometimes
         # stall the entire procedure
-        request.pool.problem_type.sample(1, standard=True)  # don't delete
+        request.pool.task_type.sample(1, standard=True)  # don't delete
 
         ts = time.time()
         logging.info("request: {}".format(request))
-        sampler = MultiProcessBatchProblemSampler[ProblemT](request.n_process)
-        problems = sampler.sample_batch(request.n_sample, request.pool)
-        assert len(problems) > 0
+        sampler = MultiProcessBatchTaskSampler[TaskT](request.n_process)
+        tasks = sampler.sample_batch(request.n_sample, request.pool)
+        assert len(tasks) > 0
         elapsed_time = time.time() - ts
-        resp = SampleProblemResponse(problems, elapsed_time)
+        resp = SampleTaskResponse(tasks, elapsed_time)
         return resp
 
     def process_DetermineMarginsRequest(
@@ -123,10 +123,10 @@ class PostHandler(BaseHTTPRequestHandler):
             resp = self.process_GetCPUInfoRequest(request)
         elif isinstance(request, GetModuleHashValueRequest):
             resp = self.process_GetModuleHashValueRequest(request)
-        elif isinstance(request, SolveProblemRequest):
-            resp = self.process_SolveProblemRequest(request)
-        elif isinstance(request, SampleProblemRequest):
-            resp = self.process_SampleProblemRequest(request)
+        elif isinstance(request, SolveTaskRequest):
+            resp = self.process_SolveTaskRequest(request)
+        elif isinstance(request, SampleTaskRequest):
+            resp = self.process_SampleTaskRequest(request)
         elif isinstance(request, DetermineMarginsRequest):
             resp = self.process_DetermineMarginsRequest(request)
         else:

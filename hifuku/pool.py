@@ -7,19 +7,19 @@ from rpbench.interface import TaskBase
 
 logger = logging.getLogger(__name__)
 
-ProblemT = TypeVar("ProblemT", bound=TaskBase)
+TaskT = TypeVar("TaskT", bound=TaskBase)
 
 
 @dataclass
-class PredicatedProblemPool(Generic[ProblemT], Iterator[Optional[np.ndarray]]):
-    problem_type: Type[ProblemT]
-    n_problem_inner: int
-    predicate: Callable[[ProblemT], bool]
+class PredicatedTaskPool(Generic[TaskT], Iterator[Optional[np.ndarray]]):
+    task_type: Type[TaskT]
+    n_task_inner: int
+    predicate: Callable[[TaskT], bool]
     max_trial_factor: int
 
     def __next__(self) -> Optional[np.ndarray]:
-        ret = self.problem_type.predicated_sample(
-            self.n_problem_inner, self.predicate, self.max_trial_factor
+        ret = self.task_type.predicated_sample(
+            self.n_task_inner, self.predicate, self.max_trial_factor
         )
         if ret is None:
             return None
@@ -27,19 +27,17 @@ class PredicatedProblemPool(Generic[ProblemT], Iterator[Optional[np.ndarray]]):
 
 
 @dataclass
-class ProblemPool(Generic[ProblemT], Iterator[np.ndarray]):
-    problem_type: Type[ProblemT]
-    n_problem_inner: int
+class TaskPool(Generic[TaskT], Iterator[np.ndarray]):
+    task_type: Type[TaskT]
+    n_task_inner: int
 
     def __next__(self) -> np.ndarray:
-        return self.problem_type.sample(self.n_problem_inner).to_intrinsic_desc_vecs()
+        return self.task_type.sample(self.n_task_inner).to_intrinsic_desc_vecs()
 
-    def as_predicated(self) -> PredicatedProblemPool[ProblemT]:
-        return cast(PredicatedProblemPool[ProblemT], self)
+    def as_predicated(self) -> PredicatedTaskPool[TaskT]:
+        return cast(PredicatedTaskPool[TaskT], self)
 
     def make_predicated(
-        self, predicate: Callable[[ProblemT], bool], max_trial_factor: int
-    ) -> PredicatedProblemPool[ProblemT]:
-        return PredicatedProblemPool(
-            self.problem_type, self.n_problem_inner, predicate, max_trial_factor
-        )
+        self, predicate: Callable[[TaskT], bool], max_trial_factor: int
+    ) -> PredicatedTaskPool[TaskT]:
+        return PredicatedTaskPool(self.task_type, self.n_task_inner, predicate, max_trial_factor)

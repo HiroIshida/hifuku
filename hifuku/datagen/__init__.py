@@ -6,13 +6,13 @@ from hifuku.datagen.batch_margin_determiant import (
     MultiProcesBatchMarginsDeterminant,
 )
 from hifuku.datagen.batch_sampler import (
-    BatchProblemSampler,
-    DistributeBatchProblemSampler,
-    MultiProcessBatchProblemSampler,
+    BatchTaskSampler,
+    DistributeBatchTaskSampler,
+    MultiProcessBatchTaskSampler,
 )
 from hifuku.datagen.batch_solver import (
-    BatchProblemSolver,
-    DistributedBatchProblemSolver,
-    MultiProcessBatchProblemSolver,
+    BatchTaskSolver,
+    DistributedBatchTaskSolver,
+    MultiProcessBatchTaskSolver,
 )
 from hifuku.datagen.utils import split_number

@@ -30,8 +30,8 @@ if __name__ == "__main__":
     task_type = BubblyComplexMeshPointConnectTask
     world_type = task_type.get_world_type()
 
-    # pool = TrivialProblemPool(HumanoidGroundRarmReachingTask, 1).as_predicated()
-    # sampler = MultiProcessBatchProblemSampler()  # type: ignore[var-annotated]
+    # pool = TrivialTaskPool(HumanoidGroundRarmReachingTask, 1).as_predicated()
+    # sampler = MultiProcessBatchTaskSampler()  # type: ignore[var-annotated]
     # problems = sampler.sample_batch(100, pool)
 
     mat_list = []

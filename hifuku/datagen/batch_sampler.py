@@ -17,11 +17,11 @@ import tqdm
 
 from hifuku.datagen.http_datagen.client import ClientBase
 from hifuku.datagen.http_datagen.request import (
-    SampleProblemRequest,
+    SampleTaskRequest,
     http_connection,
     send_request,
 )
-from hifuku.pool import PredicatedProblemPool, ProblemT
+from hifuku.pool import PredicatedTaskPool, TaskT
 from hifuku.utils import determine_process_thread, get_random_seed, num_torch_thread
 
 logger = logging.getLogger(__name__)
@@ -30,13 +30,13 @@ HostPortPair = Tuple[str, int]
 
 
 @dataclass
-class BatchProblemSampler(Generic[ProblemT], ABC):
+class BatchTaskSampler(Generic[TaskT], ABC):
     @abstractmethod
-    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
+    def sample_batch(self, n_sample: int, pool: PredicatedTaskPool[TaskT]) -> np.ndarray:
         ...
 
 
-class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
+class MultiProcessBatchTaskSampler(BatchTaskSampler[TaskT]):
     n_process: int
     n_thread: int
 
@@ -48,7 +48,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         self.n_process = n_process
         self.n_thread = n_thread
 
-    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
+    def sample_batch(self, n_sample: int, pool: PredicatedTaskPool[TaskT]) -> np.ndarray:
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
 
@@ -69,7 +69,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         return intr_descs_sampled
 
     @staticmethod
-    def _process_pool_setup(_pool: PredicatedProblemPool[ProblemT], _n_thread: int):
+    def _process_pool_setup(_pool: PredicatedTaskPool[TaskT], _n_thread: int):
         global pool, n_thread  # shared in the forked process
         pool = _pool  # type: ignore
         n_thread = _n_thread  # type: ignore
@@ -79,7 +79,7 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
         logger.debug("random seed set to {}".format(unique_seed))
 
     @staticmethod
-    def _process_pool_sample_task(_) -> ProblemT:
+    def _process_pool_sample_task(_) -> TaskT:
         global pool, n_thread  # shared in the forked process
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
@@ -90,12 +90,10 @@ class MultiProcessBatchProblemSampler(BatchProblemSampler[ProblemT]):
                         return task
 
 
-class DistributeBatchProblemSampler(
-    ClientBase[SampleProblemRequest], BatchProblemSampler[ProblemT]
-):
+class DistributeBatchTaskSampler(ClientBase[SampleTaskRequest], BatchTaskSampler[TaskT]):
     @staticmethod  # called only in generate
     def send_and_recive_and_write(
-        hostport: HostPortPair, request: SampleProblemRequest, tmp_path: Path
+        hostport: HostPortPair, request: SampleTaskRequest, tmp_path: Path
     ) -> None:
         logger.debug("send_and_recive_and_write called on pid: {}".format(os.getpid()))
         with http_connection(*hostport) as conn:
@@ -107,7 +105,7 @@ class DistributeBatchProblemSampler(
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
-    def sample_batch(self, n_sample: int, pool: PredicatedProblemPool[ProblemT]) -> np.ndarray:
+    def sample_batch(self, n_sample: int, pool: PredicatedTaskPool[TaskT]) -> np.ndarray:
         assert n_sample > 0
         n_sample_table = self.determine_assignment_per_server(n_sample)
 
@@ -123,7 +121,7 @@ class DistributeBatchProblemSampler(
                 n_sample_part = n_sample_table[hostport]
                 if n_sample_part > 0:
                     n_process = self.hostport_cpuinfo_map[hostport].n_cpu
-                    req = SampleProblemRequest(n_sample_part, pool, n_process)
+                    req = SampleTaskRequest(n_sample_part, pool, n_process)
                     p = ctx.Process(
                         target=self.send_and_recive_and_write, args=(hostport, req, td_path)
                     )

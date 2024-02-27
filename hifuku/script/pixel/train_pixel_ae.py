@@ -11,10 +11,10 @@ from mohou.script_utils import create_default_logger
 from mohou.trainer import TrainCache, TrainConfig, train
 from torch.utils.data import Dataset
 
-from hifuku.datagen import MultiProcessBatchProblemSampler
+from hifuku.datagen import MultiProcessBatchTaskSampler
 from hifuku.domain import select_domain
 from hifuku.neuralnet import AutoEncoderConfig, PixelAutoEncoder
-from hifuku.pool import TrivialProblemPool
+from hifuku.pool import TrivialTaskPool
 
 
 @dataclass
@@ -53,8 +53,8 @@ if __name__ == "__main__":
         with cache_path.open(mode="rb") as rf:
             mat_list = pickle.load(rf)
     else:
-        pool = TrivialProblemPool(task_type, 1).as_predicated()
-        sampler = MultiProcessBatchProblemSampler()  # type: ignore[var-annotated]
+        pool = TrivialTaskPool(task_type, 1).as_predicated()
+        sampler = MultiProcessBatchTaskSampler()  # type: ignore[var-annotated]
         problems = sampler.sample_batch(args.sample, pool)
 
         mat_list = []
