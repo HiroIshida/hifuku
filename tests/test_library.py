@@ -59,23 +59,28 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             create_default_logger(td_path, "test_trajectorylib")
-            lib_sampler = SimpleSolutionLibrarySampler.initialize(
-                problem_type,
-                solver_type,
-                solcon,
-                ae_model,
-                lconfig,
-                td_path,
-                solver=solver,
-                sampler=sampler,
-                device=device,
-            )
+
+            args = (problem_type, solver_type, solcon, ae_model, lconfig, td_path)
+            kwargs = {"solver": solver, "sampler": sampler, "device": device}
+
+            # main test
+            lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
             lib_sampler.step_active_sampling()
             lib_sampler.step_active_sampling()
+            coverage = lib_sampler.sampler_state.coverage_est_history[-1]
+            assert coverage > 0.3  # dummy domain specific
+
+            # test warm start
+            lib = SolutionLibrary.load(td_path, problem_type, solver_type, device=device)[0]
+            state = ActiveSamplerState.load(td_path)
+            assert len(state.coverage_est_history) == 2
+            lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
+            lib_sampler.setup_warmstart(state, lib)
+            assert len(lib_sampler.presampled_tasks_paramss) > 0, "presampled tasks are not loaded"
             lib_sampler.step_active_sampling()
-            assert lib_sampler.sampler_state.coverage_est_history[-1] > 0.5
-            SolutionLibrary.load(td_path, problem_type, solver_type)[0]
-            ActiveSamplerState.load(td_path)
+            coverage_after_warm = lib_sampler.sampler_state.coverage_est_history[-1]
+            assert coverage_after_warm > coverage, "presumably warm start did not work"
+            assert coverage_after_warm > 0.5  # dummy domain specific
 
 
 def test_SolutionLibrarySampler():
