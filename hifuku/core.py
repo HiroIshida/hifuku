@@ -356,7 +356,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         iterval_est_list = []
         init_solutions_est_list = []
         for task_params in tqdm.tqdm(task_paramss):
-            task = self.task_type.from_intrinsic_desc_vecs(task_params)
+            task = self.task_type.from_task_params(task_params)
             infer_results = self.infer(task)
             iterval_est_list.extend([res.nit for res in infer_results])  # NOTE: flatten!
             init_solutions_est_list.append([res.init_solution for res in infer_results])
@@ -384,7 +384,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         total_count = 0
         success_count = 0
         for task_params in task_paramss:
-            task = self.task_type.from_intrinsic_desc_vecs(task_params)
+            task = self.task_type.from_task_params(task_params)
             infer_res_list = self.infer(task)
             for infer_res in infer_res_list:
                 total_count += 1
@@ -1272,7 +1272,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 logger.debug("try sampling difficutl task...")
                 task_params = next(task_pool)
                 assert task_params.shape[0] == 1  # inner task is 1
-                task = self.task_type.from_intrinsic_desc_vecs(task_params)
+                task = self.task_type.from_task_params(task_params)
                 infer_res = self.library.infer(task)[0]
                 iterval = infer_res.nit
                 is_difficult = iterval > self.difficult_iter_threshold

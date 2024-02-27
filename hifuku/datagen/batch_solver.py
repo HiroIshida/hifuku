@@ -93,7 +93,7 @@ class BatchTaskSolver(Generic[ConfigT, ResultT], ABC):
         if self.n_limit_batch is None:
             logger.debug("n_limit_batch is not set. detremine now...")
             max_ram_usage = 16 * 10**9
-            task_for_measure_size = self.task_type.from_intrinsic_desc_vecs(task_paramss[0])
+            task_for_measure_size = self.task_type.from_task_params(task_paramss[0])
             serialize_ram_size_each = len(pickle.dumps(task_for_measure_size)) * 2
             max_size = int(max_ram_usage // serialize_ram_size_each)
             logger.debug(
@@ -170,7 +170,7 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
                 # return [tuple(task.solve_default()) for task in task_params]  # type: ignore
                 resultss = []
                 for task_params in task_paramss:
-                    task = self.task_type.from_intrinsic_desc_vecs(task_params)
+                    task = self.task_type.from_task_params(task_params)
                     results = tuple(task.solve_default())
                     resultss.append(results)
                 return resultss
@@ -181,7 +181,7 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
 
                 solver = self.solver_t.init(self.config)
                 for task_params, init_solution in zip(task_paramss, init_solutions):
-                    task = self.task_type.from_intrinsic_desc_vecs(task_params)
+                    task = self.task_type.from_task_params(task_params)
                     init_solutions_per_inner = duplicate_init_solution_if_not_list(
                         init_solution, task.n_inner_task
                     )
@@ -244,7 +244,7 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
         global _task_type
 
         task_idx, task_params, init_solutions = args
-        task = _task_type.from_intrinsic_desc_vecs(task_params)  # type: ignore
+        task = _task_type.from_task_params(task_params)  # type: ignore
         # NOTE: a lot of type: ignore due to global variables
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             if _use_default_solver:  # type: ignore

@@ -23,7 +23,7 @@ class PredicatedTaskPool(Generic[TaskT], Iterator[Optional[np.ndarray]]):
         )
         if ret is None:
             return None
-        return ret.to_intrinsic_desc_vecs()
+        return ret.to_task_params()
 
 
 @dataclass
@@ -32,7 +32,7 @@ class TaskPool(Generic[TaskT], Iterator[np.ndarray]):
     n_task_inner: int
 
     def __next__(self) -> np.ndarray:
-        return self.task_type.sample(self.n_task_inner).to_intrinsic_desc_vecs()
+        return self.task_type.sample(self.n_task_inner).to_task_params()
 
     def as_predicated(self) -> PredicatedTaskPool[TaskT]:
         return cast(PredicatedTaskPool[TaskT], self)

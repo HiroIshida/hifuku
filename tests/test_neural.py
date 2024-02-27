@@ -70,9 +70,7 @@ def get_sol_tasks_and_resultss(domain):
 
     n_task = 20
     n_inner = 3
-    task_paramss = np.array(
-        [task_type.sample(n_inner).to_intrinsic_desc_vecs() for _ in range(n_task)]
-    )
+    task_paramss = np.array([task_type.sample(n_inner).to_task_params() for _ in range(n_task)])
     batch_solver = MultiProcessBatchTaskSolver(domain.solver_type, domain.solver_config, task_type)
     resultss = batch_solver.solve_batch(task_paramss, [sol.traj] * n_task)
     return sol, task_paramss, resultss

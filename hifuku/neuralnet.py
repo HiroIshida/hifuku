@@ -212,7 +212,7 @@ def _create_dataset_from_paramss_and_resultss(
 
             processed_list = []
             for task_params, results, weights in tqdm.tqdm(zip(task_paramss, resultss, weightss)):
-                task = task_type.from_intrinsic_desc_vecs(task_params)
+                task = task_type.from_task_params(task_params)
                 table = task.export_table(use_matrix=True)
                 encoded: Optional[torch.Tensor] = None
                 if table.world_mat is not None:

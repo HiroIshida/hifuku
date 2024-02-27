@@ -90,9 +90,7 @@ def test_batch_solver_init_solutions():
     )
     n_task = 5
     n_inner = 2
-    task_paramss = np.array(
-        [task_type.sample(n_inner).to_intrinsic_desc_vecs() for _ in range(n_task)]
-    )
+    task_paramss = np.array([task_type.sample(n_inner).to_task_params() for _ in range(n_task)])
     mp_batch_solver.solve_batch(task_paramss, [None] * n_task)
     mp_batch_solver.solve_batch(task_paramss, [init_traj] * n_task)
     mp_batch_solver.solve_batch(task_paramss, [[init_traj] * n_inner] * n_task)
@@ -111,7 +109,7 @@ def test_consistency_of_all_batch_sovler(server):
             init_solutions = [init_traj] * n_task
             # set standard = True for testing purpose
             task_paramss = np.array(
-                [task_type.sample(n_task_inner).to_intrinsic_desc_vecs() for _ in range(n_task)]
+                [task_type.sample(n_task_inner).to_task_params() for _ in range(n_task)]
             )
             batch_solver_list: List[BatchTaskSolver] = []
             mp_batch_solver = MultiProcessBatchTaskSolver(
