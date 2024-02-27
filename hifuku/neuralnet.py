@@ -1,34 +1,24 @@
 import copy
 import logging
 import multiprocessing
-import os
-import pickle
-import subprocess
-import uuid
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any, List, Literal, Optional, Tuple, Type
 
-import dill
 import numpy as np
 import threadpoolctl
 import torch
 import torch.nn as nn
 import tqdm
 from mohou.model.common import LossDict, ModelBase, ModelConfigBase
-from mohou.utils import detect_device
 from rpbench.interface import TaskBase
 from skmp.solver.interface import ResultProtocol
 from skmp.trajectory import Trajectory
 from torch import Tensor
-from torch.utils.data import Dataset, default_collate
+from torch.utils.data import Dataset
 
-from hifuku.types import RawData
-from hifuku.utils import determine_process_thread, num_torch_thread
+from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -136,255 +126,6 @@ class IterationPredictorDataset(Dataset):
             self.descriptions[idx],
             self.itervals[idx],
             self.weights[idx],
-        )
-
-    @staticmethod
-    def _initialize(init_solution, solver_config, task_type):
-        global _init_solution_, _solver_config_, _task_type_
-        _init_solution_ = init_solution  # type: ignore
-        _solver_config_ = solver_config  # type: ignore
-        _task_type_ = task_type  # type: ignore
-        logger.info(f"initialized pid {os.getpid()}")
-
-    @staticmethod
-    def _create_raw_data(pair):  # used in ProcessPool
-        task_params, results = pair
-        global _init_solution_, _solver_config_, _task_type_
-        task = _task_type_.from_intrinsic_desc_vecs(task_params)  # type: ignore[name-defined]
-        raw_data = RawData(_init_solution_, task.export_table(use_matrix=True), results, _solver_config_)  # type: ignore
-        return raw_data
-
-    @classmethod
-    def _compute_expected_raw_data_size(
-        cls, task_paramss, resultss, solver_config, task_type: Type[TaskBase]
-    ) -> int:
-        task_params = task_paramss[0]
-        results = resultss[0]
-        task = task_type.from_intrinsic_desc_vecs(task_params)
-        raw_data = RawData(None, task.export_table(use_matrix=True), results, solver_config)  # type: ignore
-        dump_path = Path(f"/tmp/expected_raw_data_{uuid.uuid4()}.pkl")
-        logger.debug(f"dumping raw data to {dump_path}")
-        with dump_path.open("wb") as f:
-            pickle.dump(raw_data, f)
-        expected_total_size = len(pickle.dumps(raw_data)) * len(task_paramss)  # in bytes
-        return expected_total_size
-
-    @classmethod
-    def construct_from_paramss_and_resultss_in_isolated_process(
-        cls,
-        init_solution,
-        task_paramss: np.ndarray,
-        resultss,
-        solver_config,
-        task_type: Type[TaskBase],
-        weightss: Optional[Tensor],
-        ae_model: Optional[AutoEncoderBase],
-        batch_size: int = 500,
-    ) -> "IterationPredictorDataset":
-        # somehow construct_from_paramss_and_resultss causes memory leak
-        # so, by isolating the function, we can avoid the memory leak at least in the main process
-        device_original = None
-        if ae_model is not None:
-            device_original = ae_model.get_device()
-        with TemporaryDirectory() as tempdir:
-            temp_dir_path = Path(tempdir)
-            temp_path = temp_dir_path / "args.pkl"
-            with temp_path.open("wb") as f:
-                pickle.dump(
-                    (
-                        init_solution,
-                        task_paramss,
-                        resultss,
-                        solver_config,
-                        task_type,
-                        weightss,
-                        ae_model,
-                        batch_size,
-                    ),
-                    f,
-                )
-            # because we cannot create child process in child process. we call the function
-            # from the shell and dump it. see __main__ below
-            # this is a super dirty hack
-            # this method works fine but somehow pytest fails...
-            subprocess.run(
-                f"python -m hifuku.neuralnet --path {temp_dir_path}",
-                shell=True,
-                check=True,
-            )
-            # then load. need dill as we pickle __main__ object
-            # https://stackoverflow.com/a/19428760/7624196
-            dump_path = temp_dir_path / "dataset.dill"
-            with dump_path.open("rb") as f:
-                dataset = dill.load(f)
-        if ae_model is not None and device_original is not None:
-            ae_model.put_on_device(device_original)
-        return dataset
-
-    @staticmethod
-    def _isolated_construct_from_paramss_and_resultss_then_save(temp_dir: Path) -> None:
-        temp_arg_path = temp_dir / "args.pkl"
-        with temp_arg_path.open("rb") as f:
-            (
-                init_solution,
-                task_paramss,
-                resultss,
-                solver_config,
-                task_type,
-                weightss,
-                ae_model,
-                batch_size,
-            ) = pickle.load(f)
-        dataset = IterationPredictorDataset.construct_from_paramss_and_resultss(
-            init_solution,
-            task_paramss,
-            resultss,
-            solver_config,
-            task_type,
-            weightss,
-            ae_model,
-            batch_size,
-        )
-        # save the dataset to a temporary file
-        # need dill as we pickle __main__ object
-        # https://stackoverflow.com/a/19428760/7624196
-        dump_path = temp_dir / "dataset.dill"
-        with dump_path.open("wb") as f:
-            dill.dump(dataset, f)
-
-    @classmethod
-    def construct_from_paramss_and_resultss(
-        cls,
-        init_solution,
-        task_paramss: np.ndarray,
-        resultss,
-        solver_config,
-        task_type: Type[TaskBase],
-        weightss: Optional[Tensor],
-        ae_model: Optional[AutoEncoderBase],
-        batch_size: int = 500,
-    ) -> "IterationPredictorDataset":
-        expected_total_data_size = cls._compute_expected_raw_data_size(
-            task_paramss, resultss, solver_config, task_type
-        )
-        logger.info(f"expected total data size: {expected_total_data_size / 1e6} MB")
-
-        raw_data_list = []
-        n_process, _ = determine_process_thread()
-        with ProcessPoolExecutor(
-            n_process,
-            initializer=cls._initialize,
-            initargs=(init_solution, solver_config, task_type),
-        ) as executor:
-            args = list(zip(task_paramss, resultss))
-            for raw_data in tqdm.tqdm(
-                executor.map(cls._create_raw_data, args), total=len(task_paramss)
-            ):
-                raw_data_list.append(raw_data)
-
-        # split the data into batches to avoid GPU out of memory in dataset construction
-        # NOTE: GPU may be used to apply cnn-encoder to the mesh in dataset construction
-        zipped = [raw_data.to_tensors() for raw_data in raw_data_list]  # list of tuples
-        loader_like = [
-            default_collate(zipped[i : i + batch_size]) for i in range(0, len(zipped), batch_size)
-        ]
-
-        if weightss is None:
-            weightss = torch.ones((len(task_paramss), task_paramss.shape[1]))
-        assert weightss.ndim == 2
-        return cls.construct(loader_like, weightss, ae_model)
-
-    @classmethod
-    def construct(
-        cls, loader_like, weightss: Tensor, ae_model: Optional[AutoEncoderBase]
-    ) -> "IterationPredictorDataset":
-        if ae_model is None:
-            return cls.construct_keeping_mesh(loader_like, weightss)
-        else:
-            return cls.construct_by_encoding(loader_like, weightss, ae_model)
-
-    @classmethod
-    def construct_keeping_mesh(cls, loader_like, weightss: Tensor) -> "IterationPredictorDataset":
-        meshes_list = []
-        descriptions_stacked_list = []
-        iterval_stacked_list = []
-        bools_fail_stacked_list = []
-
-        n_inner = None
-        for sample in tqdm.tqdm(loader_like):
-            meshes, descriptionss, itervals, bools_fail = sample
-            meshes_list.append(meshes)
-            descriptions_stacked_list.append(descriptionss.reshape((-1, descriptionss.shape[-1])))
-            iterval_stacked_list.append(itervals.flatten())
-            bools_fail_stacked_list.append(bools_fail.flatten())
-
-            n_inner = len(descriptionss[0])
-        assert n_inner is not None
-
-        return cls(
-            torch.concat(meshes_list),
-            torch.concat(descriptions_stacked_list),
-            torch.hstack(iterval_stacked_list),
-            weightss.flatten(),
-            n_inner,
-        )
-
-    @classmethod
-    def construct_by_encoding(
-        cls, loader_like, weightss: Tensor, ae_model: AutoEncoderBase
-    ) -> "IterationPredictorDataset":
-        device = detect_device()
-        ae_model.put_on_device(device)
-
-        encoded_list = []
-        description_list = []
-        iterval_list = []
-        bools_fail_list = []
-
-        # create minibatch list
-        n_problem: int = 0
-        mesh_used: bool = False  # dirty. set in the for loop
-
-        for sample in tqdm.tqdm(loader_like):
-            mesh, description, iterval, bools_fail = sample
-
-            mesh_used = mesh is not None
-
-            if mesh_used:
-                mesh = mesh.to(device)  # n_batch x (*shape)
-                encoded: torch.Tensor = ae_model.encode(mesh).detach().cpu()
-
-            n_batch, n_problem, _ = description.shape
-
-            for i in range(n_batch):
-
-                if mesh_used:
-                    encoded_list.append(encoded[i].unsqueeze(dim=0))
-
-                description_list.append(description[i])
-                iterval_list.append(iterval[i])
-                bools_fail_list.append(bools_fail[i])
-        assert n_problem > 0
-
-        if mesh_used:
-            mesh_encodeds_concat = torch.cat(encoded_list, dim=0)  # n_batch x n_bottleneck
-        else:
-            mesh_encodeds_concat = None
-
-        descriptions_concat = torch.cat(description_list, dim=0)
-        itervals_concat = torch.cat(iterval_list, dim=0)
-        bools_fails_concat = torch.cat(bools_fail_list, dim=0)
-
-        n_data = len(descriptions_concat)
-        assert len(itervals_concat) == n_data
-        return cls(
-            mesh_encodeds_concat,
-            descriptions_concat,
-            itervals_concat,
-            bools_fails_concat,
-            weightss.flatten(),
-            n_problem,
-            True,
         )
 
 
@@ -880,17 +621,3 @@ class FusingIterationPredictor(ModelBase[FusingIterationPredictorConfig]):
         iter_loss = torch.mean(weihted_iter_loss)
         dic = {"iter": iter_loss}
         return LossDict(dic)
-
-
-if __name__ == "__main__":
-    # this is actually called inside IterationPredictorDataset.construct_from_paramss_and_resultss_in_isolated_process
-    # don't delete this
-    # don't delete this
-    import argparse
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--path", type=str)
-    args = parser.parse_args()
-    path = Path(args.path)
-    IterationPredictorDataset._isolated_construct_from_paramss_and_resultss_then_save(path)

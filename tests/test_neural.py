@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
+import pytest
 import torch
 from mohou.trainer import TrainCache, TrainConfig, train
 
@@ -12,7 +13,6 @@ from hifuku.neuralnet import (
     AutoEncoderConfig,
     IterationPredictor,
     IterationPredictorConfig,
-    IterationPredictorDataset,
     IterationPredictorWithEncoder,
     IterationPredictorWithEncoderConfig,
     PixelAutoEncoder,
@@ -135,23 +135,24 @@ def _test_dataset(domain, use_weight: bool, encode_image: bool):
     assert w.item() == w_expected
 
 
-def test_dataset_without_mat():
-    domain = DummyDomain
-    _test_dataset(domain, True, True)
-    _test_dataset(domain, True, False)
-    _test_dataset(domain, False, True)
-    _test_dataset(domain, False, False)
+@pytest.mark.parametrize(
+    "domain, use_weight, encode_image",
+    [
+        (DummyMeshDomain, True, True),
+        (DummyMeshDomain, True, False),
+        (DummyMeshDomain, False, True),
+        (DummyMeshDomain, False, False),
+        (DummyDomain, True, True),
+        (DummyDomain, True, False),
+        (DummyDomain, False, True),
+        (DummyDomain, False, False),
+    ],
+)
+def test_dataset(domain, use_weight, encode_image):
+    _test_dataset(domain, use_weight, encode_image)
 
 
-def test_dataset_with_mat():
-    domain = DummyMeshDomain
-    _test_dataset(domain, True, True)
-    _test_dataset(domain, True, False)
-    _test_dataset(domain, False, True)
-    _test_dataset(domain, False, False)
-
-
-def test_training():
+def _test_training(domain, use_pretrained_ae: bool):
     domain = DummyMeshDomain
     sol_tasks_and_resultss = get_sol_tasks_and_resultss(domain)
     device = torch.device("cpu")
@@ -162,32 +163,30 @@ def test_training():
     train_config = TrainConfig(5, n_epoch=2)
     n_dof_desc = 2
 
-    dataset = create_dataset_from_paramss_and_resultss(
-        task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
-    )
-
     conf = IterationPredictorConfig(n_dof_desc, ae_config.dim_bottleneck, (10, 10, 10))
     iterpred_model = IterationPredictor(conf, device=device)
 
+    if use_pretrained_ae:
+        dataset = create_dataset_from_paramss_and_resultss(
+            task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
+        )
+        model = iterpred_model
+    else:
+        dataset = create_dataset_from_paramss_and_resultss(
+            task_paramss, resultss, domain.solver_config, domain.task_type, None, None
+        )
+        conf = IterationPredictorWithEncoderConfig(iterpred_model, ae)
+        model = IterationPredictorWithEncoder(conf, device=device)
+
     with TemporaryDirectory() as td:
         td_path = Path(td)
-        tcache = TrainCache.from_model(iterpred_model)
+        tcache = TrainCache.from_model(model)
         train(td_path, tcache, dataset, train_config)
 
-    # test dataset when ae is not specified
-    dataset_raw = IterationPredictorDataset.construct_from_paramss_and_resultss(
-        sol.traj, task_paramss, resultss, domain.solver_config, domain.task_type, None, None
-    )
-    conf = IterationPredictorWithEncoderConfig(iterpred_model, ae)
-    combined_model = IterationPredictorWithEncoder(conf, device=device)
 
-    with TemporaryDirectory() as td:
-        td_path = Path(td)
-        tcache = TrainCache.from_model(combined_model)
-        train(td_path, tcache, dataset_raw, train_config)
-
-
-if __name__ == "__main__":
-    test_dataset_without_mat()
-    # test_dataset_with_mat()
-    # test_training()
+@pytest.mark.parametrize(
+    "domain, use_pretrained_ae",
+    [(DummyMeshDomain, True), (DummyMeshDomain, False), (DummyDomain, True), (DummyDomain, False)],
+)
+def tset_training(domain, use_pretrained_ae):
+    _test_training(domain, use_pretrained_ae)
