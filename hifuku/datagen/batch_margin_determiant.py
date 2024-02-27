@@ -8,7 +8,7 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 import threadpoolctl
 
-from hifuku.coverage import CoverageResult, DetermineMarginsResult, determine_margins
+from hifuku.coverage import DetermineMarginsResult, RealEstAggregate, determine_margins
 from hifuku.datagen.http_datagen.client import ClientBase
 from hifuku.datagen.http_datagen.request import (
     DetermineMarginsRequest,
@@ -30,7 +30,7 @@ class BatchMarginsDeterminant(ABC):
     def determine_batch(
         self,
         n_sample: int,
-        coverage_results: List[CoverageResult],
+        aggregate_list: List[RealEstAggregate],
         threshold: float,
         target_fp_rate: float,
         cma_sigma: float,
@@ -56,7 +56,7 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
     def work(
         n_sample: int,
         queue: Queue,
-        coverage_results: List[CoverageResult],
+        aggregate_list: List[RealEstAggregate],
         threshold: float,
         target_fp_rate: float,
         cma_sigma: float,
@@ -72,7 +72,7 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             for _ in range(n_sample):
                 ret = determine_margins(
-                    coverage_results,
+                    aggregate_list,
                     threshold,
                     target_fp_rate,
                     cma_sigma,
@@ -84,7 +84,7 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
     def determine_batch(
         self,
         n_sample: int,
-        coverage_results: List[CoverageResult],
+        aggregate_list: List[RealEstAggregate],
         threshold: float,
         target_fp_rate: float,
         cma_sigma: float,
@@ -101,7 +101,7 @@ class MultiProcesBatchMarginsDeterminant(BatchMarginsDeterminant):
             args = (
                 n_sample_part,
                 queue,
-                coverage_results,
+                aggregate_list,
                 threshold,
                 target_fp_rate,
                 cma_sigma,
@@ -136,7 +136,7 @@ class DistributeBatchMarginsDeterminant(
     def determine_batch(
         self,
         n_sample: int,
-        coverage_results: List[CoverageResult],
+        aggregate_list: List[RealEstAggregate],
         threshold: float,
         target_fp_rate: float,
         cma_sigma: float,
@@ -156,7 +156,7 @@ class DistributeBatchMarginsDeterminant(
                 req = DetermineMarginsRequest(
                     n_sample_part,
                     n_process,
-                    coverage_results,
+                    aggregate_list,
                     threshold,
                     target_fp_rate,
                     cma_sigma,

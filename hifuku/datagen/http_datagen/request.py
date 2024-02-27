@@ -9,7 +9,7 @@ from typing import Generic, List, Optional, Sequence, Tuple, Type, TypeVar, over
 import numpy as np
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 
-from hifuku.coverage import CoverageResult, DetermineMarginsResult
+from hifuku.coverage import DetermineMarginsResult, RealEstAggregate
 from hifuku.pool import PredicatedTaskPool, TaskT
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ class SampleTaskResponse(MainResponse):
 class DetermineMarginsRequest(MainRequest):
     n_sample: int
     n_process: int
-    coverage_results: List[CoverageResult]
+    aggregate_list: List[RealEstAggregate]
     threshold: float
     target_fp_rate: float
     cma_sigma: float
@@ -127,7 +127,7 @@ class DetermineMarginsRequest(MainRequest):
     minimum_coverage: Optional[float] = None
 
     def ignore_fields(self) -> Tuple[str, ...]:
-        return ("coverage_results",)
+        return ("aggregate_list",)
 
 
 @dataclass

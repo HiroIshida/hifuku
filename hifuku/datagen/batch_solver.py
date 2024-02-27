@@ -264,9 +264,7 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
 HostPortPair = Tuple[str, int]
 
 
-class DistributedBatchTaskSolver(
-    ClientBase[SolveTaskRequest], BatchTaskSolver[ConfigT, ResultT]
-):
+class DistributedBatchTaskSolver(ClientBase[SolveTaskRequest], BatchTaskSolver[ConfigT, ResultT]):
     n_process_per_server: Optional[int]
 
     def __init__(

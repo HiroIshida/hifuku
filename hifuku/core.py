@@ -29,7 +29,7 @@ from skmp.solver.interface import (
 )
 from skmp.trajectory import Trajectory
 
-from hifuku.coverage import CoverageResult
+from hifuku.coverage import RealEstAggregate
 from hifuku.datagen import (
     BatchMarginsDeterminant,
     BatchTaskSampler,
@@ -99,7 +99,7 @@ class ActiveSamplerHistory:
 
     # the below are not states but history for postmortem analysis
     margins_history: List[List[float]]
-    coverage_results: List[CoverageResult]
+    aggregate_list: List[RealEstAggregate]
     candidates_history: List[List[Trajectory]]
     elapsed_time_history: List[ProfileInfo]
     coverage_est_history: List[float]
@@ -107,7 +107,7 @@ class ActiveSamplerHistory:
 
     def __init__(self, sampling_number_factor: float):
         self.sampling_number_factor = sampling_number_factor
-        self.coverage_results = []
+        self.aggregate_list = []
         self.margins_history = []
         self.candidates_history = []
         self.elapsed_time_history = []
@@ -117,8 +117,8 @@ class ActiveSamplerHistory:
     def check_consistency(self) -> None:
         if len(self.elapsed_time_history) == 0:
             return
-        assert len(self.coverage_results) == len(self.margins_history)
-        total_iter = len(self.coverage_results) + self.failure_count
+        assert len(self.aggregate_list) == len(self.margins_history)
+        total_iter = len(self.aggregate_list) + self.failure_count
         assert len(self.candidates_history) == total_iter
         assert len(self.elapsed_time_history) == total_iter
         for elapsed_time in self.elapsed_time_history:
@@ -144,7 +144,7 @@ class ActiveSamplerHistory:
 
     @property
     def total_iter(self) -> int:
-        return len(self.coverage_results) + self.failure_count
+        return len(self.aggregate_list) + self.failure_count
 
     @property
     def total_time(self) -> float:
@@ -351,7 +351,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
 
     def measure_full_coverage(
         self, task_paramss: np.ndarray, solver: BatchTaskSolver
-    ) -> CoverageResult:
+    ) -> RealEstAggregate:
         logger.info("**compute est values")
         iterval_est_list = []
         init_solutions_est_list = []
@@ -373,11 +373,11 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
                     iterval_real_list.append(result.n_call)
 
         success_iter = self.success_iter_threshold()
-        coverage_result = CoverageResult(
+        aggregate = RealEstAggregate(
             np.array(iterval_real_list), np.array(iterval_est_list), success_iter
         )
-        logger.info(coverage_result)
-        return coverage_result
+        logger.info(aggregate)
+        return aggregate
 
     def measure_coverage(self, task_paramss: np.ndarray) -> float:
         threshold = self.success_iter_threshold()
@@ -804,9 +804,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         assert solver.config == solver_config
         if sampler is None:
             sampler = (
-                DistributeBatchTaskSampler()
-                if use_distributed
-                else MultiProcessBatchTaskSampler()
+                DistributeBatchTaskSampler() if use_distributed else MultiProcessBatchTaskSampler()
             )
         determinant = (
             DistributeBatchMarginsDeterminant()
@@ -883,7 +881,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         prof_info = ProfileInfo()
         ts = time.time()
         self.sampler_history.check_consistency()
-        assert len(self.sampler_history.coverage_results) == len(self.library.predictors)
+        assert len(self.sampler_history.aggregate_list) == len(self.library.predictors)
 
         logger.info("active sampling step")
 
@@ -908,7 +906,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 coverage_est = 0.0
             self.sampler_history.failure_count += 1
         else:
-            margins, coverage_result, coverage_est = ret
+            margins, aggregate, coverage_est = ret
             logger.info("margin for latest iterpred is {}".format(margins[-1]))
             logger.debug("determined margins {}".format(margins))
 
@@ -916,7 +914,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             self.library.init_solutions.append(init_solution)
             self.library.margins = margins
 
-            self.sampler_history.coverage_results.append(coverage_result)
+            self.sampler_history.aggregate_list.append(aggregate)
             self.sampler_history.margins_history.append(copy.deepcopy(margins))
 
         prof_info.t_total = time.time() - ts
@@ -966,7 +964,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         self,
         predictor: Union[IterationPredictorWithEncoder, IterationPredictor],
         init_solution: Trajectory,
-    ) -> Optional[Tuple[List[float], CoverageResult, float]]:
+    ) -> Optional[Tuple[List[float], RealEstAggregate, float]]:
         # TODO: move this whole "adjusting" operation to a different method
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
@@ -981,15 +979,13 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             uuidval="dummy",
             meta_data={},
         )
-        coverage_result = singleton_library.measure_full_coverage(
-            self.tasks_validation, self.solver
-        )
-        logger.info(coverage_result)
+        aggregate = singleton_library.measure_full_coverage(self.tasks_validation, self.solver)
+        logger.info(aggregate)
 
         if len(self.library.predictors) > 0:
             # determine margin using cmaes
             cma_std = self.solver_config.n_max_call * 0.5
-            coverages_new = self.sampler_history.coverage_results + [coverage_result]
+            coverages_new = self.sampler_history.aggregate_list + [aggregate]
             coverage_est_last = self.sampler_history.coverage_est_history[-1]
             results = self.determinant.determine_batch(
                 self.config.n_determine_batch,
@@ -1014,7 +1010,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             margins = best_margins
         else:
             logger.info("determine margin using exact method")
-            margin, max_coverage = coverage_result.determine_margin(
+            margin, max_coverage = aggregate.determine_margin(
                 self.config.acceptable_false_positive_rate
             )
 
@@ -1026,7 +1022,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
 
         assert max_coverage is not None
         logger.info("optimal coverage estimate is set to {}".format(max_coverage))
-        return margins, coverage_result, max_coverage
+        return margins, aggregate, max_coverage
 
     def _train_predictor(
         self,

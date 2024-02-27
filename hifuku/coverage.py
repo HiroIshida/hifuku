@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class CoverageResult:
+class RealEstAggregate:
     reals: np.ndarray
     ests: np.ndarray
     threshold: float
@@ -28,7 +28,7 @@ class CoverageResult:
         return json.dumps(d)
 
     @classmethod
-    def loads(cls, s: str) -> "CoverageResult":
+    def loads(cls, s: str) -> "RealEstAggregate":
         d = json.loads(s)
         reals = np.array(d["reals"])
         ests = np.array(d["ests"])
@@ -43,12 +43,12 @@ class CoverageResult:
     def __len__(self) -> int:
         return len(self.reals)
 
-    def bootstrap_sampling(self) -> "CoverageResult":
+    def bootstrap_sampling(self) -> "RealEstAggregate":
         n = self.__len__()
         indices = np.random.randint(n, size=n)
         vgt = self.reals[indices]
         vest = self.ests[indices]
-        return CoverageResult(vgt, vest, self.threshold)
+        return RealEstAggregate(vgt, vest, self.threshold)
 
     @cached_property
     def true_positive_bools(self) -> np.ndarray:
@@ -158,7 +158,7 @@ def compute_coverage_and_fp_jit(
 
 
 def determine_margins(
-    coverage_results: List[CoverageResult],
+    aggregate_list: List[RealEstAggregate],
     threshold: float,
     target_fp_rate: float,
     cma_sigma: float,
@@ -170,7 +170,7 @@ def determine_margins(
     logger.debug("target fp_rate modified: {}".format(target_fp_rate_modified))
 
     if margins_guess is None:
-        n_pred = len(coverage_results)
+        n_pred = len(aggregate_list)
         margins_guess = np.zeros(n_pred)
 
     best_score = np.inf
@@ -182,8 +182,8 @@ def determine_margins(
     coverage_est = -np.inf
     fp_rate = -np.inf
 
-    realss = np.array([cr.reals for cr in coverage_results], order="F")
-    estss = np.array([cr.ests for cr in coverage_results], order="F")
+    realss = np.array([cr.reals for cr in aggregate_list], order="F")
+    estss = np.array([cr.ests for cr in aggregate_list], order="F")
 
     optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
     for generation in tqdm.tqdm(range(1000)):

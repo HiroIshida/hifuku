@@ -70,9 +70,7 @@ class PostHandler(BaseHTTPRequestHandler):
         resp = SolveTaskResponse(results_list, elapsed_time)
         return resp
 
-    def process_SampleTaskRequest(
-        self, request: SampleTaskRequest[TaskT]
-    ) -> SampleTaskResponse:
+    def process_SampleTaskRequest(self, request: SampleTaskRequest[TaskT]) -> SampleTaskResponse:
 
         # NOTE: by calling this line (sample()) some pre-computation
         # e.g. sdf mesh creation will running.
@@ -98,7 +96,7 @@ class PostHandler(BaseHTTPRequestHandler):
         determinant = MultiProcesBatchMarginsDeterminant(request.n_process)
         results = determinant.determine_batch(
             request.n_sample,
-            request.coverage_results,
+            request.aggregate_list,
             request.threshold,
             request.target_fp_rate,
             request.cma_sigma,

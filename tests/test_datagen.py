@@ -14,7 +14,7 @@ import pytest
 from ompl import set_ompl_random_seed
 from skmp.trajectory import Trajectory
 
-from hifuku.coverage import CoverageResult
+from hifuku.coverage import RealEstAggregate
 from hifuku.datagen import (
     BatchTaskSampler,
     BatchTaskSolver,
@@ -111,10 +111,7 @@ def test_consistency_of_all_batch_sovler(server):
             init_solutions = [init_traj] * n_task
             # set standard = True for testing purpose
             task_paramss = np.array(
-                [
-                    task_type.sample(n_task_inner).to_intrinsic_desc_vecs()
-                    for _ in range(n_task)
-                ]
+                [task_type.sample(n_task_inner).to_intrinsic_desc_vecs() for _ in range(n_task)]
             )
             batch_solver_list: List[BatchTaskSolver] = []
             mp_batch_solver = MultiProcessBatchTaskSolver(
@@ -202,8 +199,8 @@ def test_batch_determinant(server):
     real2 = f_real(x, -0.5)
     est1 = f_est(x, 0.5)
     est2 = f_est(x, -0.5)
-    cr1 = CoverageResult(real1, est1, 0.5)
-    cr2 = CoverageResult(real2, est2, 0.5)
+    cr1 = RealEstAggregate(real1, est1, 0.5)
+    cr2 = RealEstAggregate(real2, est2, 0.5)
 
     specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
     determinant_list = []

@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from hifuku.coverage import CoverageResult, compute_coverage_and_fp_jit
+from hifuku.coverage import RealEstAggregate, compute_coverage_and_fp_jit
 
 
 def test_coverage_result():
@@ -23,7 +23,7 @@ def test_coverage_result():
             values_gt = func_gt(xs)
             values_est = func_est(xs)
 
-            result = CoverageResult(values_gt, values_est, 0.0)
+            result = RealEstAggregate(values_gt, values_est, 0.0)
 
             assert sum(result.false_postive_bools) + sum(result.false_negative_bools) + sum(
                 result.true_positive_bools
@@ -31,7 +31,7 @@ def test_coverage_result():
             # rate_threshold = 0.05
             margin, _ = result.determine_margin(rate_threshold)
 
-            result = CoverageResult(values_gt, values_est + margin, 0.0)
+            result = RealEstAggregate(values_gt, values_est + margin, 0.0)
 
             # sum must equal
             n_sum = (
@@ -55,7 +55,7 @@ def test_coverage_result_int_case():
     n_sample = 1000
     values_gt = np.random.randint(5, size=(n_sample,))
     values_est = np.random.randint(5, size=(n_sample,))
-    result = CoverageResult(values_gt, values_est, 2)
+    result = RealEstAggregate(values_gt, values_est, 2)
     n_sum = (
         sum(result.true_positive_bools)
         + sum(result.true_negative_bools)
@@ -66,7 +66,7 @@ def test_coverage_result_int_case():
 
 
 def compute_coverage_and_fp_naive(
-    margins: np.ndarray, coverage_results: List[CoverageResult], threshold: float
+    margins: np.ndarray, coverage_results: List[RealEstAggregate], threshold: float
 ) -> Tuple[float, float]:
     # naive (non-vectorized) coverage and fp computation
     coverage_count = 0
@@ -112,11 +112,11 @@ def test_compute_coverage_and_fp():
     X = np.random.rand(n_data, 2)
     centers = np.array([[0, 0], [0, 1], [1, 0], [1, 1], [0.5, 0.0]])
 
-    cr_list: List[CoverageResult] = []
+    cr_list: List[RealEstAggregate] = []
     for c in centers:
         est_values = np.array([est_model(c, x) for x in X])
         real_values = np.array([actual_model(c, x) for x in X])
-        cr = CoverageResult(real_values, est_values, threshold)
+        cr = RealEstAggregate(real_values, est_values, threshold)
         cr_list.append(cr)
 
     # test main
@@ -137,8 +137,8 @@ def test_coverage_result_serialization():
     reals_random = np.random.rand(100)
     ests_random = np.random.rand(100)
     threshold = 0.5
-    cr = CoverageResult(reals_random, ests_random, threshold)
-    cr_again = CoverageResult.loads(cr.dumps())
+    cr = RealEstAggregate(reals_random, ests_random, threshold)
+    cr_again = RealEstAggregate.loads(cr.dumps())
     # compare pickled
     assert pickle.dumps(cr) == pickle.dumps(cr_again)
 
