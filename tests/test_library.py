@@ -7,7 +7,7 @@ from mohou.trainer import TrainConfig
 
 from hifuku.domain import DomainProtocol, DummyDomain, DummyMeshDomain
 from hifuku.library import (
-    ActiveSamplerState,
+    ActiveSamplerHistory,
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
@@ -67,18 +67,20 @@ def _test_SolutionLibrarySampler(domain: Type[DomainProtocol], train_with_encode
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
             lib_sampler.step_active_sampling()
             lib_sampler.step_active_sampling()
-            coverage = lib_sampler.sampler_state.coverage_est_history[-1]
+            time.time() - ts
+            # assert lib_sampler.sampler_history
+            coverage = lib_sampler.sampler_history.coverage_est_history[-1]
             assert coverage > 0.3  # dummy domain specific
 
             # test warm start
             lib = SolutionLibrary.load(td_path, problem_type, solver_type, device=device)[0]
-            state = ActiveSamplerState.load(td_path)
+            state = ActiveSamplerHistory.load(td_path)
             assert len(state.coverage_est_history) == 2
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
             lib_sampler.setup_warmstart(state, lib)
             assert len(lib_sampler.presampled_tasks_paramss) > 0, "presampled tasks are not loaded"
             lib_sampler.step_active_sampling()
-            coverage_after_warm = lib_sampler.sampler_state.coverage_est_history[-1]
+            coverage_after_warm = lib_sampler.sampler_history.coverage_est_history[-1]
             assert coverage_after_warm > coverage, "presumably warm start did not work"
             assert coverage_after_warm > 0.5  # dummy domain specific
 

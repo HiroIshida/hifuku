@@ -23,7 +23,7 @@ from hifuku.script_utils import (
     get_project_path,
     load_compatible_autoencoder,
     load_library,
-    load_sampler_state,
+    load_sampler_history,
     watch_memory,
 )
 from hifuku.types import _CLAMP_FACTOR
@@ -156,9 +156,9 @@ if __name__ == "__main__":
     )
 
     if warm_start:
-        state = load_sampler_state(domain_name, postfix=project_name_postfix)
+        history = load_sampler_history(domain_name, postfix=project_name_postfix)
         library = load_library(domain_name, "cuda", True, postfix=project_name_postfix)
-        lib_sampler.setup_warmstart(state, library)
+        lib_sampler.setup_warmstart(history, library)
         if use_pretrained_ae:
             assert lib_sampler.library.ae_model_shared is not None
         else:
@@ -170,7 +170,7 @@ if __name__ == "__main__":
             assert n_grid == n_grid_pre
 
     for i in range(n_step):
-        history = lib_sampler.sampler_state.elapsed_time_history
+        history = lib_sampler.sampler_history.elapsed_time_history
         if len(history) > 0:
             time_total = sum([info.t_total for info in history])  # type: ignore[misc]
             logger.info("time_total: {}".format(time_total))

@@ -94,7 +94,7 @@ class ProfileInfo:  # per each iteration
         return self.t_total - (self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin)  # type: ignore[operator]
 
 
-class ActiveSamplerState:
+class ActiveSamplerHistory:
     # states
     sampling_number_factor: float
 
@@ -133,13 +133,13 @@ class ActiveSamplerState:
         )
 
     def dump(self, base_path: Path) -> None:
-        with (base_path / "state.pkl").open(mode="wb") as f:
+        with (base_path / "sampler_history.pkl").open(mode="wb") as f:
             pickle.dump(self, f)
 
     @classmethod
-    def load(cls, base_path: Path) -> "ActiveSamplerState":
-        with (base_path / "state.pkl").open(mode="rb") as f:
-            state: ActiveSamplerState = pickle.load(f)
+    def load(cls, base_path: Path) -> "ActiveSamplerHistory":
+        with (base_path / "sampler_history.pkl").open(mode="rb") as f:
+            state: ActiveSamplerHistory = pickle.load(f)
         state.check_consistency()
         return state
 
@@ -712,7 +712,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
     determinant: BatchMarginsDeterminant
     test_false_positive_rate: bool
     project_path: Path
-    sampler_state: ActiveSamplerState
+    sampler_history: ActiveSamplerHistory
     device: torch.device
     ae_model_pretrained: Optional[AutoEncoderBase]
     presampled_tasks_paramss: np.ndarray
@@ -775,7 +775,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             None if config.train_with_encoder else ae_model,
             meta_data,
         )
-        sampler_state = ActiveSamplerState(config.sampling_number_factor)
+        sampler_state = ActiveSamplerHistory(config.sampling_number_factor)
 
         # setup solver, sampler, determinant
         if solver is None:
@@ -869,9 +869,9 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         )
 
     def setup_warmstart(
-        self, state: ActiveSamplerState, library: SolutionLibrary[ProblemT, ConfigT, ResultT]
+        self, history: ActiveSamplerHistory, library: SolutionLibrary[ProblemT, ConfigT, ResultT]
     ) -> None:
-        self.sampler_state = state
+        self.sampler_history = history
         self.library = library
 
     def step_active_sampling(self) -> bool:
@@ -879,16 +879,16 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         return False if failed
         """
         prof_info = ProfileInfo()
-        self.sampler_state.check_consistency()
-        assert len(self.sampler_state.coverage_results) == len(self.library.predictors)
+        self.sampler_history.check_consistency()
+        assert len(self.sampler_history.coverage_results) == len(self.library.predictors)
 
         logger.info("active sampling step")
         ts = time.time()
 
         ts_determine_cand = time.time()
         init_solution, gain_expected = self._determine_init_solution(self.config.n_difficult)
-        logger.info(f"sampling nuber factor: {self.sampler_state.sampling_number_factor}")
-        n_problem_now = int((1.0 / gain_expected) * self.sampler_state.sampling_number_factor)
+        logger.info(f"sampling nuber factor: {self.sampler_history.sampling_number_factor}")
+        n_problem_now = int((1.0 / gain_expected) * self.sampler_history.sampling_number_factor)
         logger.info(f"n_problem_now: {n_problem_now}")
         prof_info.t_determine_cand = time.time() - ts_determine_cand
 
@@ -902,8 +902,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
 
         if ret is None:
             logger.info("no margin set could increase coverage. dont add anything to library")
-            coverage_est = self.sampler_state.coverage_est_history[-1]
-            self.sampler_state.failure_count += 1
+            coverage_est = self.sampler_history.coverage_est_history[-1]
+            self.sampler_history.failure_count += 1
         else:
             margins, coverage_result, coverage_est = ret
             logger.info("margin for latest iterpred is {}".format(margins[-1]))
@@ -913,16 +913,16 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             self.library.init_solutions.append(init_solution)
             self.library.margins = margins
 
-            self.sampler_state.coverage_results.append(coverage_result)
-            self.sampler_state.margins_history.append(copy.deepcopy(margins))
+            self.sampler_history.coverage_results.append(coverage_result)
+            self.sampler_history.margins_history.append(copy.deepcopy(margins))
 
         prof_info.t_total = time.time() - ts
 
-        self.sampler_state.elapsed_time_history.append(prof_info)
-        self.sampler_state.coverage_est_history.append(coverage_est)
-        coverage_this = self.sampler_state.coverage_est_history[-1]
-        if len(self.sampler_state.coverage_est_history) > 1:
-            coverage_previous = self.sampler_state.coverage_est_history[-2]
+        self.sampler_history.elapsed_time_history.append(prof_info)
+        self.sampler_history.coverage_est_history.append(coverage_est)
+        coverage_this = self.sampler_history.coverage_est_history[-1]
+        if len(self.sampler_history.coverage_est_history) > 1:
+            coverage_previous = self.sampler_history.coverage_est_history[-2]
         else:
             coverage_previous = 0.0
         gain = coverage_this - coverage_previous
@@ -934,25 +934,25 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             f"expected gain: {gain_expected}, actual gain: {gain}, achievement rate: {achievement_rate}"
         )
         if achievement_rate < self.config.threshold_inc_snf:
-            self.sampler_state.sampling_number_factor *= self.config.inc_coef_mult_snf
+            self.sampler_history.sampling_number_factor *= self.config.inc_coef_mult_snf
             logger.info(
-                f"expected gain is {gain_expected} is too small. increase sampling number factor to {self.sampler_state.sampling_number_factor}"
+                f"expected gain is {gain_expected} is too small. increase sampling number factor to {self.sampler_history.sampling_number_factor}"
             )
         elif gain > gain_expected * self.config.threshold_dec_snf:
-            self.sampler_state.sampling_number_factor *= self.config.dec_coef_mult_snf
+            self.sampler_history.sampling_number_factor *= self.config.dec_coef_mult_snf
             logger.info(
-                f"expected gain is high enough. decrease sampling number factor to {self.sampler_state.sampling_number_factor}"
+                f"expected gain is high enough. decrease sampling number factor to {self.sampler_history.sampling_number_factor}"
             )
 
         logger.info("elapsed time in active sampling: {} min".format(prof_info.t_total / 60.0))
         logger.info("prof_info: {}".format(prof_info))
-        t_total_list = [e.t_total for e in self.sampler_state.elapsed_time_history]
+        t_total_list = [e.t_total for e in self.sampler_history.elapsed_time_history]
         logger.info("current elapsed time history: {}".format(t_total_list))
         logger.info(
-            "current coverage est history: {}".format(self.sampler_state.coverage_est_history)
+            "current coverage est history: {}".format(self.sampler_history.coverage_est_history)
         )
         self.library.dump(self.project_path)
-        self.sampler_state.dump(self.project_path)
+        self.sampler_history.dump(self.project_path)
         return True
 
     @property
@@ -986,8 +986,8 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
         if len(self.library.predictors) > 0:
             # determine margin using cmaes
             cma_std = self.solver_config.n_max_call * 0.5
-            coverages_new = self.sampler_state.coverage_results + [coverage_result]
-            coverage_est_last = self.sampler_state.coverage_est_history[-1]
+            coverages_new = self.sampler_history.coverage_results + [coverage_result]
+            coverage_est_last = self.sampler_history.coverage_est_history[-1]
             results = self.determinant.determine_batch(
                 self.config.n_determine_batch,
                 coverages_new,
@@ -1328,7 +1328,7 @@ class SimpleSolutionLibrarySampler(Generic[ProblemT, ConfigT, ResultT]):
             solution_candidates = self._sample_solution_canidates(
                 self.config.n_solution_candidate, problem_pool
             )
-            self.sampler_state.candidates_history.append(solution_candidates)
+            self.sampler_history.candidates_history.append(solution_candidates)
 
             logger.info("sample difficult problems")
             if self.at_first_iteration():
