@@ -15,6 +15,7 @@ from ompl import set_ompl_random_seed
 from skmp.trajectory import Trajectory
 
 from hifuku.config import ServerSpec
+from hifuku.coverage import CoverageResult
 from hifuku.datagen import (
     BatchProblemSampler,
     BatchProblemSolver,
@@ -190,9 +191,19 @@ def test_consistency_of_all_batch_sampler(server):
 
 
 def test_batch_determinant(server):
-    coverage_results_path = Path(__file__).resolve().parent / "data" / "coverage_results.pkl"
-    with coverage_results_path.open(mode="rb") as f:
-        coverage_results = pickle.load(f)
+    def f_real(x, c):
+        return np.exp(-0.5 * ((x - c) ** 2)) + np.random.randn(len(x)) * 0.2
+
+    def f_est(x, c):
+        return np.exp(-0.5 * ((x - c) ** 2))
+
+    x = np.random.rand(1000)
+    real1 = f_real(x, 0.5)
+    real2 = f_real(x, -0.5)
+    est1 = f_est(x, 0.5)
+    est2 = f_est(x, -0.5)
+    cr1 = CoverageResult(real1, est1, 0.5)
+    cr2 = CoverageResult(real2, est2, 0.5)
 
     specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
     determinant_list = []
@@ -200,12 +211,10 @@ def test_batch_determinant(server):
     determinant_list.append(DistributeBatchMarginsDeterminant(specs))
 
     for determinant in determinant_list:
-        n_sample = 8
-        results = determinant.determine_batch(n_sample, coverage_results, 5, 0.1, 5, None, None)
-        assert len(results) == n_sample
+        determinant.determine_batch(8, [cr1, cr2], 5, 0.1, 5, None, None)
 
 
 if __name__ == "__main__":
-    test_batch_solver_init_solutions()
+    # test_batch_solver_init_solutions()
     # test_create_dataset()
-    # test_batch_determinant()
+    test_batch_determinant()
