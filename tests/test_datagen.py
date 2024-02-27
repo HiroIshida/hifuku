@@ -14,7 +14,6 @@ import pytest
 from ompl import set_ompl_random_seed
 from skmp.trajectory import Trajectory
 
-from hifuku.config import ServerSpec
 from hifuku.coverage import CoverageResult
 from hifuku.datagen import (
     BatchProblemSampler,
@@ -26,6 +25,7 @@ from hifuku.datagen import (
     MultiProcessBatchProblemSampler,
     MultiProcessBatchProblemSolver,
 )
+from hifuku.datagen.http_datagen.client import ServerSpec
 from hifuku.domain import DoubleIntegratorBubblySimple_SQP
 from hifuku.pool import PredicatedProblemPool, ProblemPool
 from hifuku.script_utils import create_default_logger

@@ -17,8 +17,7 @@ from rpbench.interface import TaskBase
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
-from hifuku.config import ServerSpec
-from hifuku.datagen.http_datagen.client import ClientBase
+from hifuku.datagen.http_datagen.client import ClientBase, ServerSpec
 from hifuku.datagen.http_datagen.request import (
     SolveProblemRequest,
     http_connection,
