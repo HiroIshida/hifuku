@@ -688,11 +688,10 @@ class LibrarySamplerConfig:
     # maybe you have to tune maybe ...
     inc_coef_mult_snf: float = 1.1  # snf stands for sampling_number_factor
     dec_coef_mult_snf: float = 0.9
-    threshold_inc_snf: float = 0.2  # if gain < expected * this, then increase snf
-    threshold_dec_snf: float = 0.5  # if gain > expected * this, then decrease snf
+    threshold_inc_snf: float = 0.3  # if gain < expected * this, then increase snf
+    threshold_dec_snf: float = 0.7  # if gain > expected * this, then decrease snf
     n_solution_candidate: int = 100
     n_difficult: int = 500
-    n_task_max: int = 1000000
     early_stopping_patience: int = 10
 
     # same for all settings (you dont have to tune)
