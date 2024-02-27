@@ -111,7 +111,7 @@ if __name__ == "__main__":
     if not isinstance(ae_model, NullAutoEncoder) and use_pretrained_ae:
         # check if the autoencoder is properly trained
         task = domain.task_type.sample(1)
-        table = task.export_table(use_matrix=True)
+        table = task.export_task_expression(use_matrix=True)
         assert table.world_mat is not None
         world_mat_np = np.expand_dims(table.world_mat, axis=(0, 1)).astype(float)
         world_mat_torch = torch.from_numpy(world_mat_np).float().to(ae_model.get_device())
