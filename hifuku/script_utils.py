@@ -36,19 +36,21 @@ def load_compatible_autoencoder(
             ae_model = TrainCache.load_all(ae_pp)[0].best_model
             logger.info("load from {}".format(ae_pp))
             assert isinstance(ae_model, AutoEncoderBase)
-            ae_model.put_on_device(detect_device())
+        ae_model.put_on_device(detect_device())
         return ae_model
     else:
         logger.info("use untrained autoencoder")
         T = domain.auto_encoder_type
         if issubclass(T, NullAutoEncoder):
             logger.info("actually, we will use null autoencoder")
-            return NullAutoEncoder()
+            ae = NullAutoEncoder()
         else:
             assert n_grid is not None
             conf = AutoEncoderConfig(n_grid=n_grid)
             logger.info("Initialize {} with default config {}".format(T.__name__, conf))
-            return T(conf)  # type: ignore
+            ae = T(conf)  # type: ignore
+        ae.put_on_device(detect_device())
+        return ae_model
 
 
 def get_project_path(
