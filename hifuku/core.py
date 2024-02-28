@@ -161,7 +161,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
     """
 
     task_type: Type[TaskT]
-    task_distribution_hash: str
+    task_distribution_vec: np.ndarray
     solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]]
     solver_config: ConfigT
     ae_model_shared: Optional[
@@ -203,7 +203,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
             meta_data = {}
         return cls(
             task_type,
-            task_type.compute_distribution_hash(),
+            task_type.distribution_vector(),
             solver_type,
             config,
             ae_model,
@@ -420,7 +420,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         task_type: Type[TaskT],
         solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         device: Optional[torch.device] = None,
-        check_hash: bool = True,
+        check_distribution: bool = True,
     ) -> List["SolutionLibrary[TaskT, ConfigT, ResultT]"]:
         if device is None:
             if torch.cuda.is_available():
@@ -448,7 +448,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
                 latest_path = path
         assert latest_path is not None
 
-        task_hash = task_type.compute_distribution_hash()
+        distribution_vec = task_type.distribution_vector()
 
         logger.debug("load latest library from {}".format(latest_path))
         with latest_path.open(mode="rb") as f:
@@ -460,13 +460,13 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
             # In most case, user will use the library in a single process
             # thus we dont need to care about thread stuff.
             lib.limit_thread = False  # faster
-            if check_hash:
+            if check_distribution:
                 # check if lib.task_distribution_hash attribute exists
                 # if not, it means that the library is old version
                 # and we cannot check the hash
-                if hasattr(lib, "task_distribution_hash"):
-                    if lib.task_distribution_hash != task_hash:
-                        msg = f"task_distribution_hash mismatch: {lib.task_distribution_hash} != {task_hash}\n"
+                if hasattr(lib, "task_distribution_vec"):
+                    if not np.allclose(lib.task_distribution_vec, distribution_vec):
+                        msg = f"task_distribution_vec mismatch: {lib.task_distribution_vec} != {distribution_vec}\n"
                         msg += "task definition has been change after training the library."
                         raise RuntimeError(msg)
                 else:
@@ -482,7 +482,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         ):
             singleton = SolutionLibrary(
                 task_type=self.task_type,
-                task_distribution_hash=self.task_distribution_hash,
+                task_distribution_vec=self.task_distribution_vec,
                 solver_type=self.solver_type,
                 solver_config=self.solver_config,
                 ae_model_shared=self.ae_model_shared,
@@ -506,7 +506,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
 
         library = SolutionLibrary(
             task_type=singleton.task_type,
-            task_distribution_hash=singleton.task_distribution_hash,
+            task_distribution_vec=singleton.task_distribution_vec,
             solver_type=singleton.solver_type,
             solver_config=singleton.solver_config,
             ae_model_shared=singleton.ae_model_shared,
@@ -521,7 +521,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
     def get_singleton(self, idx: int) -> "SolutionLibrary[TaskT, ConfigT, ResultT]":
         singleton = SolutionLibrary(
             task_type=self.task_type,
-            task_distribution_hash=self.task_distribution_hash,
+            task_distribution_vec=self.task_distribution_vec,
             solver_type=self.solver_type,
             solver_config=self.solver_config,
             ae_model_shared=self.ae_model_shared,
@@ -966,7 +966,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
             task_type=self.task_type,
-            task_distribution_hash=self.library.task_distribution_hash,
+            task_distribution_vec=self.library.task_distribution_vec,
             solver_type=self.solver_type,
             solver_config=self.solver_config,
             ae_model_shared=self.library.ae_model_shared,
