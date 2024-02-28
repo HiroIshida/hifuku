@@ -9,6 +9,7 @@ from mohou.trainer import TrainConfig
 
 from hifuku.core import (
     ActiveSamplerHistory,
+    LibraryBasedGuaranteedSolver,
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
     SolutionLibrary,
@@ -30,10 +31,11 @@ def _test_SolutionLibrarySampler(
     solcon = domain.solver_config
     solver_type = domain.solver_type
     domain.auto_encoder_project_name
-    solver = domain.get_multiprocess_batch_solver(2)
+    batch_solver = domain.get_multiprocess_batch_solver(2)
     sampler = domain.get_multiprocess_batch_sampler(2)
 
     lconfig = LibrarySamplerConfig(
+        acceptable_false_positive_rate=0.2,
         n_difficult=100,
         n_solution_candidate=10,
         sampling_number_factor=1000,
@@ -61,10 +63,10 @@ def _test_SolutionLibrarySampler(
 
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
-            create_default_logger(td_path, "test_trajectorylib")
+            logger = create_default_logger(td_path, "test_trajectorylib")
 
             args = (task_type, solver_type, solcon, ae_model, lconfig, td_path)
-            kwargs = {"solver": solver, "sampler": sampler, "device": device}
+            kwargs = {"solver": batch_solver, "sampler": sampler, "device": device}
 
             # main test
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
@@ -113,6 +115,28 @@ def _test_SolutionLibrarySampler(
             a = lib_sampler.sampler_history.coverage_est_history[-1]
             b = lib_sampler.library.measure_coverage(lib_sampler.tasks_validation)
             assert abs(a - b) < 1e-6, f"coverage estimation is not consistent: {a} vs {b}"
+
+            # test library based solver usage
+            lib = lib_sampler.library
+            solver = LibraryBasedGuaranteedSolver.init(lib)
+            est_true_count = 0
+            fp_count = 0
+            for _ in range(100):
+                task = task_type.sample(1)
+                solver.setup(task)
+                ret = solver.solve()
+                if solver.previous_est_positive:
+                    est_true_count += 1
+                    if ret.traj is None:
+                        fp_count += 1
+            coverage = est_true_count / 100
+            coverage_expected = lib_sampler.library.measure_coverage(lib_sampler.tasks_validation)
+            assert abs(coverage - lib_sampler.sampler_history.coverage_est_history[-1]) < 0.2
+            logger.info(f"coverage={coverage}, coverage_expected={coverage_expected}")
+            fprate = fp_count / 100
+            fprate_expected = lconfig.acceptable_false_positive_rate
+            assert abs(fprate - lconfig.acceptable_false_positive_rate) < 0.1
+            logger.info(f"fprate={fprate}, fprate_expected={fprate_expected}")
 
 
 dom = [DummyDomain, DummyMeshDomain]
