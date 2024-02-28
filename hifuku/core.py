@@ -177,7 +177,6 @@ class SolutionLibrary:
     uuidval: str
     meta_data: Dict
     limit_thread: bool = False
-    task_distribution_vec: Optional[np.ndarray] = None
 
     def __post_init__(self):
         if self.ae_model_shared is not None:
@@ -200,7 +199,6 @@ class SolutionLibrary:
         max_admissible_cost: float,
         ae_model: Optional[AutoEncoderBase],
         meta_data: Optional[Dict] = None,
-        task_distribution_vec: Optional[np.ndarray] = None,
     ) -> "SolutionLibrary":
         uuidval = str(uuid.uuid4())[-8:]
         if meta_data is None:
@@ -214,7 +212,6 @@ class SolutionLibrary:
             uuidval,
             meta_data,
             False,
-            task_distribution_vec,
         )
 
     def put_on_device(self, device: torch.device):
