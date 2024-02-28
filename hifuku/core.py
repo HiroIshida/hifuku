@@ -23,7 +23,6 @@ from typing import (
 )
 
 import numpy as np
-import threadpoolctl
 import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
@@ -60,7 +59,6 @@ from hifuku.neuralnet import (
     create_dataset_from_paramss_and_resultss,
 )
 from hifuku.pool import TaskPool, TaskT
-from hifuku.utils import num_torch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -183,13 +181,6 @@ class ActiveSamplerHistory:
 
 @dataclass
 class SolutionLibrary:
-    """Solution Library
-
-    limitting threadnumber takes nonnegligible time. So please set
-    limit_thread = false in performance evaluation time. However,
-    when in attempt to run in muliple process, one must set it True.
-    """
-
     max_admissible_cost: float
     ae_model_shared: Optional[AutoEncoderBase]
     predictors: List[Union[CostPredictor, CostPredictorWithEncoder]]
@@ -197,7 +188,6 @@ class SolutionLibrary:
     margins: List[float]
     uuidval: str
     meta_data: Dict
-    limit_thread: bool = False
 
     def __post_init__(self):
         if self.ae_model_shared is not None:
@@ -232,7 +222,6 @@ class SolutionLibrary:
             [],
             uuidval,
             meta_data,
-            False,
         )
 
     def put_on_device(self, device: torch.device):
@@ -258,23 +247,12 @@ class SolutionLibrary:
             return self._infer_cost_combined(task)
 
     def _infer_cost_combined(self, task: TaskBase) -> np.ndarray:
-        # what the hell is this
-        if self.limit_thread:
-            with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
-                with num_torch_thread(1):
-                    desc_table = task.export_task_expression(use_matrix=True)
-                    assert desc_table.world_mat is not None
-                    world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
-                    vecs_np = np.array(desc_table.get_desc_vecs())
-                    world_mat_torch = torch.from_numpy(world_mat_np).float().to(self.device)
-                    descs_torch = torch.from_numpy(vecs_np).float().to(self.device)
-        else:
-            desc_table = task.export_task_expression(use_matrix=True)
-            assert desc_table.world_mat is not None
-            world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
-            vecs_np = np.array(desc_table.get_desc_vecs())
-            world_mat_torch = torch.from_numpy(world_mat_np).float().to(self.device)
-            descs_torch = torch.from_numpy(vecs_np).float().to(self.device)
+        desc_table = task.export_task_expression(use_matrix=True)
+        assert desc_table.world_mat is not None
+        world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
+        vecs_np = np.array(desc_table.get_desc_vecs())
+        world_mat_torch = torch.from_numpy(world_mat_np).float().to(self.device)
+        descs_torch = torch.from_numpy(vecs_np).float().to(self.device)
 
         # these lines copied from _infer_cost_with_shared_ae
         costs_list = []
@@ -294,45 +272,17 @@ class SolutionLibrary:
         """
         assert self.ae_model_shared is not None
 
-        if self.limit_thread:
-            # FIXME: maybe threadpool_limits and num_torch_thread scope can be
-            # integrated into one? In that case, if-else conditioning due to
-            # mesh_np_tmp can be simplar
+        desc_table = task.export_task_expression(use_matrix=True)
+        vecs_np = np.array(desc_table.get_desc_vecs())
+        vecs_torch = torch.from_numpy(vecs_np)
+        vecs_torch = vecs_torch.float().to(self.device)
 
-            with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
-                # limiting numpy thread seems to make stable. but not sure why..
-                desc_table = task.export_task_expression(use_matrix=True)
-                if desc_table.world_mat is None:
-                    world_mat_np = None
-                else:
-                    world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
-                vecs_np = np.array(desc_table.get_desc_vecs())
-
-            with num_torch_thread(1):
-                # float() must be run in single (cpp-layer) thread
-                # see https://github.com/pytorch/pytorch/issues/89693
-                if world_mat_np is None:
-                    world_mat_torch = torch.empty((1, 0))
-                else:
-                    world_mat_torch = torch.from_numpy(world_mat_np)
-                    world_mat_torch = world_mat_torch.float().to(self.device)
-                vecs_torch = torch.from_numpy(vecs_np)
-                vecs_torch = vecs_torch.float().to(self.device)
+        if desc_table.world_mat is None:
+            world_mat_torch = torch.empty((1, 0))
         else:
-            # usually, calling threadpoolctl and num_torch_thread function
-            # is constly. So if you are sure that you are running program in
-            # a single process. Then set limit_thread = False
-            desc_table = task.export_task_expression(use_matrix=True)
-            vecs_np = np.array(desc_table.get_desc_vecs())
-            vecs_torch = torch.from_numpy(vecs_np)
-            vecs_torch = vecs_torch.float().to(self.device)
-
-            if desc_table.world_mat is None:
-                world_mat_torch = torch.empty((1, 0))
-            else:
-                world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
-                world_mat_torch = torch.from_numpy(world_mat_np)
-                world_mat_torch = world_mat_torch.float().to(self.device)
+            world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
+            world_mat_torch = torch.from_numpy(world_mat_np)
+            world_mat_torch = world_mat_torch.float().to(self.device)
 
         n_batch, _ = vecs_np.shape
 
@@ -866,7 +816,6 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             [0.0],
             "dummy",
             {},
-            False,
         )
         aggregate = self.measure_real_est(singleton_library, self.tasks_validation)
         logger.info(aggregate)
