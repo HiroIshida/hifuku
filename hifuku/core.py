@@ -20,7 +20,7 @@ import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 from mohou.utils import detect_device
 from ompl import set_ompl_random_seed
-from rpbench.interface import AbstractTaskSolver
+from rpbench.interface import AbstractTaskSolver, TaskBase
 from skmp.solver.interface import (
     AbstractScratchSolver,
     ConfigT,
@@ -152,7 +152,7 @@ class ActiveSamplerHistory:
 
 
 @dataclass
-class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
+class SolutionLibrary:
     """Solution Library
 
     limitting threadnumber takes nonnegligible time. So please set
@@ -160,19 +160,15 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
     when in attempt to run in muliple process, one must set it True.
     """
 
-    task_type: Type[TaskT]
-    task_distribution_vec: np.ndarray
-    solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]]
-    solver_config: ConfigT
-    ae_model_shared: Optional[
-        AutoEncoderBase
-    ]  # if None, when each predictor does not share autoencoder
+    max_admissible_cost: float
+    ae_model_shared: Optional[AutoEncoderBase]
     predictors: List[Union[CostPredictor, CostPredictorWithEncoder]]
     init_solutions: List[Trajectory]
     margins: List[float]
     uuidval: str
     meta_data: Dict
     limit_thread: bool = False
+    task_distribution_vec: Optional[np.ndarray] = None
 
     def __post_init__(self):
         if self.ae_model_shared is not None:
@@ -192,26 +188,24 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
     @classmethod
     def initialize(
         cls,
-        task_type: Type[TaskT],
-        solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
-        config,
+        max_admissible_cost: float,
         ae_model: Optional[AutoEncoderBase],
         meta_data: Optional[Dict] = None,
-    ) -> "SolutionLibrary[TaskT, ConfigT, ResultT]":
+        task_distribution_vec: Optional[np.ndarray] = None,
+    ) -> "SolutionLibrary":
         uuidval = str(uuid.uuid4())[-8:]
         if meta_data is None:
             meta_data = {}
         return cls(
-            task_type,
-            task_type.distribution_vector(),
-            solver_type,
-            config,
+            max_admissible_cost,
             ae_model,
             [],
             [],
             [],
             uuidval,
             meta_data,
+            False,
+            task_distribution_vec,
         )
 
     def put_on_device(self, device: torch.device):
@@ -228,7 +222,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
             pred: CostPredictorWithEncoder = self.predictors[0]  # type: ignore[assignment]
             return pred.device
 
-    def _infer_cost(self, task: TaskT) -> np.ndarray:
+    def _infer_cost(self, task: TaskBase) -> np.ndarray:
         assert len(self.predictors) > 0
         has_shared_ae = self.ae_model_shared is not None
         if has_shared_ae:
@@ -236,7 +230,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         else:
             return self._infer_cost_combined(task)
 
-    def _infer_cost_combined(self, task: TaskT) -> np.ndarray:
+    def _infer_cost_combined(self, task: TaskBase) -> np.ndarray:
         # what the hell is this
         if self.limit_thread:
             with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
@@ -267,7 +261,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         costs_arr = np.array(costs_list)
         return costs_arr
 
-    def _infer_cost_with_shared_ae(self, task: TaskT) -> np.ndarray:
+    def _infer_cost_with_shared_ae(self, task: TaskBase) -> np.ndarray:
         """
         costs_arr: R^{n_solution, n_desc_inner}
         """
@@ -328,7 +322,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         costs_arr = np.array(costs_list)
         return costs_arr
 
-    def infer(self, task: TaskT) -> List[InferenceResult]:
+    def infer(self, task: TaskBase) -> List[InferenceResult]:
         # costs_aar: R^{n_task_inner, n_elem_in_lib}
         costs_arr = self._infer_cost(task)
 
@@ -346,52 +340,6 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
             result_list.append(res)
         return result_list
 
-    def cost_threshold(self) -> float:
-        return self.solver_config.n_max_call
-
-    def measure_full_coverage(
-        self, task_paramss: np.ndarray, solver: BatchTaskSolver
-    ) -> RealEstAggregate:
-        logger.info("**compute est values")
-        cost_est_list = []
-        init_solutions_est_list = []
-        for task_params in tqdm.tqdm(task_paramss):
-            task = self.task_type.from_task_params(task_params)
-            infer_results = self.infer(task)
-            cost_est_list.extend([res.cost for res in infer_results])  # NOTE: flatten!
-            init_solutions_est_list.append([res.init_solution for res in infer_results])
-        logger.info("**compute real values")
-
-        resultss = solver.solve_batch(task_paramss, init_solutions_est_list)  # type: ignore
-
-        cost_real_list = []
-        for results in resultss:
-            for result in results:
-                if result.traj is None:
-                    cost_real_list.append(np.inf)
-                else:
-                    cost_real_list.append(result.n_call)
-
-        success_cost = self.cost_threshold()
-        aggregate = RealEstAggregate(
-            np.array(cost_real_list), np.array(cost_est_list), success_cost
-        )
-        logger.info(aggregate)
-        return aggregate
-
-    def measure_coverage(self, task_paramss: np.ndarray) -> float:
-        threshold = self.cost_threshold()
-        total_count = 0
-        success_count = 0
-        for task_params in task_paramss:
-            task = self.task_type.from_task_params(task_params)
-            infer_res_list = self.infer(task)
-            for infer_res in infer_res_list:
-                total_count += 1
-                if infer_res.cost < threshold:
-                    success_count += 1
-        return success_count / total_count
-
     def dump(self, base_path: Path) -> None:
         cpu_device = torch.device("cpu")
         copied = copy.deepcopy(self)
@@ -401,13 +349,13 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         for pred in copied.predictors:
             pred.put_on_device(cpu_device)
 
-        name = "Library-{}-{}.pkl".format(self.task_type.__name__, self.uuidval)
+        name = "Library-{}.pkl".format(self.uuidval)
         file_path = base_path / name
         with file_path.open(mode="wb") as f:
             pickle.dump(copied, f)
         logger.info("dumped library to {}".format(file_path))
 
-        name = "MetaData-{}-{}.json".format(self.task_type.__name__, self.uuidval)
+        name = "MetaData-{}.json".format(self.uuidval)
         file_path = base_path / name
         if not file_path.exists():
             with file_path.open(mode="w") as f:
@@ -420,8 +368,7 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         task_type: Type[TaskT],
         solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
         device: Optional[torch.device] = None,
-        check_distribution: bool = True,
-    ) -> List["SolutionLibrary[TaskT, ConfigT, ResultT]"]:
+    ) -> List["SolutionLibrary"]:
         if device is None:
             if torch.cuda.is_available():
                 device = torch.device("cuda")
@@ -431,8 +378,8 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
         library_paths = []
         for path in base_path.iterdir():
             # logger.debug("load from path: {}".format(path))
-            m = re.match(r"Library-(\w+)-(\w+).pkl", path.name)
-            if m is not None and m[1] == task_type.__name__:
+            m = re.match(r"Library-(\w+).pkl", path.name)
+            if m is not None:
                 logger.debug("library found at {}".format(path))
                 library_paths.append(path)
 
@@ -448,95 +395,23 @@ class SolutionLibrary(Generic[TaskT, ConfigT, ResultT]):
                 latest_path = path
         assert latest_path is not None
 
-        distribution_vec = task_type.distribution_vector()
+        task_type.distribution_vector()
 
         logger.debug("load latest library from {}".format(latest_path))
         with latest_path.open(mode="rb") as f:
-            lib: "SolutionLibrary[TaskT, ConfigT, ResultT]" = pickle.load(f)
+            lib: "SolutionLibrary" = pickle.load(f)
             assert lib.device == torch.device("cpu")
             for pred in lib.predictors:
                 assert not pred.training
             lib.put_on_device(device)
-            # In most case, user will use the library in a single process
-            # thus we dont need to care about thread stuff.
             lib.limit_thread = False  # faster
-            if check_distribution:
-                # check if lib.task_distribution_hash attribute exists
-                # if not, it means that the library is old version
-                # and we cannot check the hash
-                if hasattr(lib, "task_distribution_vec"):
-                    if not np.allclose(lib.task_distribution_vec, distribution_vec):
-                        msg = f"task_distribution_vec mismatch: {lib.task_distribution_vec} != {distribution_vec}\n"
-                        msg += "task definition has been change after training the library."
-                        raise RuntimeError(msg)
-                else:
-                    logger.warning("cannot check hash because library is old version")
             libraries.append(lib)
         return libraries  # type: ignore
-
-    def unbundle(self) -> List["SolutionLibrary[TaskT, ConfigT, ResultT]"]:
-        # split into list of singleton libraries
-        singleton_list = []
-        for predictor, init_solution, margin in zip(
-            self.predictors, self.init_solutions, self.margins
-        ):
-            singleton = SolutionLibrary(
-                task_type=self.task_type,
-                task_distribution_vec=self.task_distribution_vec,
-                solver_type=self.solver_type,
-                solver_config=self.solver_config,
-                ae_model_shared=self.ae_model_shared,
-                predictors=[predictor],
-                init_solutions=[init_solution],
-                margins=[margin],
-                uuidval="dummy",
-                meta_data={},
-            )
-            singleton_list.append(singleton)
-        return singleton_list
-
-    @classmethod
-    def from_singletons(
-        cls, singletons: List["SolutionLibrary[TaskT, ConfigT, ResultT]"]
-    ) -> "SolutionLibrary[TaskT, ConfigT, ResultT]":
-        singleton = singletons[0]
-        predictors = [e.predictors[0] for e in singletons]
-        init_solutions = [e.init_solutions[0] for e in singletons]
-        margins = [e.margins[0] for e in singletons]
-
-        library = SolutionLibrary(
-            task_type=singleton.task_type,
-            task_distribution_vec=singleton.task_distribution_vec,
-            solver_type=singleton.solver_type,
-            solver_config=singleton.solver_config,
-            ae_model_shared=singleton.ae_model_shared,
-            predictors=predictors,
-            init_solutions=init_solutions,
-            margins=margins,
-            uuidval="dummy",
-            meta_data={},
-        )
-        return library
-
-    def get_singleton(self, idx: int) -> "SolutionLibrary[TaskT, ConfigT, ResultT]":
-        singleton = SolutionLibrary(
-            task_type=self.task_type,
-            task_distribution_vec=self.task_distribution_vec,
-            solver_type=self.solver_type,
-            solver_config=self.solver_config,
-            ae_model_shared=self.ae_model_shared,
-            predictors=[self.predictors[idx]],
-            init_solutions=[self.init_solutions[idx]],
-            margins=[self.margins[idx]],
-            uuidval="dummy",
-            meta_data={},
-        )
-        return singleton
 
 
 @dataclass
 class LibraryBasedSolverBase(AbstractTaskSolver[TaskT, ConfigT, ResultT]):
-    library: SolutionLibrary[TaskT, ConfigT, ResultT]
+    library: SolutionLibrary
     solver: AbstractScratchSolver[ConfigT, ResultT]
     task: Optional[TaskT]
     timeout: Optional[float]
@@ -548,17 +423,17 @@ class LibraryBasedSolverBase(AbstractTaskSolver[TaskT, ConfigT, ResultT]):
     @classmethod
     def init(
         cls,
-        library: SolutionLibrary[TaskT, ConfigT, ResultT],
-        config: Optional[ConfigT] = None,
+        library: SolutionLibrary,
+        solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
+        config: ConfigT,
         use_rospy_logger: bool = False,
     ) -> "LibraryBasedSolverBase[TaskT, ConfigT, ResultT]":
-        if config is None:
-            config = library.solver_config
         # internal solver's timeout must be None
         # because inference time must be considered in timeout for fairness
+        assert config.n_max_call == library.max_admissible_cost
         timeout_stashed = config.timeout  # stash this
         config.timeout = None
-        solver = library.solver_type.init(config)
+        solver = solver_type.init(config)
 
         if use_rospy_logger:
             import rospy
@@ -621,8 +496,8 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[TaskT, ConfigT, Result
         assert len(inference_results) == 1
         inference_result = inference_results[0]
 
-        seems_infeasible = inference_result.cost > self.library.cost_threshold()
-        self._loginfo_fun(f"nit {inference_result.cost}: the {self.library.cost_threshold()}")
+        seems_infeasible = inference_result.cost > self.library.max_admissible_cost
+        self._loginfo_fun(f"nit {inference_result.cost}: the {self.library.max_admissible_cost}")
         if seems_infeasible:
             self._logwarn_fun("seems infeasible")
             result_type = self.solver.get_result_type()
@@ -653,9 +528,9 @@ class LibraryBasedHeuristicSolver(LibraryBasedSolverBase[TaskT, ConfigT, ResultT
 
 
 @dataclass
-class DifficultTaskPredicate(Generic[TaskT, ConfigT, ResultT]):
-    task_type: Type[TaskT]
-    library: SolutionLibrary[TaskT, ConfigT, ResultT]
+class DifficultTaskPredicate:
+    task_type: Type[TaskBase]
+    library: SolutionLibrary
     th_min_cost: float
     th_max_cost: Optional[float] = None
 
@@ -665,7 +540,7 @@ class DifficultTaskPredicate(Generic[TaskT, ConfigT, ResultT]):
         self.library = copy.deepcopy(self.library)
         self.library.put_on_device(torch.device("cpu"))
 
-    def __call__(self, task: TaskT) -> bool:
+    def __call__(self, task: TaskBase) -> bool:
         assert task.n_inner_task == 1
         infer_res = self.library.infer(task)[0]
         cost = infer_res.cost
@@ -713,7 +588,8 @@ class LibrarySamplerConfig:
 @dataclass
 class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
     task_type: Type[TaskT]
-    library: SolutionLibrary[TaskT, ConfigT, ResultT]
+    solver_config: ConfigT
+    library: SolutionLibrary
     config: LibrarySamplerConfig
     pool_single: TaskPool[TaskT]
     pool_multiple: TaskPool[TaskT]
@@ -730,14 +606,6 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
 
     # below are class variables
     presampled_cache_file_name: ClassVar[str] = "presampled_tasks.cache"
-
-    @property
-    def solver_type(self) -> Type[AbstractScratchSolver[ConfigT, ResultT]]:
-        return self.library.solver_type
-
-    @property
-    def solver_config(self) -> ConfigT:
-        return self.library.solver_config
 
     @property
     def train_pred_with_encoder(self) -> bool:
@@ -778,9 +646,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             device = detect_device()
         assert ae_model.get_device() == device
         library = SolutionLibrary.initialize(
-            task_type,
-            solver_t,
-            solver_config,
+            solver_config.n_max_call,
             None if config.train_with_encoder else ae_model,
             meta_data,
         )
@@ -849,6 +715,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         logger.info("library sampler config: {}".format(config))
         return cls(
             task_type,
+            solver_config,
             library,
             config,
             pool_single,
@@ -865,9 +732,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             presampled_task_paramss,
         )
 
-    def setup_warmstart(
-        self, history: ActiveSamplerHistory, library: SolutionLibrary[TaskT, ConfigT, ResultT]
-    ) -> None:
+    def setup_warmstart(self, history: ActiveSamplerHistory, library: SolutionLibrary) -> None:
         self.sampler_history = history
         self.library = library
 
@@ -953,10 +818,6 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         self.sampler_history.dump(self.project_path)
         return True
 
-    @property
-    def difficult_cost_threshold(self) -> float:
-        return self.library.solver_config.n_max_call
-
     def _determine_margins(
         self,
         predictor: Union[CostPredictorWithEncoder, CostPredictor],
@@ -965,18 +826,16 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         # TODO: move this whole "adjusting" operation to a different method
         logger.info("start measuring coverage")
         singleton_library = SolutionLibrary(
-            task_type=self.task_type,
-            task_distribution_vec=self.library.task_distribution_vec,
-            solver_type=self.solver_type,
-            solver_config=self.solver_config,
-            ae_model_shared=self.library.ae_model_shared,
-            predictors=[predictor],
-            init_solutions=[init_solution],
-            margins=[0.0],
-            uuidval="dummy",
-            meta_data={},
+            self.library.max_admissible_cost,
+            self.library.ae_model_shared,
+            [predictor],
+            [init_solution],
+            [0.0],
+            "dummy",
+            {},
+            False,
         )
-        aggregate = singleton_library.measure_full_coverage(self.tasks_validation, self.solver)
+        aggregate = self.measure_real_est(singleton_library, self.tasks_validation)
         logger.info(aggregate)
 
         if len(self.library.predictors) > 0:
@@ -1202,15 +1061,15 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             pred_bit_difficult = DifficultTaskPredicate(
                 task_pool.task_type,
                 self.library,
-                self.difficult_cost_threshold,
-                self.difficult_cost_threshold * 1.2,
+                self.solver_config.n_max_call,
+                self.solver_config.n_max_call * 1.2,
             )
             predicated_pool_bit_difficult = task_pool.make_predicated(pred_bit_difficult, 40)
 
             # but, we also need to sample from far-boundary because some of the possible
             # feasible regions are disjoint from the ones obtained so far
             pred_difficult = DifficultTaskPredicate(
-                task_pool.task_type, self.library, self.difficult_cost_threshold, None
+                task_pool.task_type, self.library, self.solver_config.n_max_call, None
             )
             predicated_pool_difficult = task_pool.make_predicated(pred_difficult, 40)
         else:
@@ -1271,7 +1130,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 task = self.task_type.from_task_params(task_params)
                 infer_res = self.library.infer(task)[0]
                 cost = infer_res.cost
-                is_difficult = cost > self.difficult_cost_threshold
+                is_difficult = cost > self.solver_config.n_max_call
                 if is_difficult:
                     logger.debug("sampled! number: {}".format(len(difficult_params_list)))
                     difficult_params_list.append(task_params)
@@ -1343,3 +1202,42 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 logger.info("found best solution")
                 return best_solution, rate_difficult_solved
         raise RuntimeError("consumed all repeat budget")
+
+    def measure_real_est(self, lib: SolutionLibrary, task_paramss: np.ndarray) -> RealEstAggregate:
+        logger.info("**compute est values")
+        cost_est_list = []
+        init_solutions_est_list = []
+        for task_params in tqdm.tqdm(task_paramss):
+            task = self.task_type.from_task_params(task_params)
+            infer_results = lib.infer(task)
+            cost_est_list.extend([res.cost for res in infer_results])  # NOTE: flatten!
+            init_solutions_est_list.append([res.init_solution for res in infer_results])
+        logger.info("**compute real values")
+
+        resultss = self.solver.solve_batch(task_paramss, init_solutions_est_list)  # type: ignore
+
+        cost_real_list = []
+        for results in resultss:
+            for result in results:
+                if result.traj is None:
+                    cost_real_list.append(np.inf)
+                else:
+                    cost_real_list.append(result.n_call)
+
+        aggregate = RealEstAggregate(
+            np.array(cost_real_list), np.array(cost_est_list), self.solver_config.n_max_call
+        )
+        logger.info(aggregate)
+        return aggregate
+
+    def measure_coverage(self, task_paramss: np.ndarray) -> float:
+        total_count = 0
+        success_count = 0
+        for task_params in task_paramss:
+            task = self.task_type.from_task_params(task_params)
+            infer_res_list = self.library.infer(task)
+            for infer_res in infer_res_list:
+                total_count += 1
+                if infer_res.cost < self.solver_config.n_max_call:
+                    success_count += 1
+        return success_count / total_count

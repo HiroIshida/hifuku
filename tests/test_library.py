@@ -82,7 +82,7 @@ def _test_SolutionLibrarySampler(
 
                 # test coverage estimation's consistency
                 a = lib_sampler.sampler_history.coverage_est_history[-1]
-                b = lib_sampler.library.measure_coverage(lib_sampler.tasks_validation)
+                b = lib_sampler.measure_coverage(lib_sampler.tasks_validation)
                 assert (
                     abs(a - b) < 1e-6
                 ), f"iter={it} coverage estimation is not consistent: {a} vs {b}"
@@ -113,12 +113,12 @@ def _test_SolutionLibrarySampler(
 
             # test coverage estimation's consistency
             a = lib_sampler.sampler_history.coverage_est_history[-1]
-            b = lib_sampler.library.measure_coverage(lib_sampler.tasks_validation)
+            b = lib_sampler.measure_coverage(lib_sampler.tasks_validation)
             assert abs(a - b) < 1e-6, f"coverage estimation is not consistent: {a} vs {b}"
 
             # test library based solver usage
             lib = lib_sampler.library
-            solver = LibraryBasedGuaranteedSolver.init(lib)
+            solver = LibraryBasedGuaranteedSolver.init(lib, solver_type, solcon)
             est_true_count = 0
             fp_count = 0
             for _ in range(100):
@@ -130,7 +130,7 @@ def _test_SolutionLibrarySampler(
                     if ret.traj is None:
                         fp_count += 1
             coverage = est_true_count / 100
-            coverage_expected = lib_sampler.library.measure_coverage(lib_sampler.tasks_validation)
+            coverage_expected = lib_sampler.sampler_history.coverage_est_history[-1]
             assert abs(coverage - lib_sampler.sampler_history.coverage_est_history[-1]) < 0.2
             logger.info(f"coverage={coverage}, coverage_expected={coverage_expected}")
             fprate = fp_count / 100
