@@ -76,7 +76,6 @@ def load_library(
     limit_thread: bool = False,
     project_path: Optional[Path] = None,
     postfix: Optional[str] = None,
-    check_hash: bool = True,
 ) -> SolutionLibrary:
 
     if isinstance(domain, str):
@@ -84,14 +83,7 @@ def load_library(
 
     if project_path is None:
         project_path = get_project_path(domain, postfix)
-    lib = SolutionLibrary.load(
-        project_path,
-        domain.task_type,
-        domain.solver_type,
-        torch.device(device),
-        check_hash=check_hash,
-    )[0]
-    lib.limit_thread = limit_thread
+    lib = SolutionLibrary.load(project_path, torch.device(device))
     return lib
 
 

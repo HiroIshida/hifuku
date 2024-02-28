@@ -92,7 +92,7 @@ def _test_SolutionLibrarySampler(
             assert coverage > 0.3, f"iter={it}, coverage={coverage}"
 
             # test warm start
-            lib = SolutionLibrary.load(td_path, task_type, solver_type, device=device)[0]
+            lib = SolutionLibrary.load(td_path, device)
             state = ActiveSamplerHistory.load(td_path)
             assert state.total_iter == 2
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)

@@ -1,7 +1,5 @@
 import copy
-import datetime
 import inspect
-import json
 import logging
 import pickle
 import re
@@ -11,7 +9,18 @@ import uuid
 from abc import abstractmethod
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, ClassVar, Dict, Generic, List, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import numpy as np
 import threadpoolctl
@@ -341,72 +350,78 @@ class SolutionLibrary:
         return result_list
 
     def dump(self, base_path: Path) -> None:
-        cpu_device = torch.device("cpu")
-        copied = copy.deepcopy(self)
+        # rather than directly saving the object, serialize it
+        # to a dictionary and then save it for future compatibility
+        device = torch.device("cpu")
 
-        if copied.ae_model_shared is not None:
-            copied.ae_model_shared.put_on_device(cpu_device)
-        for pred in copied.predictors:
-            pred.put_on_device(cpu_device)
+        dic: Dict[str, Any] = {}
+        dic["max_admissible_cost"] = self.max_admissible_cost
+        if self.ae_model_shared is None:
+            dic["ae_model_shared"] = None
+        else:
+            ae_model = copy.deepcopy(self.ae_model_shared)
+            ae_model.put_on_device(device)
+            dic["ae_model_shared"] = pickle.dumps(ae_model)
+        dic["predictors"] = []
+        for pred in self.predictors:
+            pred_copied = copy.deepcopy(pred)
+            pred_copied.put_on_device(device)
+            dic["predictors"].append(pickle.dumps(pred_copied))
+        dic["margins"] = self.margins
+        dic["init_solutions"] = pickle.dumps(self.init_solutions)
+        dic["uuidval"] = self.uuidval
+        dic["meta_data"] = self.meta_data
 
         name = "Library-{}.pkl".format(self.uuidval)
-        file_path = base_path / name
-        with file_path.open(mode="wb") as f:
-            pickle.dump(copied, f)
-        logger.info("dumped library to {}".format(file_path))
-
-        name = "MetaData-{}.json".format(self.uuidval)
-        file_path = base_path / name
-        if not file_path.exists():
-            with file_path.open(mode="w") as f:
-                json.dump(self.meta_data, f, indent=4)
+        with (base_path / name).open(mode="wb") as f:
+            pickle.dump(dic, f)
 
     @classmethod
-    def load(
-        cls,
-        base_path: Path,
-        task_type: Type[TaskT],
-        solver_type: Type[AbstractScratchSolver[ConfigT, ResultT]],
-        device: Optional[torch.device] = None,
-    ) -> List["SolutionLibrary"]:
+    def load(cls, base_path: Path, device: Optional[torch.device] = None) -> "SolutionLibrary":
         if device is None:
             if torch.cuda.is_available():
                 device = torch.device("cuda")
             else:
                 device = torch.device("cpu")
-        libraries = []
-        library_paths = []
-        for path in base_path.iterdir():
-            # logger.debug("load from path: {}".format(path))
-            m = re.match(r"Library-(\w+).pkl", path.name)
-            if m is not None:
-                logger.debug("library found at {}".format(path))
-                library_paths.append(path)
 
-        latest_path = None
-        latest_timestamp = None
-        for path in library_paths:
-            timestamp = path.stat().st_ctime
+        file_lst = []
+        for file in base_path.iterdir():
+            match = re.match(r"Library-(\w{8}).pkl", file.name)
+            if match:
+                file_lst.append((file, match.group(1)))
+        if len(file_lst) == 0:
+            raise FileNotFoundError("no library file found")
+        if len(file_lst) > 1:
+            raise ValueError("multiple library files found")
 
-            readable_timestamp = datetime.datetime.fromtimestamp(timestamp)
-            logger.debug("lib: {}, ts: {}".format(path, readable_timestamp))
-            if latest_timestamp is None or timestamp > latest_timestamp:
-                latest_timestamp = timestamp
-                latest_path = path
-        assert latest_path is not None
-
-        task_type.distribution_vector()
-
-        logger.debug("load latest library from {}".format(latest_path))
-        with latest_path.open(mode="rb") as f:
-            lib: "SolutionLibrary" = pickle.load(f)
-            assert lib.device == torch.device("cpu")
-            for pred in lib.predictors:
-                assert not pred.training
-            lib.put_on_device(device)
-            lib.limit_thread = False  # faster
-            libraries.append(lib)
-        return libraries  # type: ignore
+        file, uuidval = file_lst[0]
+        with file.open(mode="rb") as f:
+            dic = pickle.load(f)
+        max_admissible_cost = dic["max_admissible_cost"]
+        tmp = dic["ae_model_shared"]
+        if tmp is None:
+            ae_model_shared = None
+        else:
+            ae_model_shared = pickle.loads(tmp)
+            ae_model_shared.put_on_device(device)
+        pred_pickled_list = dic["predictors"]
+        pred_list = []
+        for pred_pickled in pred_pickled_list:
+            pred = pickle.loads(pred_pickled)
+            pred.put_on_device(device)
+            pred_list.append(pred)
+        margins = dic["margins"]
+        init_solutions = pickle.loads(dic["init_solutions"])
+        meta_data = dic["meta_data"]
+        return cls(
+            max_admissible_cost,
+            ae_model_shared,
+            pred_list,
+            init_solutions,
+            margins,
+            uuidval,
+            meta_data,
+        )
 
 
 @dataclass
