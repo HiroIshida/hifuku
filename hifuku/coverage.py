@@ -1,9 +1,8 @@
 import copy
-import json
 import logging
 from dataclasses import dataclass
 from functools import cached_property
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import tqdm
@@ -19,17 +18,16 @@ class RealEstAggregate:
     ests: np.ndarray
     threshold: float
 
-    def dumps(self) -> str:
+    def to_dict(self) -> Dict:
         d = {
             "reals": self.reals.tolist(),
             "ests": self.ests.tolist(),
             "threshold": self.threshold,
         }
-        return json.dumps(d)
+        return d
 
     @classmethod
-    def loads(cls, s: str) -> "RealEstAggregate":
-        d = json.loads(s)
+    def from_dict(cls, d: Dict) -> "RealEstAggregate":
         reals = np.array(d["reals"])
         ests = np.array(d["ests"])
         threshold = d["threshold"]

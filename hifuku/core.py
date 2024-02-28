@@ -102,6 +102,7 @@ class ProfileInfo:  # per each iteration
         return self.t_total - (self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin)  # type: ignore[operator]
 
 
+@dataclass
 class ActiveSamplerHistory:
     # states
     sampling_number_factor: float
@@ -114,14 +115,9 @@ class ActiveSamplerHistory:
     coverage_est_history: List[float]
     failure_count: int
 
-    def __init__(self, sampling_number_factor: float):
-        self.sampling_number_factor = sampling_number_factor
-        self.aggregate_list = []
-        self.margins_history = []
-        self.candidates_history = []
-        self.elapsed_time_history = []
-        self.coverage_est_history = []
-        self.failure_count = 0
+    @classmethod
+    def init(cls, sampling_number_factor: float) -> "ActiveSamplerHistory":
+        return cls(sampling_number_factor, [], [], [], [], [], 0)
 
     def check_consistency(self) -> None:
         if len(self.elapsed_time_history) == 0:
@@ -141,15 +137,40 @@ class ActiveSamplerHistory:
         )
 
     def dump(self, base_path: Path) -> None:
+        # with (base_path / "sampler_history.pkl").open(mode="wb") as f:
+        #     pickle.dump(self, f)
+        # dump using dict
+        dic: Dict[str, Any] = {}
+        dic["sampling_number_factor"] = self.sampling_number_factor
+        dic["aggregate_list"] = [agg.to_dict() for agg in self.aggregate_list]
+        dic["margins_history"] = self.margins_history
+        dic["candidates_history"] = [pickle.dumps(cands) for cands in self.candidates_history]
+        dic["elapsed_time_history"] = [asdict(e) for e in self.elapsed_time_history]
+        dic["coverage_est_history"] = self.coverage_est_history
+        dic["failure_count"] = self.failure_count
         with (base_path / "sampler_history.pkl").open(mode="wb") as f:
-            pickle.dump(self, f)
+            pickle.dump(dic, f)
 
     @classmethod
     def load(cls, base_path: Path) -> "ActiveSamplerHistory":
         with (base_path / "sampler_history.pkl").open(mode="rb") as f:
-            state: ActiveSamplerHistory = pickle.load(f)
-        state.check_consistency()
-        return state
+            dic = pickle.load(f)
+        sampling_number_factor = dic["sampling_number_factor"]
+        aggregate_list = [RealEstAggregate.from_dict(d) for d in dic["aggregate_list"]]
+        margins_history = dic["margins_history"]
+        candidates_history = [pickle.loads(c) for c in dic["candidates_history"]]
+        elapsed_time_history = [ProfileInfo(**d) for d in dic["elapsed_time_history"]]
+        coverage_est_history = dic["coverage_est_history"]
+        failure_count = dic["failure_count"]
+        return cls(
+            sampling_number_factor,
+            margins_history,
+            aggregate_list,
+            candidates_history,
+            elapsed_time_history,
+            coverage_est_history,
+            failure_count,
+        )
 
     @property
     def total_iter(self) -> int:
@@ -662,7 +683,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             None if config.train_with_encoder else ae_model,
             meta_data,
         )
-        sampler_state = ActiveSamplerHistory(config.sampling_number_factor)
+        sampler_state = ActiveSamplerHistory.init(config.sampling_number_factor)
 
         # setup solver, sampler, optimizer
         if solver is None:
