@@ -37,7 +37,7 @@ from skmp.solver.interface import (
 )
 from skmp.trajectory import Trajectory
 
-from hifuku.coverage import RealEstAggregate
+from hifuku.coverage import RealEstAggregate, optimize_latest_margin
 from hifuku.datagen import (
     BatchMarginsOptimizerBase,
     BatchTaskSampler,
@@ -819,48 +819,66 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         )
         aggregate = self.measure_real_est(singleton_library, self.tasks_validation)
         logger.info(aggregate)
+        agg_list = self.sampler_history.aggregate_list + [aggregate]
 
-        if len(self.library.predictors) > 0:
-            # determine margin using cmaes
-            cma_std = self.solver_config.n_max_call * 0.5
-            coverages_new = self.sampler_history.aggregate_list + [aggregate]
-            coverage_est_last = self.sampler_history.coverage_est_history[-1]
-            results = self.margin_optimizer.optimize_batch(
-                self.config.n_optimize_margin_batch,
-                coverages_new,
+        use_cmaes: bool = False
+        if use_cmaes:
+            if len(self.library.predictors) > 0:
+                # determine margin in naive way
+                logger.info("determine margin using naive method")
+
+                # determine margin using cmaes
+                logger.info("determine margin using cmaes")
+                cma_std = self.solver_config.n_max_call * 0.5
+                coverage_est_last = self.sampler_history.coverage_est_history[-1]
+                results = self.margin_optimizer.optimize_batch(
+                    self.config.n_optimize_margin_batch,
+                    agg_list,
+                    self.solver_config.n_max_call,
+                    self.config.acceptable_false_positive_rate,
+                    cma_std,
+                    minimum_coverage=coverage_est_last,
+                )
+
+                best_margins = None
+                max_coverage = coverage_est_last
+                for result in results:
+                    if result is None:
+                        continue
+                    if result.coverage > max_coverage:
+                        max_coverage = result.coverage
+                        best_margins = result.best_margins
+
+                if best_margins is None:
+                    return None
+                margins = best_margins
+            else:
+                logger.info("determine margin using exact method")
+                margin, max_coverage = aggregate.determine_margin(
+                    self.config.acceptable_false_positive_rate
+                )
+
+                if not np.isfinite(margin) and self.config.ignore_useless_traj:
+                    message = "margin value {} is invalid. retrun from active_sampling".format(
+                        margin
+                    )
+                    logger.info(message)
+                    return None
+                margins = [margin]
+            assert max_coverage is not None
+            logger.info("optimal coverage estimate is set to {}".format(max_coverage))
+            return margins, aggregate, max_coverage
+        else:
+            result = optimize_latest_margin(
+                agg_list,
+                self.library.margins,
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,
-                cma_std,
-                minimum_coverage=coverage_est_last,
             )
-
-            best_margins = None
-            max_coverage = coverage_est_last
-            for result in results:
-                if result is None:
-                    continue
-                if result.coverage > max_coverage:
-                    max_coverage = result.coverage
-                    best_margins = result.best_margins
-
-            if best_margins is None:
+            if result is not None:
+                return result.best_margins, aggregate, result.coverage
+            else:
                 return None
-            margins = best_margins
-        else:
-            logger.info("determine margin using exact method")
-            margin, max_coverage = aggregate.determine_margin(
-                self.config.acceptable_false_positive_rate
-            )
-
-            if not np.isfinite(margin) and self.config.ignore_useless_traj:
-                message = "margin value {} is invalid. retrun from active_sampling".format(margin)
-                logger.info(message)
-                return None
-            margins = [margin]
-
-        assert max_coverage is not None
-        logger.info("optimal coverage estimate is set to {}".format(max_coverage))
-        return margins, aggregate, max_coverage
 
     def _train_predictor(
         self,

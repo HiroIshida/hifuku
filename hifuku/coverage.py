@@ -155,6 +155,29 @@ def compute_coverage_and_fp_jit(
     return coverage_rate, fp_rate
 
 
+def optimize_latest_margin(
+    aggregate_list: List[RealEstAggregate],
+    margins_so_far: List[float],
+    threshold: float,
+    target_fp_rate: float,
+    n_split: int = 2000,
+) -> Optional[OptimizeMarginsResult]:
+    assert len(aggregate_list) == len(margins_so_far) + 1
+    realss = np.array([cr.reals for cr in aggregate_list], order="F")
+    estss = np.array([cr.ests for cr in aggregate_list], order="F")
+
+    def f(margin: float) -> Tuple[float, float]:
+        margins = np.array(margins_so_far + [margin])
+        coverage_est, fp_rate = compute_coverage_and_fp_jit(margins, realss, estss, threshold)
+        return coverage_est, fp_rate
+
+    for margin in np.linspace(-2 * threshold, 2 * threshold, n_split):
+        cov, fp = f(margin)
+        if fp < target_fp_rate:
+            return OptimizeMarginsResult(margins_so_far + [margin], cov, fp)
+    return None
+
+
 def optimize_margins(
     aggregate_list: List[RealEstAggregate],
     threshold: float,
