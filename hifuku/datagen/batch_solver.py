@@ -305,6 +305,22 @@ class DistributedBatchTaskSolver(ClientBase[SolveTaskRequest], BatchTaskSolver[C
         init_solutions: Sequence[Optional[TrajectoryMaybeList]],
         use_default_solver: bool = False,
     ) -> List[Tuple[ResultT, ...]]:
+        try:
+            return self._solve_batch_impl_inner(
+                task_paramss, init_solutions, use_default_solver=use_default_solver
+            )
+        except ValueError:
+            logger.error("Probably something wrong with connection. Retry...")
+            return self._solve_batch_impl_inner(
+                task_paramss, init_solutions, use_default_solver=use_default_solver
+            )
+
+    def _solve_batch_impl_inner(
+        self,
+        task_paramss: np.ndarray,
+        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
+        use_default_solver: bool = False,
+    ) -> List[Tuple[ResultT, ...]]:
         logger.debug("use_default_solver: {}".format(use_default_solver))
 
         n_task = len(task_paramss)
@@ -364,5 +380,8 @@ class DistributedBatchTaskSolver(ClientBase[SolveTaskRequest], BatchTaskSolver[C
             idx_result_pairs_sorted = sorted(idx_result_pairs, key=lambda x: x[0])  # type: ignore
             _, results = zip(*idx_result_pairs_sorted)
             ret = list(results)
-            assert len(ret) == len(task_paramss)
+            if len(ret) != len(task_paramss):
+                message = f"len(ret) != len(task_paramss) ({len(ret)} != {len(task_paramss)})"
+                logger.error(message)
+                raise ValueError(message)
         return ret  # type: ignore
