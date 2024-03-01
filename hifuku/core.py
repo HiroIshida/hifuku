@@ -821,64 +821,65 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         logger.info(aggregate)
         agg_list = self.sampler_history.aggregate_list + [aggregate]
 
-        use_cmaes: bool = False
-        if use_cmaes:
-            if len(self.library.predictors) > 0:
-                # determine margin in naive way
-                logger.info("determine margin using naive method")
+        # first solve the margin naively fixig all the past margins
+        logger.info("determine margin using naive method")
+        naive_result = optimize_latest_margin(
+            agg_list,
+            self.library.margins,
+            self.solver_config.n_max_call,
+            self.config.acceptable_false_positive_rate,
+        )
 
-                # determine margin using cmaes
-                logger.info("determine margin using cmaes")
-                cma_std = self.solver_config.n_max_call * 0.5
-                coverage_est_last = self.sampler_history.coverage_est_history[-1]
-                results = self.margin_optimizer.optimize_batch(
-                    self.config.n_optimize_margin_batch,
-                    agg_list,
-                    self.solver_config.n_max_call,
-                    self.config.acceptable_false_positive_rate,
-                    cma_std,
-                    minimum_coverage=coverage_est_last,
-                )
-
-                best_margins = None
-                max_coverage = coverage_est_last
-                for result in results:
-                    if result is None:
-                        continue
-                    if result.coverage > max_coverage:
-                        max_coverage = result.coverage
-                        best_margins = result.best_margins
-
-                if best_margins is None:
-                    return None
-                margins = best_margins
-            else:
-                logger.info("determine margin using exact method")
-                margin, max_coverage = aggregate.determine_margin(
-                    self.config.acceptable_false_positive_rate
-                )
-
-                if not np.isfinite(margin) and self.config.ignore_useless_traj:
-                    message = "margin value {} is invalid. retrun from active_sampling".format(
-                        margin
-                    )
-                    logger.info(message)
-                    return None
-                margins = [margin]
-            assert max_coverage is not None
-            logger.info("optimal coverage estimate is set to {}".format(max_coverage))
-            return margins, aggregate, max_coverage
-        else:
-            result = optimize_latest_margin(
+        # then solve the margin using cmaes if the library is not empty
+        cmaes_result = None
+        if len(self.library.predictors) > 0:
+            logger.info("determine margin using cmaes")
+            cma_std = self.solver_config.n_max_call * 0.5
+            coverage_est_last = self.sampler_history.coverage_est_history[-1]
+            results = self.margin_optimizer.optimize_batch(
+                self.config.n_optimize_margin_batch,
                 agg_list,
-                self.library.margins,
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,
+                cma_std,
+                minimum_coverage=coverage_est_last,
             )
-            if result is not None:
-                return result.best_margins, aggregate, result.coverage
+            # filter None of results
+            result_list = [r for r in results if r is not None]
+            if len(result_list) > 0:
+                idx_max_cover = np.argmax([r.coverage for r in result_list])
+                cmaes_result = result_list[idx_max_cover]
+
+        # both method failed
+        if naive_result is None and cmaes_result is None:
+            logger.info(f"no margin set could increase coverage")
+            return None
+
+        # logging for later discussion in the paper
+        result = None
+        if naive_result is None:
+            assert cmaes_result is not None  # to satisfy mypy
+            logger.info(f"naive method failed. use cmaes result {cmaes_result.coverage}")
+            result = cmaes_result
+        elif cmaes_result is None:
+            logger.info(
+                f"cmaes method failed (or not executed). use naive result {naive_result.coverage}"
+            )
+            result = naive_result
+        else:
+            if cmaes_result.coverage > naive_result.coverage:
+                logger.info(
+                    f"cmaes result {cmaes_result.coverage} is better than naive result {naive_result.coverage}"
+                )
+                result = cmaes_result
             else:
-                return None
+                logger.info(
+                    f"naive result {naive_result.coverage} is better than cmaes result {cmaes_result.coverage}"
+                )
+                result = naive_result
+        assert result is not None
+
+        return result.best_margins, aggregate, result.coverage
 
     def _train_predictor(
         self,
