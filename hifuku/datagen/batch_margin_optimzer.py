@@ -8,7 +8,7 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 import threadpoolctl
 
-from hifuku.coverage import OptimizeMarginsResult, RealEstAggregate, optimize_margins
+from hifuku.coverage import OptimizeMarginsResult, RealEstAggregate, optimize_biases
 from hifuku.datagen.http_datagen.client import ClientBase
 from hifuku.datagen.http_datagen.request import (
     OptimizeMarginsRequest,
@@ -25,7 +25,7 @@ HostPortPair = Tuple[str, int]
 
 
 @dataclass
-class BatchMarginsOptimizerBase(ABC):
+class BatchBiasesOptimizerBase(ABC):
     @abstractmethod
     def optimize_batch(
         self,
@@ -34,13 +34,13 @@ class BatchMarginsOptimizerBase(ABC):
         threshold: float,
         target_fp_rate: float,
         cma_sigma: float,
-        margins_guess: Optional[np.ndarray] = None,
+        biases_guess: Optional[np.ndarray] = None,
         minimum_coverage: Optional[float] = None,
     ) -> Sequence[Optional[OptimizeMarginsResult]]:
         ...
 
 
-class MultiProcesBatchMarginsOptimizer(BatchMarginsOptimizerBase):
+class MultiProcesBatchBiasesOptimizer(BatchBiasesOptimizerBase):
     n_process: int
     n_thread: int
 
@@ -60,7 +60,7 @@ class MultiProcesBatchMarginsOptimizer(BatchMarginsOptimizerBase):
         threshold: float,
         target_fp_rate: float,
         cma_sigma: float,
-        margins_guess: Optional[np.ndarray] = None,
+        biases_guess: Optional[np.ndarray] = None,
         minimum_coverage: Optional[float] = None,
     ) -> None:
 
@@ -71,12 +71,12 @@ class MultiProcesBatchMarginsOptimizer(BatchMarginsOptimizerBase):
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             for _ in range(n_sample):
-                ret = optimize_margins(
+                ret = optimize_biases(
                     aggregate_list,
                     threshold,
                     target_fp_rate,
                     cma_sigma,
-                    margins_guess,
+                    biases_guess,
                     minimum_coverage,
                 )
                 queue.put(ret)
@@ -88,7 +88,7 @@ class MultiProcesBatchMarginsOptimizer(BatchMarginsOptimizerBase):
         threshold: float,
         target_fp_rate: float,
         cma_sigma: float,
-        margins_guess: Optional[np.ndarray] = None,
+        biases_guess: Optional[np.ndarray] = None,
         minimum_coverage: Optional[float] = None,
     ) -> Sequence[Optional[OptimizeMarginsResult]]:
 
@@ -105,23 +105,21 @@ class MultiProcesBatchMarginsOptimizer(BatchMarginsOptimizerBase):
                 threshold,
                 target_fp_rate,
                 cma_sigma,
-                margins_guess,
+                biases_guess,
                 minimum_coverage,
             )
             p = ctx.Process(target=self.work, args=args)  # type: ignore
             p.start()
             process_list.append(p)
 
-        # the result is margins, coverage, fprate order
+        # the result is biases, coverage, fprate order
         result_list: List[Optional[OptimizeMarginsResult]] = [queue.get() for _ in range(n_sample)]
         for p in process_list:
             p.join()
         return result_list
 
 
-class DistributeBatchMarginsOptimizer(
-    ClientBase[OptimizeMarginsRequest], BatchMarginsOptimizerBase
-):
+class DistributeBatchBiasesOptimizer(ClientBase[OptimizeMarginsRequest], BatchBiasesOptimizerBase):
     @staticmethod  # called only in generate
     def send_and_recive_and_put(
         hostport: HostPortPair, request: OptimizeMarginsRequest, queue: Queue
@@ -140,7 +138,7 @@ class DistributeBatchMarginsOptimizer(
         threshold: float,
         target_fp_rate: float,
         cma_sigma: float,
-        margins_guess: Optional[np.ndarray] = None,
+        biases_guess: Optional[np.ndarray] = None,
         minimum_coverage: Optional[float] = None,
     ) -> Sequence[Optional[OptimizeMarginsResult]]:
 
@@ -160,7 +158,7 @@ class DistributeBatchMarginsOptimizer(
                     threshold,
                     target_fp_rate,
                     cma_sigma,
-                    margins_guess,
+                    biases_guess,
                     minimum_coverage,
                 )
 
@@ -168,7 +166,7 @@ class DistributeBatchMarginsOptimizer(
                 p.start()
                 process_list.append(p)
 
-        # the result is margins, coverage, fprate order
+        # the result is biases, coverage, fprate order
         result_list: List[Optional[OptimizeMarginsResult]] = [queue.get() for _ in range(n_sample)]
 
         for p in process_list:

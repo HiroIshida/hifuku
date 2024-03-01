@@ -18,10 +18,10 @@ from hifuku.coverage import RealEstAggregate
 from hifuku.datagen import (
     BatchTaskSampler,
     BatchTaskSolver,
-    DistributeBatchMarginsOptimizer,
+    DistributeBatchBiasesOptimizer,
     DistributeBatchTaskSampler,
     DistributedBatchTaskSolver,
-    MultiProcesBatchMarginsOptimizer,
+    MultiProcesBatchBiasesOptimizer,
     MultiProcessBatchTaskSampler,
     MultiProcessBatchTaskSolver,
 )
@@ -185,7 +185,7 @@ def test_consistency_of_all_batch_sampler(server):
                 # is different. so we cannot compare the result of the sampling directly.
 
 
-def test_batch_margin_optimizer(server):
+def test_batch_biases_optimizer(server):
     def f_real(x, c):
         return np.exp(-0.5 * ((x - c) ** 2)) + np.random.randn(len(x)) * 0.2
 
@@ -202,14 +202,8 @@ def test_batch_margin_optimizer(server):
 
     specs = (ServerSpec("localhost", 8081, 1.0), ServerSpec("localhost", 8082, 1.0))
     optimizer_list = []
-    optimizer_list.append(MultiProcesBatchMarginsOptimizer(4))
-    optimizer_list.append(DistributeBatchMarginsOptimizer(specs))
+    optimizer_list.append(MultiProcesBatchBiasesOptimizer(4))
+    optimizer_list.append(DistributeBatchBiasesOptimizer(specs))
 
     for optimizer in optimizer_list:
         optimizer.optimize_batch(8, [cr1, cr2], 5, 0.1, 5, None, None)
-
-
-if __name__ == "__main__":
-    # test_batch_solver_init_solutions()
-    # test_create_dataset()
-    test_batch_determinant()

@@ -37,15 +37,15 @@ from skmp.solver.interface import (
 )
 from skmp.trajectory import Trajectory
 
-from hifuku.coverage import RealEstAggregate, optimize_latest_margin
+from hifuku.coverage import RealEstAggregate, optimize_latest_bias
 from hifuku.datagen import (
-    BatchMarginsOptimizerBase,
+    BatchBiasesOptimizerBase,
     BatchTaskSampler,
     BatchTaskSolver,
-    DistributeBatchMarginsOptimizer,
+    DistributeBatchBiasesOptimizer,
     DistributeBatchTaskSampler,
     DistributedBatchTaskSolver,
-    MultiProcesBatchMarginsOptimizer,
+    MultiProcesBatchBiasesOptimizer,
     MultiProcessBatchTaskSampler,
     MultiProcessBatchTaskSolver,
 )
@@ -69,7 +69,7 @@ class ProfileInfo:  # per each iteration
     t_determine_cand: Optional[float] = None
     t_dataset: Optional[float] = None
     t_train: Optional[float] = None
-    t_margin: Optional[float] = None
+    t_bias: Optional[float] = None
 
     @property
     def has_all_info(self) -> bool:
@@ -79,7 +79,7 @@ class ProfileInfo:  # per each iteration
                 self.t_determine_cand is not None,
                 self.t_dataset is not None,
                 self.t_train is not None,
-                self.t_margin is not None,
+                self.t_bias is not None,
             ]
         )
 
@@ -88,7 +88,7 @@ class ProfileInfo:  # per each iteration
         if not self.has_all_info:
             return False
         # sum of each time must be smaller than t_total
-        return self.t_total > (self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin)  # type: ignore[operator]
+        return self.t_total > (self.t_dataset + self.t_train + self.t_determine_cand + self.t_bias)  # type: ignore[operator]
 
     @classmethod
     def from_total(cls, t_total: float) -> "ProfileInfo":
@@ -97,7 +97,7 @@ class ProfileInfo:  # per each iteration
 
     @property
     def t_other(self) -> float:
-        return self.t_total - (self.t_dataset + self.t_train + self.t_determine_cand + self.t_margin)  # type: ignore[operator]
+        return self.t_total - (self.t_dataset + self.t_train + self.t_determine_cand + self.t_bias)  # type: ignore[operator]
 
 
 @dataclass
@@ -106,7 +106,7 @@ class ActiveSamplerHistory:
     sampling_number_factor: float
 
     # the below are not states but history for postmortem analysis
-    margins_history: List[List[float]]
+    biases_history: List[List[float]]
     aggregate_list: List[RealEstAggregate]
     candidates_history: List[List[Trajectory]]
     elapsed_time_history: List[ProfileInfo]
@@ -120,7 +120,7 @@ class ActiveSamplerHistory:
     def check_consistency(self) -> None:
         if len(self.elapsed_time_history) == 0:
             return
-        assert len(self.aggregate_list) == len(self.margins_history)
+        assert len(self.aggregate_list) == len(self.biases_history)
         total_iter = len(self.aggregate_list) + self.failure_count
         assert len(self.candidates_history) == total_iter
         assert len(self.elapsed_time_history) == total_iter
@@ -141,7 +141,7 @@ class ActiveSamplerHistory:
         dic: Dict[str, Any] = {}
         dic["sampling_number_factor"] = self.sampling_number_factor
         dic["aggregate_list"] = [agg.to_dict() for agg in self.aggregate_list]
-        dic["margins_history"] = self.margins_history
+        dic["biases_history"] = self.biases_history
         dic["candidates_history"] = [pickle.dumps(cands) for cands in self.candidates_history]
         dic["elapsed_time_history"] = [asdict(e) for e in self.elapsed_time_history]
         dic["coverage_est_history"] = self.coverage_est_history
@@ -155,14 +155,14 @@ class ActiveSamplerHistory:
             dic = pickle.load(f)
         sampling_number_factor = dic["sampling_number_factor"]
         aggregate_list = [RealEstAggregate.from_dict(d) for d in dic["aggregate_list"]]
-        margins_history = dic["margins_history"]
+        biases_history = dic["biases_history"]
         candidates_history = [pickle.loads(c) for c in dic["candidates_history"]]
         elapsed_time_history = [ProfileInfo(**d) for d in dic["elapsed_time_history"]]
         coverage_est_history = dic["coverage_est_history"]
         failure_count = dic["failure_count"]
         return cls(
             sampling_number_factor,
-            margins_history,
+            biases_history,
             aggregate_list,
             candidates_history,
             elapsed_time_history,
@@ -185,7 +185,7 @@ class SolutionLibrary:
     ae_model_shared: Optional[AutoEncoderBase]
     predictors: List[Union[CostPredictor, CostPredictorWithEncoder]]
     init_solutions: List[Trajectory]
-    margins: List[float]
+    biases: List[float]
     uuidval: str
     meta_data: Dict
 
@@ -256,12 +256,12 @@ class SolutionLibrary:
 
         # these lines copied from _infer_cost_with_shared_ae
         costs_list = []
-        for pred, margin in zip(self.predictors, self.margins):
+        for pred, bias in zip(self.predictors, self.biases):
             assert isinstance(pred, CostPredictorWithEncoder)
-            # margin is for correcting the overestimated inference
+            # bias is for correcting the overestimated inference
             costs = pred.forward_multi_inner(world_mat_torch, descs_torch)  # type: ignore
             costs = costs.squeeze(dim=1)
-            costs_np = costs.detach().cpu().numpy() + margin
+            costs_np = costs.detach().cpu().numpy() + bias
             costs_list.append(costs_np)
         costs_arr = np.array(costs_list)
         return costs_arr
@@ -290,11 +290,11 @@ class SolutionLibrary:
         encoded_repeated = encoded.repeat(n_batch, 1)
 
         costs_list = []
-        for pred, margin in zip(self.predictors, self.margins):
-            # margin is for correcting the overestimated inference
+        for pred, bias in zip(self.predictors, self.biases):
+            # bias is for correcting the overestimated inference
             costs, _ = pred.forward((encoded_repeated, vecs_torch))
             costs = costs.squeeze(dim=1)
-            costs_np = costs.detach().cpu().numpy() + margin
+            costs_np = costs.detach().cpu().numpy() + bias
             costs_list.append(costs_np)
         costs_arr = np.array(costs_list)
         return costs_arr
@@ -335,7 +335,7 @@ class SolutionLibrary:
             pred_copied = copy.deepcopy(pred)
             pred_copied.put_on_device(device)
             dic["predictors"].append(pickle.dumps(pred_copied))
-        dic["margins"] = self.margins
+        dic["biases"] = self.biases
         dic["init_solutions"] = pickle.dumps(self.init_solutions)
         dic["uuidval"] = self.uuidval
         dic["meta_data"] = self.meta_data
@@ -378,7 +378,7 @@ class SolutionLibrary:
             pred = pickle.loads(pred_pickled)
             pred.put_on_device(device)
             pred_list.append(pred)
-        margins = dic["margins"]
+        biases = dic["biases"]
         init_solutions = pickle.loads(dic["init_solutions"])
         meta_data = dic["meta_data"]
         return cls(
@@ -386,7 +386,7 @@ class SolutionLibrary:
             ae_model_shared,
             pred_list,
             init_solutions,
-            margins,
+            biases,
             uuidval,
             meta_data,
         )
@@ -558,7 +558,7 @@ class LibrarySamplerConfig:
     costpred_model_config: Optional[Dict] = None
     n_validation: int = 10000
     n_validation_inner: int = 1
-    n_optimize_margin_batch: int = 2000
+    n_optimize_biases_batch: int = 2000
     candidate_sample_scale: int = 4
     train_with_encoder: bool = False
     tmp_n_max_call_mult_factor: float = 1.5
@@ -579,7 +579,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
     tasks_validation: np.ndarray
     solver: BatchTaskSolver
     sampler: BatchTaskSampler
-    margin_optimizer: BatchMarginsOptimizerBase
+    biases_optimizer: BatchBiasesOptimizerBase
     test_false_positive_rate: bool
     project_path: Path
     sampler_history: ActiveSamplerHistory
@@ -652,10 +652,10 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             sampler = (
                 DistributeBatchTaskSampler() if use_distributed else MultiProcessBatchTaskSampler()
             )
-        margin_optimizer = (
-            DistributeBatchMarginsOptimizer()
+        biases_optimizer = (
+            DistributeBatchBiasesOptimizer()
             if use_distributed
-            else MultiProcesBatchMarginsOptimizer()
+            else MultiProcesBatchBiasesOptimizer()
         )
 
         # setup pools
@@ -706,7 +706,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             tasks_validation,
             solver,
             sampler,
-            margin_optimizer,
+            biases_optimizer,
             test_false_positive_rate,
             project_path,
             sampler_state,
@@ -739,28 +739,28 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
 
         predictor = self._train_predictor(init_solution, self.project_path, n_task_now, prof_info)
 
-        ts_margin = time.time()
-        ret = self._determine_margins(predictor, init_solution)
-        prof_info.t_margin = time.time() - ts_margin
+        ts_bias = time.time()
+        ret = self._determine_biases(predictor, init_solution)
+        prof_info.t_bias = time.time() - ts_bias
 
         if ret is None:
-            logger.info("no margin set could increase coverage. dont add anything to library")
+            logger.info("no bias set could increase coverage. dont add anything to library")
             if len(self.sampler_history.coverage_est_history) > 0:
                 coverage_est = self.sampler_history.coverage_est_history[-1]
             else:
                 coverage_est = 0.0
             self.sampler_history.failure_count += 1
         else:
-            margins, aggregate, coverage_est = ret
-            logger.info("margin for latest costpred is {}".format(margins[-1]))
-            logger.debug("determined margins {}".format(margins))
+            biases, aggregate, coverage_est = ret
+            logger.info("bias for latest costpred is {}".format(biases[-1]))
+            logger.debug("determined biases {}".format(biases))
 
             self.library.predictors.append(predictor)
             self.library.init_solutions.append(init_solution)
-            self.library.margins = margins
+            self.library.biases = biases
 
             self.sampler_history.aggregate_list.append(aggregate)
-            self.sampler_history.margins_history.append(copy.deepcopy(margins))
+            self.sampler_history.biases_history.append(copy.deepcopy(biases))
 
         prof_info.t_total = time.time() - ts
 
@@ -801,7 +801,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         self.sampler_history.dump(self.project_path)
         return True
 
-    def _determine_margins(
+    def _determine_biases(
         self,
         predictor: Union[CostPredictorWithEncoder, CostPredictor],
         init_solution: Trajectory,
@@ -821,23 +821,23 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         logger.info(aggregate)
         agg_list = self.sampler_history.aggregate_list + [aggregate]
 
-        # first solve the margin naively fixig all the past margins
-        logger.info("determine margin using naive method")
-        naive_result = optimize_latest_margin(
+        # first solve the latest bias naively fixig all the past biases
+        logger.info("determine bias using naive method")
+        naive_result = optimize_latest_bias(
             agg_list,
-            self.library.margins,
+            self.library.biases,
             self.solver_config.n_max_call,
             self.config.acceptable_false_positive_rate,
         )
 
-        # then solve the margin using cmaes if the library is not empty
+        # solve the biases using cmaes if the library is not empty
         cmaes_result = None
         if len(self.library.predictors) > 0:
-            logger.info("determine margin using cmaes")
+            logger.info("determine biases using cmaes")
             cma_std = self.solver_config.n_max_call * 0.5
             coverage_est_last = self.sampler_history.coverage_est_history[-1]
-            results = self.margin_optimizer.optimize_batch(
-                self.config.n_optimize_margin_batch,
+            results = self.biases_optimizer.optimize_batch(
+                self.config.n_optimize_biases_batch,
                 agg_list,
                 self.solver_config.n_max_call,
                 self.config.acceptable_false_positive_rate,
@@ -852,7 +852,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
 
         # both method failed
         if naive_result is None and cmaes_result is None:
-            logger.info(f"no margin set could increase coverage")
+            logger.info("no biases set could increase coverage")
             return None
 
         # logging for later discussion in the paper
@@ -879,7 +879,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 result = naive_result
         assert result is not None
 
-        return result.best_margins, aggregate, result.coverage
+        return result.best_biases, aggregate, result.coverage
 
     def _train_predictor(
         self,

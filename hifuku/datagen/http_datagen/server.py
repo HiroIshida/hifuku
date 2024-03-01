@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from skmp.solver.interface import ConfigT, ResultT
 
 from hifuku.datagen import (
-    MultiProcesBatchMarginsOptimizer,
+    MultiProcesBatchBiasesOptimizer,
     MultiProcessBatchTaskSampler,
     MultiProcessBatchTaskSolver,
 )
@@ -93,7 +93,7 @@ class PostHandler(BaseHTTPRequestHandler):
     ) -> OptimizeMarginsResponse:
         ts = time.time()
         logging.info("request: {}".format(request))
-        optimizer = MultiProcesBatchMarginsOptimizer(request.n_process)
+        optimizer = MultiProcesBatchBiasesOptimizer(request.n_process)
         results = optimizer.optimize_batch(
             request.n_sample,
             request.aggregate_list,

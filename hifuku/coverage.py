@@ -64,13 +64,13 @@ class RealEstAggregate:
     def false_negative_bools(self) -> np.ndarray:
         return np.logical_and(self.reals <= self.threshold, self.ests > self.threshold)
 
-    def compute_coverage_rate(self, margin: float, eps: float = 1e-6) -> float:
-        positive_est = self.ests + margin + eps < self.threshold
+    def compute_coverage_rate(self, bias: float, eps: float = 1e-6) -> float:
+        positive_est = self.ests + bias + eps < self.threshold
         n_positive = np.sum(positive_est)
         return float(n_positive / len(self.ests))
 
-    def compute_false_positive_rate(self, margin: float, eps: float = 1e-6) -> Optional[float]:
-        positive_est = self.ests + margin + eps < self.threshold
+    def compute_false_positive_rate(self, bias: float, eps: float = 1e-6) -> Optional[float]:
+        positive_est = self.ests + bias + eps < self.threshold
         n_positive = np.sum(positive_est)
         no_positive = n_positive == 0
         if no_positive:
@@ -81,7 +81,7 @@ class RealEstAggregate:
         fp_rate = 1.0 - tp_rate
         return fp_rate
 
-    def determine_margin(self, acceptable_false_positive_rate: float) -> Tuple[float, float]:
+    def determine_bias(self, acceptable_false_positive_rate: float) -> Tuple[float, float]:
         """
         note that fp rate is defined as fp/(fp + tp)
         """
@@ -92,23 +92,23 @@ class RealEstAggregate:
 
         rate = self.compute_false_positive_rate(0.0)
         if rate is None:
-            # make no sense to set margin because no positive est
+            # make no sense to set bias because no positive est
             return np.inf, 0.0
 
         if rate < acceptable_false_positive_rate:
-            # no need to set margin
+            # no need to set bias
             return 0.0, self.compute_coverage_rate(0.0)
 
         sorted_diffs = np.sort(diffs)
         for i in range(len(diffs)):
-            margin_cand = sorted_diffs[i]
-            rate = self.compute_false_positive_rate(margin_cand)
-            logger.debug("margin_cand: {}, fp_rate: {}".format(margin_cand, rate))
+            bias_cand = sorted_diffs[i]
+            rate = self.compute_false_positive_rate(bias_cand)
+            logger.debug("bias_cand: {}, fp_rate: {}".format(bias_cand, rate))
             if rate is None:
                 return np.inf, 0.0
             if rate < acceptable_false_positive_rate:
-                margin_final = margin_cand + 1e-6
-                return margin_final, self.compute_coverage_rate(margin_final)
+                bias_final = bias_cand + 1e-6
+                return bias_final, self.compute_coverage_rate(bias_final)
         assert False, "final rate {}".format(rate)
 
     def __str__(self) -> str:
@@ -123,14 +123,14 @@ class RealEstAggregate:
 
 @dataclass
 class OptimizeMarginsResult:
-    best_margins: List[float]
+    best_biases: List[float]
     coverage: float
     fprate: float
 
 
 @jit(nopython=True)
 def compute_coverage_and_fp_jit(
-    margins: np.ndarray,
+    biases: np.ndarray,
     realss: np.ndarray,
     estss: np.ndarray,
     threshold: float,
@@ -140,8 +140,8 @@ def compute_coverage_and_fp_jit(
     n_coverage = 0
     n_fp = 0
     for j in range(N_mc):
-        best_path_idx = np.argmin(estss[:, j] + margins)
-        is_est_ok = estss[best_path_idx, j] + margins[best_path_idx] < threshold
+        best_path_idx = np.argmin(estss[:, j] + biases)
+        is_est_ok = estss[best_path_idx, j] + biases[best_path_idx] < threshold
         is_real_ok = realss[best_path_idx, j] < threshold
         if is_est_ok:
             n_coverage += 1
@@ -155,47 +155,47 @@ def compute_coverage_and_fp_jit(
     return coverage_rate, fp_rate
 
 
-def optimize_latest_margin(
+def optimize_latest_bias(
     aggregate_list: List[RealEstAggregate],
-    margins_so_far: List[float],
+    biases_so_far: List[float],
     threshold: float,
     target_fp_rate: float,
     n_split: int = 2000,
 ) -> Optional[OptimizeMarginsResult]:
-    assert len(aggregate_list) == len(margins_so_far) + 1
+    assert len(aggregate_list) == len(biases_so_far) + 1
     realss = np.array([cr.reals for cr in aggregate_list], order="F")
     estss = np.array([cr.ests for cr in aggregate_list], order="F")
 
-    def f(margin: float) -> Tuple[float, float]:
-        margins = np.array(margins_so_far + [margin])
-        coverage_est, fp_rate = compute_coverage_and_fp_jit(margins, realss, estss, threshold)
+    def f(bias: float) -> Tuple[float, float]:
+        biases = np.array(biases_so_far + [bias])
+        coverage_est, fp_rate = compute_coverage_and_fp_jit(biases, realss, estss, threshold)
         return coverage_est, fp_rate
 
-    for margin in np.linspace(-2 * threshold, 2 * threshold, n_split):
-        cov, fp = f(margin)
+    for bias in np.linspace(-2 * threshold, 2 * threshold, n_split):
+        cov, fp = f(bias)
         if fp < target_fp_rate:
-            return OptimizeMarginsResult(margins_so_far + [margin], cov, fp)
+            return OptimizeMarginsResult(biases_so_far + [bias], cov, fp)
     return None
 
 
-def optimize_margins(
+def optimize_biases(
     aggregate_list: List[RealEstAggregate],
     threshold: float,
     target_fp_rate: float,
     cma_sigma: float,
-    margins_guess: Optional[np.ndarray] = None,
+    biases_guess: Optional[np.ndarray] = None,
     minimum_coverage: Optional[float] = None,
 ) -> Optional[OptimizeMarginsResult]:
 
     target_fp_rate_modified = target_fp_rate - 1e-3  # because penalty method is not tight
     logger.debug("target fp_rate modified: {}".format(target_fp_rate_modified))
 
-    if margins_guess is None:
+    if biases_guess is None:
         n_pred = len(aggregate_list)
-        margins_guess = np.zeros(n_pred)
+        biases_guess = np.zeros(n_pred)
 
     best_score = np.inf
-    best_margins = copy.deepcopy(margins_guess)
+    best_biases = copy.deepcopy(biases_guess)
 
     if minimum_coverage is None:
         minimum_coverage = 0.0
@@ -206,7 +206,7 @@ def optimize_margins(
     realss = np.array([cr.reals for cr in aggregate_list], order="F")
     estss = np.array([cr.ests for cr in aggregate_list], order="F")
 
-    optimizer = CMA(mean=margins_guess, sigma=cma_sigma)
+    optimizer = CMA(mean=biases_guess, sigma=cma_sigma)
     for generation in tqdm.tqdm(range(1000)):
         solutions = []
         for _ in range(optimizer.population_size):
@@ -221,7 +221,7 @@ def optimize_margins(
 
         if values[best_index] < best_score:
             best_score = values[best_index]
-            best_margins = xs[best_index]
+            best_biases = xs[best_index]
 
         logger.debug(
             "[generation {}] coverage: {}, fp_rate: {}".format(generation, coverage_est, fp_rate)
@@ -230,12 +230,12 @@ def optimize_margins(
             break
 
     coverage_est_cand, fp_rate_cand = compute_coverage_and_fp_jit(
-        best_margins, realss, estss, threshold
+        best_biases, realss, estss, threshold
     )
     logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
     if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate:
         logger.info("cma result accepted")
-        return OptimizeMarginsResult(list(best_margins), coverage_est_cand, fp_rate_cand)
+        return OptimizeMarginsResult(list(best_biases), coverage_est_cand, fp_rate_cand)
     else:
         logger.info("cma result rejected. Returning None")
         return None

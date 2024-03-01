@@ -41,7 +41,7 @@ def _test_SolutionLibrarySampler(
         sampling_number_factor=1000,
         train_config=TrainConfig(n_epoch=20, learning_rate=0.01),
         costpred_model_config={"layers": [64, 64, 64]},
-        n_optimize_margin_batch=50,
+        n_optimize_biases_batch=50,
         n_validation=1000,
         n_validation_inner=1,
         clamp_factor=1.5,

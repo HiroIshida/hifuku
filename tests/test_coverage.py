@@ -29,9 +29,9 @@ def test_coverage_result():
                 result.true_positive_bools
             ) + sum(result.true_negative_bools) == len(result)
             # rate_threshold = 0.05
-            margin, _ = result.determine_margin(rate_threshold)
+            bias, _ = result.determine_bias(rate_threshold)
 
-            result = RealEstAggregate(values_gt, values_est + margin, 0.0)
+            result = RealEstAggregate(values_gt, values_est + bias, 0.0)
 
             # sum must equal
             n_sum = (
@@ -66,7 +66,7 @@ def test_coverage_result_int_case():
 
 
 def compute_coverage_and_fp_naive(
-    margins: np.ndarray, coverage_results: List[RealEstAggregate], threshold: float
+    biases: np.ndarray, coverage_results: List[RealEstAggregate], threshold: float
 ) -> Tuple[float, float]:
     # naive (non-vectorized) coverage and fp computation
     coverage_count = 0
@@ -78,7 +78,7 @@ def compute_coverage_and_fp_naive(
         best_idx = None
 
         for idx, cr in enumerate(coverage_results):
-            est = cr.ests[i] + margins[idx]
+            est = cr.ests[i] + biases[idx]
             if est < best_est:
                 best_est = est
                 best_idx = idx
@@ -120,15 +120,15 @@ def test_compute_coverage_and_fp():
         cr_list.append(cr)
 
     # test main
-    margins = np.array([10, 100, 20, 40, 200])
+    biases = np.array([10, 100, 20, 40, 200])
     coverage_jit, fp_rate_jit = compute_coverage_and_fp_jit(
-        margins,
+        biases,
         np.array([cr.reals for cr in cr_list]),
         np.array([cr.ests for cr in cr_list]),
         threshold,
     )
 
-    coverage_rate_truth, fp_rate_truth = compute_coverage_and_fp_naive(margins, cr_list, threshold)
+    coverage_rate_truth, fp_rate_truth = compute_coverage_and_fp_naive(biases, cr_list, threshold)
     np.testing.assert_almost_equal(coverage_jit, coverage_rate_truth)
     np.testing.assert_almost_equal(fp_rate_jit, fp_rate_truth)
 

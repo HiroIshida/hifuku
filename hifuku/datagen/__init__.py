@@ -1,9 +1,9 @@
 # flake8: noqa
 
 from hifuku.datagen.batch_margin_optimzer import (
-    BatchMarginsOptimizerBase,
-    DistributeBatchMarginsOptimizer,
-    MultiProcesBatchMarginsOptimizer,
+    BatchBiasesOptimizerBase,
+    DistributeBatchBiasesOptimizer,
+    MultiProcesBatchBiasesOptimizer,
 )
 from hifuku.datagen.batch_sampler import (
     BatchTaskSampler,
