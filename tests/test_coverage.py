@@ -138,7 +138,7 @@ def test_coverage_result_serialization():
     ests_random = np.random.rand(100)
     threshold = 0.5
     cr = RealEstAggregate(reals_random, ests_random, threshold)
-    cr_again = RealEstAggregate.loads(cr.dumps())
+    cr_again = RealEstAggregate.from_dict(cr.to_dict())
     # compare pickled
     assert pickle.dumps(cr) == pickle.dumps(cr_again)
 
