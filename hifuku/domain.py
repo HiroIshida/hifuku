@@ -14,7 +14,10 @@ from rpbench.articulated.pr2.jskfridge import (
     JskFridgeVerticalReachingTask,
     JskFridgeVerticalReachingTask2,
 )
-from rpbench.articulated.pr2.minifridge import TabletopClutteredFridgeReachingTask
+from rpbench.articulated.pr2.minifridge import (
+    FixedPR2MiniFridgeTask,
+    MovingPR2MiniFridgeTask,
+)
 from rpbench.interface import TaskBase
 from rpbench.two_dimensional.bubbly_world import (
     BubblyComplexMeshPointConnectTask,
@@ -86,8 +89,18 @@ class DomainProtocol(Protocol):
         return DistributeBatchTaskSampler(*args, **kwargs)
 
 
-class ClutteredFridge_SQP(DomainProtocol):
-    task_type = TabletopClutteredFridgeReachingTask
+class FixedPR2MiniFridge_SQP(DomainProtocol):
+    task_type = FixedPR2MiniFridgeTask
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
+    )
+    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class MovingPR2MiniFridge_SQP(DomainProtocol):
+    task_type = MovingPR2MiniFridgeTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
@@ -116,56 +129,56 @@ class ClutteredFridge_SQP(DomainProtocol):
 #     auto_encoder_type = PixelAutoEncoder
 
 
-class ClutteredFridge_RRT250(DomainProtocol):
-    task_type = TabletopClutteredFridgeReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=250,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class ClutteredFridge_RRT500(DomainProtocol):
-    task_type = TabletopClutteredFridgeReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=500,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class ClutteredFridge_RRT1000(DomainProtocol):
-    task_type = TabletopClutteredFridgeReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=1000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class ClutteredFridge_RRT2000(DomainProtocol):
-    task_type = TabletopClutteredFridgeReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=2000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
+# class ClutteredFridge_RRT250(DomainProtocol):
+#     task_type = TabletopClutteredFridgeReachingTask
+#     solver_type = OMPLSolver
+#     solver_config = OMPLSolverConfig(
+#         n_max_call=250,
+#         n_max_satisfaction_trial=1,
+#         expbased_planner_backend="ertconnect",
+#         ertconnect_eps=0.1,
+#     )
+#     auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+#     auto_encoder_type = PixelAutoEncoder
+#
+#
+# class ClutteredFridge_RRT500(DomainProtocol):
+#     task_type = TabletopClutteredFridgeReachingTask
+#     solver_type = OMPLSolver
+#     solver_config = OMPLSolverConfig(
+#         n_max_call=500,
+#         n_max_satisfaction_trial=1,
+#         expbased_planner_backend="ertconnect",
+#         ertconnect_eps=0.1,
+#     )
+#     auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+#     auto_encoder_type = PixelAutoEncoder
+#
+#
+# class ClutteredFridge_RRT1000(DomainProtocol):
+#     task_type = TabletopClutteredFridgeReachingTask
+#     solver_type = OMPLSolver
+#     solver_config = OMPLSolverConfig(
+#         n_max_call=1000,
+#         n_max_satisfaction_trial=1,
+#         expbased_planner_backend="ertconnect",
+#         ertconnect_eps=0.1,
+#     )
+#     auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+#     auto_encoder_type = PixelAutoEncoder
+#
+#
+# class ClutteredFridge_RRT2000(DomainProtocol):
+#     task_type = TabletopClutteredFridgeReachingTask
+#     solver_type = OMPLSolver
+#     solver_config = OMPLSolverConfig(
+#         n_max_call=2000,
+#         n_max_satisfaction_trial=1,
+#         expbased_planner_backend="ertconnect",
+#         ertconnect_eps=0.1,
+#     )
+#     auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+#     auto_encoder_type = PixelAutoEncoder
 
 
 class JSKFridge_SQP(DomainProtocol):
@@ -432,11 +445,8 @@ def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> f
 
 def select_domain(domain_name: str) -> Type[DomainProtocol]:
     class DomainCollection(Enum):
-        cluttered_fridge_sqp = ClutteredFridge_SQP
-        cluttered_fridge_rrt250 = ClutteredFridge_RRT250
-        cluttered_fridge_rrt500 = ClutteredFridge_RRT500
-        cluttered_fridge_rrt1000 = ClutteredFridge_RRT1000
-        cluttered_fridge_rrt2000 = ClutteredFridge_RRT2000
+        fixed_pr2_minifridge_sqp = FixedPR2MiniFridge_SQP
+        moving_pr2_minifridge_sqp = MovingPR2MiniFridge_SQP
         jsk_fridge_sqp = JSKFridge_SQP
         jsk_fridge_rrt2000 = JSKFridge_RRT2000
         jsk_fridge_rrt5000 = JSKFridge_RRT5000
@@ -453,7 +463,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         di_bubbly_moderate_sqp = DoubleIntegratorBubblyModerate_SQP
         di_bubbly_complex_sqp = DoubleIntegratorBubblyComplex_SQP
         di_bubbly_simple_sqp = DoubleIntegratorBubblySimple_SQP
-        di_bubbly_empty_sqp = DoubleIntegratorBubblyEmpty_SQP
         dummy = DummyDomain
         prob_dummy = ProbDummyDomain
 
