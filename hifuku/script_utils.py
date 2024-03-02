@@ -73,7 +73,6 @@ def get_project_path(
 def load_library(
     domain: Union[str, Type[DomainProtocol]],
     device: Literal["cpu", "cuda"],
-    limit_thread: bool = False,
     project_path: Optional[Path] = None,
     postfix: Optional[str] = None,
 ) -> SolutionLibrary:
