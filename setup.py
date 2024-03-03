@@ -16,7 +16,7 @@ install_requires = [
 
 setup(
     name="hifuku",
-    version="0.0.3",
+    version="0.0.4",
     description="experimental",
     author="Hirokazu Ishida",
     author_email="h-ishida@jsk.imi.i.u-tokyo.ac.jp",
