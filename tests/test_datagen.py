@@ -77,8 +77,8 @@ def server():
 
 @lru_cache(maxsize=1)
 def compute_init_traj() -> Trajectory:
-    task = task_type.sample(1, standard=True)
-    res = task.solve_default()[0]
+    task = task_type.sample(standard=True)
+    res = task.solve_default()
     assert res.traj is not None
     return res.traj
 
@@ -89,8 +89,8 @@ def test_batch_solver_init_solutions():
         domain.solver_type, domain.solver_config, task_type, 2
     )
     n_task = 5
-    n_inner = 2
-    task_paramss = np.array([task_type.sample(n_inner).to_task_params() for _ in range(n_task)])
+    n_inner = 1  # TODO(3/3) remove
+    task_paramss = np.array([task_type.sample().to_task_params() for _ in range(n_task)])
     mp_batch_solver.solve_batch(task_paramss, [None] * n_task)
     mp_batch_solver.solve_batch(task_paramss, [init_traj] * n_task)
     mp_batch_solver.solve_batch(task_paramss, [[init_traj] * n_inner] * n_task)
@@ -104,13 +104,11 @@ def test_consistency_of_all_batch_sovler(server):
         create_default_logger(td_path, "test_datagen")
 
         for n_task in [1, 8]:  # to test edge case
-            n_task_inner = 2
+            n_task_inner = 1  # TODO(3/3) remove
 
             init_solutions = [init_traj] * n_task
             # set standard = True for testing purpose
-            task_paramss = np.array(
-                [task_type.sample(n_task_inner).to_task_params() for _ in range(n_task)]
-            )
+            task_paramss = np.array([task_type.sample().to_task_params() for _ in range(n_task)])
             batch_solver_list: List[BatchTaskSolver] = []
             mp_batch_solver = MultiProcessBatchTaskSolver(
                 domain.solver_type, domain.solver_config, task_type, n_process=2
@@ -163,9 +161,8 @@ def test_consistency_of_all_batch_sampler(server):
     sampler_list.append(MultiProcessBatchTaskSampler(1))
     sampler_list.append(DistributeBatchTaskSampler[task_type](specs))
 
-    n_task_inner = 5
     pool_list: List[PredicatedTaskPool] = []
-    pool_base = TaskPool(task_type, n_task_inner)
+    pool_base = TaskPool(task_type)
     pool_list.append(pool_base.as_predicated())
     # pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
 
@@ -173,7 +170,11 @@ def test_consistency_of_all_batch_sampler(server):
         for pool in pool_list:
             for sampler in sampler_list:
                 samples = sampler.sample_batch(n_sample, pool)
-                assert samples.shape == (n_sample, n_task_inner, task_type.get_task_dof())
+                assert samples.shape == (
+                    n_sample,
+                    1,
+                    task_type.get_task_dof(),
+                )  # TODO(3/3) to 2dim array
 
                 # in the parallel processing, the typical but difficult-to-find bug is
                 # duplication of sample by forgetting to set peroper random seed.

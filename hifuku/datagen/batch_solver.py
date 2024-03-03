@@ -171,7 +171,8 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
                 resultss = []
                 for task_params in task_paramss:
                     task = self.task_type.from_task_params(task_params)
-                    results = tuple(task.solve_default())
+                    result = task.solve_default()
+                    results = (result,)  # TODO(3/3) fix this
                     resultss.append(results)
                 return resultss
             else:
@@ -183,14 +184,13 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
                 for task_params, init_solution in zip(task_paramss, init_solutions):
                     task = self.task_type.from_task_params(task_params)
                     init_solutions_per_inner = duplicate_init_solution_if_not_list(
-                        init_solution, task.n_inner_task
+                        init_solution, 1  # TODO(3/3) fix this
                     )
-                    tasks = task.export_problems()
-                    results: List[ResultT] = []
-                    for task, init_solution_per_inner in zip(tasks, init_solutions_per_inner):
-                        solver.setup(task)
-                        result = solver.solve(init_solution_per_inner)
-                        results.append(result)
+                    problem = task.export_problem()
+                    solver.setup(problem)
+                    assert len(init_solutions_per_inner) == 1  # TODO(3/3) fix this
+                    result = solver.solve(init_solutions_per_inner[0])
+                    results = (result,)  # TODO(3/3) fix this
                     results_list.append(tuple(results))
                 return results_list
         else:
@@ -248,16 +248,15 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
         # NOTE: a lot of type: ignore due to global variables
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             if _use_default_solver:  # type: ignore
-                results = task.solve_default()
+                result = task.solve_default()
+                results = (result,)  # type: ignore
             else:
-                init_solutions = duplicate_init_solution_if_not_list(
-                    init_solutions, task.n_inner_task
-                )
-                results = []
-                for task, init_solution in zip(task.export_problems(), init_solutions):
-                    _solver.setup(task)  # type: ignore
-                    result = _solver.solve(init_solution)  # type: ignore
-                    results.append(result)
+                init_solutions = duplicate_init_solution_if_not_list(init_solutions, 1)
+                assert len(init_solutions) == 1  # TODO(3/3) fix this
+                problem = task.export_problem()
+                _solver.setup(problem)
+                result = _solver.solve(init_solutions[0])
+                results = (result,)  # TODO(3/3) fix this
         return task_idx, tuple(results)
 
 

@@ -433,9 +433,7 @@ class LibraryBasedSolverBase(AbstractTaskSolver[TaskT, ConfigT, ResultT]):
         return cls(library, solver, None, timeout_stashed, None, None, loginfo_fun, logwarn_fun)
 
     def setup(self, task: TaskT) -> None:
-        assert task.n_inner_task == 1
-        tasks = [p for p in task.export_problems()]
-        self.solver.setup(tasks[0])
+        self.solver.setup(task.export_problem())
         self.task = task
 
     def solve(self) -> ResultT:
@@ -524,7 +522,6 @@ class DifficultTaskPredicate:
         self.library.put_on_device(torch.device("cpu"))
 
     def __call__(self, task: TaskBase) -> bool:
-        assert task.n_inner_task == 1
         infer_res = self.library.infer(task)[0]
         cost = infer_res.cost
         if cost < self.th_min_cost:
@@ -574,8 +571,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
     solver_config: ConfigT
     library: SolutionLibrary
     config: LibrarySamplerConfig
-    pool_single: TaskPool[TaskT]
-    pool_multiple: TaskPool[TaskT]
+    task_pool: TaskPool[TaskT]
     tasks_validation: np.ndarray
     solver: BatchTaskSolver
     sampler: BatchTaskSampler
@@ -606,8 +602,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         ae_model: AutoEncoderBase,
         config: LibrarySamplerConfig,
         project_path: Path,
-        pool_single: Optional[TaskPool[TaskT]] = None,
-        pool_multiple: Optional[TaskPool[TaskT]] = None,
+        task_pool: Optional[TaskPool[TaskT]] = None,
         solver: Optional[BatchTaskSolver[ConfigT, ResultT]] = None,
         sampler: Optional[BatchTaskSampler[TaskT]] = None,
         use_distributed: bool = False,
@@ -659,15 +654,8 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         )
 
         # setup pools
-        if pool_single is None:
-            logger.info("task pool is not specified. use SimpleTaskPool")
-            pool_single = TaskPool(task_type, 1)
-        assert pool_single.n_task_inner == 1
-
-        if pool_multiple is None:
-            logger.info("task pool is not specified. use SimpleTaskPool")
-            # TODO: smelling! n_task_inner should not be set here
-            pool_multiple = TaskPool(task_type, config.n_task_inner)
+        if task_pool is None:
+            task_pool = TaskPool(task_type)
 
         logger.info("start creating validation set")
         project_path.mkdir(exist_ok=True)
@@ -677,8 +665,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 tasks_validation: np.ndarray = pickle.load(f)
         else:
             tasks_validation = sampler.sample_batch(
-                config.n_validation,
-                TaskPool(task_type, config.n_validation_inner).as_predicated(),
+                config.n_validation, TaskPool(task_type).as_predicated()
             )
 
             with validation_cache_path.open(mode="wb") as f:
@@ -691,7 +678,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             with presample_cache_path.open(mode="rb") as f:
                 presampled_task_paramss: np.ndarray = pickle.load(f)
         else:
-            task_params = next(pool_multiple)  # sample once to get the shape
+            task_params = next(task_pool)  # sample once to get the shape
             presampled_task_paramss = np.array([task_params])
         assert presampled_task_paramss.ndim == 3
 
@@ -701,8 +688,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             solver_config,
             library,
             config,
-            pool_single,
-            pool_multiple,
+            task_pool,
             tasks_validation,
             solver,
             sampler,
@@ -898,7 +884,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             logger.info(
                 f"presampled {len(self.presampled_tasks_paramss)} tasks are not enough. populate more: {n_required}"
             )
-            predicated_pool = self.pool_multiple.as_predicated()
+            predicated_pool = self.task_pool.as_predicated()
             tasks = self.sampler.sample_batch(n_required, predicated_pool)
             self.presampled_tasks_paramss = np.concatenate([self.presampled_tasks_paramss, tasks])
             # save it to cache
@@ -1002,7 +988,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         ts_train = time.time()
         # determine 1dim tensor dimension by temp creation of a task
         # TODO: should I implement this as a method?
-        task = self.task_type.sample(1, standard=True)
+        task = self.task_type.sample(standard=True)
         table = task.export_task_expression(use_matrix=True)
         vector_desc = table.get_desc_vecs()[0]
         n_dim_vector_description = vector_desc.shape[0]
@@ -1054,8 +1040,6 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         n_sample: int,
         task_pool: TaskPool[TaskT],
     ) -> List[Trajectory]:
-
-        assert task_pool.n_task_inner == 1
 
         if self.config.sample_from_difficult_region and not self.at_first_iteration():
             # because sampling from near-feasible-boundary is effective in most case....
@@ -1177,19 +1161,18 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         n_repeat_budget = 2
         for i_repeat in range(n_repeat_budget):
             logger.info("sample solution candidates ({}-th repeat)".format(i_repeat))
-            task_pool = self.pool_single
             solution_candidates = self._sample_solution_canidates(
-                self.config.n_solution_candidate, task_pool
+                self.config.n_solution_candidate, self.task_pool
             )
             self.sampler_history.candidates_history.append(solution_candidates)
 
             logger.info("sample difficult tasks")
             if self.at_first_iteration():
-                difficult_paramss = np.array([next(task_pool) for _ in range(n_difficult)])
+                difficult_paramss = np.array([next(self.task_pool) for _ in range(n_difficult)])
                 n_total = len(difficult_paramss)
             else:
                 difficult_paramss, easy_paramss = self._sample_difficult_tasks(
-                    n_difficult, task_pool
+                    n_difficult, self.task_pool
                 )
                 n_total = len(difficult_paramss) + len(easy_paramss)
 

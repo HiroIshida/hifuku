@@ -77,7 +77,7 @@ class PostHandler(BaseHTTPRequestHandler):
         # Without this line, all the processes will do pre-computation
         # by themself in MultiProcessBatchTaskSampler which sometimes
         # stall the entire procedure
-        request.pool.task_type.sample(1, standard=True)  # don't delete
+        request.pool.task_type.sample(standard=True)  # don't delete (cache)
 
         ts = time.time()
         logging.info("request: {}".format(request))
