@@ -110,10 +110,11 @@ if __name__ == "__main__":
 
     if not isinstance(ae_model, NullAutoEncoder) and use_pretrained_ae:
         # check if the autoencoder is properly trained
-        task = domain.task_type.sample(1)
-        table = task.export_task_expression(use_matrix=True)
-        assert table.world_mat is not None
-        world_mat_np = np.expand_dims(table.world_mat, axis=(0, 1)).astype(float)
+        task = domain.task_type.sample()
+        expression = task.export_task_expression(use_matrix=True)
+        matrix = expression.get_matrix()
+        assert matrix is not None
+        world_mat_np = np.expand_dims(matrix, axis=(0, 1)).astype(float)
         world_mat_torch = torch.from_numpy(world_mat_np).float().to(ae_model.get_device())
         assert isinstance(ae_model, PixelAutoEncoder)
         decoded = ae_model.decoder(ae_model.encoder(world_mat_torch))
@@ -143,14 +144,13 @@ if __name__ == "__main__":
         ae_model,
         lsconfig,
         project_path,
-        pool_single=None,
         use_distributed=use_distributed,
         n_limit_batch_solver=args.n_limit_batch,
     )
 
     if warm_start:
         history = load_sampler_history(domain_name, postfix=project_name_postfix)
-        library = load_library(domain_name, "cuda", True, postfix=project_name_postfix)
+        library = load_library(domain_name, "cuda", postfix=project_name_postfix)
         lib_sampler.setup_warmstart(history, library)
         if use_pretrained_ae:
             assert lib_sampler.library.ae_model_shared is not None
@@ -163,9 +163,9 @@ if __name__ == "__main__":
             assert n_grid == n_grid_pre
 
     for i in range(n_step):
-        history = lib_sampler.sampler_history.elapsed_time_history
-        if len(history) > 0:
-            time_total = sum([info.t_total for info in history])  # type: ignore[misc]
+        profs = lib_sampler.sampler_history.elapsed_time_history
+        if len(profs) > 0:
+            time_total = sum([info.t_total for info in profs])  # type: ignore[misc]
             logger.info("time_total: {}".format(time_total))
             if time_total > 3600 * 24:
                 logger.info("time_total > 24 hours, break")
