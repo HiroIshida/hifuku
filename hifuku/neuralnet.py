@@ -213,17 +213,17 @@ def _create_dataset_from_paramss_and_resultss(
             processed_list = []
             for task_params, results, weights in tqdm.tqdm(zip(task_paramss, resultss, weightss)):
                 task = task_type.from_task_params(task_params)
-                table = task.export_task_expression(use_matrix=True)
+                expression = task.export_task_expression(use_matrix=True)
+                matrix = expression.get_matrix()
                 encoded: Optional[torch.Tensor] = None
-                if table.world_mat is not None:
-                    mat_torch = torch.from_numpy(table.world_mat).float().unsqueeze(0)
+                if matrix is not None:
+                    mat_torch = torch.from_numpy(matrix).float().unsqueeze(0)
                     if ae_model is None:
                         encoded = mat_torch  # just don't encode
                     else:
                         encoded = ae_model.encode(mat_torch.unsqueeze(0)).squeeze(0).detach()
 
-                vector_parts = table.get_desc_vecs()
-                assert len(vector_parts) > 0, "This should not happen"
+                vector_parts = np.array([expression.get_vector()])
 
                 vector_parts_torch = torch.from_numpy(np.array(vector_parts)).float()
                 costs = np.array([get_clamped_cost(r) for r in results])

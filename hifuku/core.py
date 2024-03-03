@@ -247,19 +247,20 @@ class SolutionLibrary:
             return self._infer_cost_combined(task)
 
     def _infer_cost_combined(self, task: TaskBase) -> np.ndarray:
-        desc_table = task.export_task_expression(use_matrix=True)
-        assert desc_table.world_mat is not None
-        world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
-        vecs_np = np.array(desc_table.get_desc_vecs())
+        expression = task.export_task_expression(use_matrix=True)
+        matrix = expression.get_matrix()
+        assert matrix is not None
+        world_mat_np = np.expand_dims(matrix, axis=(0, 1))
+        vecs_np = np.array([expression.get_vector()])
         world_mat_torch = torch.from_numpy(world_mat_np).float().to(self.device)
-        descs_torch = torch.from_numpy(vecs_np).float().to(self.device)
+        vecs_torch = torch.from_numpy(vecs_np).float().to(self.device)
 
         # these lines copied from _infer_cost_with_shared_ae
         costs_list = []
         for pred, bias in zip(self.predictors, self.biases):
             assert isinstance(pred, CostPredictorWithEncoder)
             # bias is for correcting the overestimated inference
-            costs = pred.forward_multi_inner(world_mat_torch, descs_torch)  # type: ignore
+            costs = pred.forward_multi_inner(world_mat_torch, vecs_torch)  # type: ignore
             costs = costs.squeeze(dim=1)
             costs_np = costs.detach().cpu().numpy() + bias
             costs_list.append(costs_np)
@@ -272,15 +273,15 @@ class SolutionLibrary:
         """
         assert self.ae_model_shared is not None
 
-        desc_table = task.export_task_expression(use_matrix=True)
-        vecs_np = np.array(desc_table.get_desc_vecs())
+        expression = task.export_task_expression(use_matrix=True)
+        vecs_np = np.array([expression.get_vector()])
         vecs_torch = torch.from_numpy(vecs_np)
         vecs_torch = vecs_torch.float().to(self.device)
 
-        if desc_table.world_mat is None:
+        if expression.world_mat is None:
             world_mat_torch = torch.empty((1, 0))
         else:
-            world_mat_np = np.expand_dims(desc_table.world_mat, axis=(0, 1))
+            world_mat_np = np.expand_dims(expression.world_mat, axis=(0, 1))
             world_mat_torch = torch.from_numpy(world_mat_np)
             world_mat_torch = world_mat_torch.float().to(self.device)
 
@@ -989,8 +990,8 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         # determine 1dim tensor dimension by temp creation of a task
         # TODO: should I implement this as a method?
         task = self.task_type.sample(standard=True)
-        table = task.export_task_expression(use_matrix=True)
-        vector_desc = table.get_desc_vecs()[0]
+        exp = task.export_task_expression(use_matrix=True)
+        vector_desc = exp.get_vector()
         n_dim_vector_description = vector_desc.shape[0]
 
         # train
