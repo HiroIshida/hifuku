@@ -81,7 +81,6 @@ class CostPredictorDataset(Dataset):
     descriptions: torch.Tensor
     costs: torch.Tensor
     weights: torch.Tensor
-    n_inner: int
     """
     mesh_likes can be either a of stack of feature vectors (n_elem, n_feature)
     or stack of meshes (n_elem, ...) depending on `encoded".
@@ -106,10 +105,6 @@ class CostPredictorDataset(Dataset):
         self.costs = costs
         self.weights = weights
 
-    @property
-    def n_task(self) -> int:
-        return int(len(self) / self.n_inner)
-
     def __len__(self) -> int:
         return len(self.descriptions)
 
@@ -117,10 +112,7 @@ class CostPredictorDataset(Dataset):
         if self.mesh_likes is None:
             mesh_like_here = torch.empty(0)
         else:
-            # Note: len(mesh_likes) * n_inner = len(descriptions)
-            # because n_inner descriptions share a single mesh.
-            # Thus we must devide the dix by n_inner
-            mesh_like_here = self.mesh_likes[idx // self.n_inner]
+            mesh_like_here = self.mesh_likes[idx]
         return (
             mesh_like_here,
             self.descriptions[idx],
@@ -129,12 +121,12 @@ class CostPredictorDataset(Dataset):
         )
 
 
-def create_dataset_from_paramss_and_resultss(
-    task_paramss: np.ndarray,
-    resultss: List[Tuple[ResultProtocol, ...]],
+def create_dataset_from_params_and_results(
+    task_params: np.ndarray,
+    results: List[ResultProtocol],
     solver_config,
     task_type: Type[TaskBase],
-    weightss: Optional[Tensor],
+    weights: Optional[Tensor],
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float = 2.0,
 ) -> CostPredictorDataset:
@@ -142,17 +134,15 @@ def create_dataset_from_paramss_and_resultss(
     n_process = 6
     # use multiprocessing.
     # split the data for each process
-    n_data = len(task_paramss)
-    n_data // n_process
+    n_data = len(task_params)
 
     split_indices_list = np.array_split(np.arange(n_data), n_process)
-    task_paramss_list = [task_paramss[indices] for indices in split_indices_list]
-    # resultss_list = [resultss[indices] for indices in split_indices_list]
-    resultss_list = [list(np.array(resultss)[indices]) for indices in split_indices_list]
-    if weightss is None:
-        weightss_list = [None] * n_process
+    task_params_list = [task_params[indices] for indices in split_indices_list]
+    results_list = [list(np.array(results)[indices]) for indices in split_indices_list]
+    if weights is None:
+        weights_list = [None] * n_process
     else:
-        weightss_list = [weightss[indices] for indices in split_indices_list]
+        weights_list = [weights[indices] for indices in split_indices_list]
 
     if ae_model is not None:
         ae_model_copied = copy.deepcopy(ae_model)
@@ -163,7 +153,7 @@ def create_dataset_from_paramss_and_resultss(
     # spawn is maybe necessary to avoid the error in torch multiprocessing
     with multiprocessing.get_context("spawn").Pool(n_process) as pool:
         dataset_list = pool.starmap(
-            _create_dataset_from_paramss_and_resultss,
+            _create_dataset_from_params_and_results,
             [
                 (
                     task_params,
@@ -175,7 +165,7 @@ def create_dataset_from_paramss_and_resultss(
                     clamp_factor,
                 )
                 for task_params, results, weights in zip(
-                    task_paramss_list, resultss_list, weightss_list
+                    task_params_list, results_list, weights_list
                 )
             ],
         )
@@ -186,12 +176,12 @@ def create_dataset_from_paramss_and_resultss(
     return dataset
 
 
-def _create_dataset_from_paramss_and_resultss(
-    task_paramss: np.ndarray,
-    resultss,
+def _create_dataset_from_params_and_results(
+    task_params: np.ndarray,
+    results,
     solver_config: ConfigProtocol,
     task_type: Type[TaskBase],
-    weightss: Optional[Tensor],
+    weights: Optional[Tensor],
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float,
 ) -> CostPredictorDataset:
@@ -205,32 +195,29 @@ def _create_dataset_from_paramss_and_resultss(
             if ae_model is not None:
                 assert ae_model.get_device() == torch.device("cpu"), "to parallelize"
 
-            if weightss is None:
-                weightss = torch.ones((len(task_paramss), task_paramss.shape[1]))
+            if weights is None:
+                weights = torch.ones(len(task_params))
 
-            Processed = namedtuple("processed", ["encoded", "vectors", "costs", "weights"])
+            Processed = namedtuple("processed", ["encoded", "vector", "cost", "weight"])
 
             processed_list = []
-            for task_params, results, weights in tqdm.tqdm(zip(task_paramss, resultss, weightss)):
-                task = task_type.from_task_params(task_params)
-                table = task.export_task_expression(use_matrix=True)
+            for task_param, result, weight in tqdm.tqdm(zip(task_params, results, weights)):
+                task = task_type.from_task_param(task_param)
+                expression = task.export_task_expression(use_matrix=True)
+                matrix = expression.get_matrix()
                 encoded: Optional[torch.Tensor] = None
-                if table.world_mat is not None:
-                    mat_torch = torch.from_numpy(table.world_mat).float().unsqueeze(0)
+                if matrix is not None:
+                    mat_torch = torch.from_numpy(matrix).float().unsqueeze(0)
                     if ae_model is None:
                         encoded = mat_torch  # just don't encode
                     else:
                         encoded = ae_model.encode(mat_torch.unsqueeze(0)).squeeze(0).detach()
 
-                vector_parts = table.get_desc_vecs()
-                assert len(vector_parts) > 0, "This should not happen"
+                vector = expression.get_vector()
+                vector_torch = torch.from_numpy(vector).float()
+                cost = get_clamped_cost(result)
 
-                vector_parts_torch = torch.from_numpy(np.array(vector_parts)).float()
-                costs = np.array([get_clamped_cost(r) for r in results])
-                costs_torch = torch.from_numpy(costs).float()
-                weights_torch = weights
-
-                processed = Processed(encoded, vector_parts_torch, costs_torch, weights_torch)
+                processed = Processed(encoded, vector_torch, cost, weight)
                 processed_list.append(processed)
 
             # convert all
@@ -244,27 +231,19 @@ def _create_dataset_from_paramss_and_resultss(
                 else:
                     assert mesh_likes.ndim == 2
             # vectorss = torch.vstack([p.vectors for p in processed_list])
-            vectorss = torch.stack([p.vectors for p in processed_list], dim=0)
-            assert vectorss.ndim == 3
-            vectors = vectorss.reshape(  # n_data x n_task x n_feature
-                vectorss.shape[0] * vectorss.shape[1], vectorss.shape[2]
-            )
+            vectors = torch.stack([p.vector for p in processed_list], dim=0)
             assert vectors.ndim == 2
             # costss = torch.vstack([p.costs for p in processed_list])
-            costss = torch.stack([p.costs for p in processed_list], dim=0)
-            assert costss.ndim == 2
-            costs = costss.flatten()
+            costs = torch.from_numpy(np.array([p.cost for p in processed_list])).float()
+            assert costs.ndim == 1
 
-            weightss = torch.stack([p.weights for p in processed_list], dim=0)
-            assert weightss.ndim == 2
-            weights = weightss.flatten()
-            n_inner = vectorss.shape[1]
+            weights = torch.from_numpy(np.array([p.weight for p in processed_list])).float()
+            assert weights.ndim == 1
             return CostPredictorDataset(
                 mesh_likes,
                 vectors,
                 costs,
                 weights,
-                n_inner,
             )
 
 

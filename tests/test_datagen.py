@@ -77,8 +77,8 @@ def server():
 
 @lru_cache(maxsize=1)
 def compute_init_traj() -> Trajectory:
-    task = task_type.sample(1, standard=True)
-    res = task.solve_default()[0]
+    task = task_type.sample(standard=True)
+    res = task.solve_default()
     assert res.traj is not None
     return res.traj
 
@@ -89,11 +89,9 @@ def test_batch_solver_init_solutions():
         domain.solver_type, domain.solver_config, task_type, 2
     )
     n_task = 5
-    n_inner = 2
-    task_paramss = np.array([task_type.sample(n_inner).to_task_params() for _ in range(n_task)])
-    mp_batch_solver.solve_batch(task_paramss, [None] * n_task)
-    mp_batch_solver.solve_batch(task_paramss, [init_traj] * n_task)
-    mp_batch_solver.solve_batch(task_paramss, [[init_traj] * n_inner] * n_task)
+    task_params = np.array([task_type.sample().to_task_param() for _ in range(n_task)])
+    mp_batch_solver.solve_batch(task_params, None)
+    mp_batch_solver.solve_batch(task_params, [init_traj] * n_task)
 
 
 def test_consistency_of_all_batch_sovler(server):
@@ -104,13 +102,9 @@ def test_consistency_of_all_batch_sovler(server):
         create_default_logger(td_path, "test_datagen")
 
         for n_task in [1, 8]:  # to test edge case
-            n_task_inner = 2
-
             init_solutions = [init_traj] * n_task
             # set standard = True for testing purpose
-            task_paramss = np.array(
-                [task_type.sample(n_task_inner).to_task_params() for _ in range(n_task)]
-            )
+            task_params = np.array([task_type.sample().to_task_param() for _ in range(n_task)])
             batch_solver_list: List[BatchTaskSolver] = []
             mp_batch_solver = MultiProcessBatchTaskSolver(
                 domain.solver_type, domain.solver_config, task_type, n_process=2
@@ -131,19 +125,17 @@ def test_consistency_of_all_batch_sovler(server):
             successes_list = []
             for batch_solver in batch_solver_list:  # type: ignore
                 print(batch_solver)
-                results_list = batch_solver.solve_batch(
-                    task_paramss, init_solutions, tmp_n_max_call_mult_factor=1.5
+                results = batch_solver.solve_batch(
+                    task_params, init_solutions, tmp_n_max_call_mult_factor=1.5
                 )
-                assert isinstance(results_list, list)
-                assert len(results_list) == n_task
-                assert isinstance(results_list[0], tuple)
-                assert len(results_list[0]) == n_task_inner
+                assert isinstance(results, list)
+                assert len(results) == n_task
 
                 nits = []
                 successes = []
-                for results in results_list:
-                    nits.extend([r.n_call for r in results])
-                    successes.extend([r.traj is not None for r in results])
+                for result in results:
+                    nits.append(result.n_call)
+                    successes.append(result.traj is not None)
                 nits_list.append(tuple(nits))
                 successes_list.append(tuple(successes))
 
@@ -163,9 +155,8 @@ def test_consistency_of_all_batch_sampler(server):
     sampler_list.append(MultiProcessBatchTaskSampler(1))
     sampler_list.append(DistributeBatchTaskSampler[task_type](specs))
 
-    n_task_inner = 5
     pool_list: List[PredicatedTaskPool] = []
-    pool_base = TaskPool(task_type, n_task_inner)
+    pool_base = TaskPool(task_type)
     pool_list.append(pool_base.as_predicated())
     # pool_list.append(pool_base.make_predicated(SimplePredicate(), 40))
 
@@ -173,7 +164,7 @@ def test_consistency_of_all_batch_sampler(server):
         for pool in pool_list:
             for sampler in sampler_list:
                 samples = sampler.sample_batch(n_sample, pool)
-                assert samples.shape == (n_sample, n_task_inner, task_type.get_task_dof())
+                assert samples.shape == (n_sample, task_type.get_task_dof())
 
                 # in the parallel processing, the typical but difficult-to-find bug is
                 # duplication of sample by forgetting to set peroper random seed.

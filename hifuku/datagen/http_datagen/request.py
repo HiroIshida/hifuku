@@ -75,7 +75,7 @@ class GetModuleHashValueResponse(Response):
 
 @dataclass
 class SolveTaskRequest(Generic[TaskT, ConfigT, ResultT], MainRequest):
-    task_paramss: np.ndarray
+    task_params: np.ndarray
     solver_t: Type[AbstractScratchSolver[ConfigT, ResultT]]
     config: ConfigT
     task_type: Type[TaskT]
@@ -84,16 +84,16 @@ class SolveTaskRequest(Generic[TaskT, ConfigT, ResultT], MainRequest):
     use_default_solver: bool
 
     def ignore_fields(self) -> Tuple[str, ...]:
-        return ("tasks", "init_solutions")
+        return ("task_params", "init_solutions")
 
 
 @dataclass
 class SolveTaskResponse(Generic[ResultT], MainResponse):
-    results_list: List[Tuple[ResultT, ...]]
+    results: List[ResultT]
     elapsed_time: float
 
     def ignore_fields(self) -> Tuple[str, ...]:
-        return ("results_list", "init_solutions")
+        return ("results", "init_solutions")
 
 
 @dataclass
@@ -108,7 +108,7 @@ class SampleTaskRequest(Generic[TaskT], MainRequest):
 
 @dataclass
 class SampleTaskResponse(MainResponse):
-    task_paramss: np.ndarray
+    task_params: np.ndarray
     elapsed_time: float
 
     def ignore_fields(self) -> Tuple[str, ...]:

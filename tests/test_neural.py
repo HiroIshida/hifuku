@@ -17,7 +17,7 @@ from hifuku.neuralnet import (
     CostPredictorWithEncoderConfig,
     PixelAutoEncoder,
     VoxelAutoEncoder,
-    create_dataset_from_paramss_and_resultss,
+    create_dataset_from_params_and_results,
 )
 
 
@@ -97,11 +97,11 @@ def _test_dataset(domain, use_weight: bool, encode_image: bool):
 
     # for encode_image in [True, False]:
     if encode_image:
-        dataset = create_dataset_from_paramss_and_resultss(
+        dataset = create_dataset_from_params_and_results(
             task_paramss, resultss, domain.solver_config, domain.task_type, weightss, ae
         )
     else:
-        dataset = create_dataset_from_paramss_and_resultss(
+        dataset = create_dataset_from_params_and_results(
             task_paramss, resultss, domain.solver_config, domain.task_type, weightss, None
         )
     assert len(dataset) == n_data
@@ -161,12 +161,12 @@ def _test_training(domain, use_pretrained_ae: bool):
     costpred_model = CostPredictor(conf, device=device)
 
     if use_pretrained_ae:
-        dataset = create_dataset_from_paramss_and_resultss(
+        dataset = create_dataset_from_params_and_results(
             task_paramss, resultss, domain.solver_config, domain.task_type, None, ae
         )
         model = costpred_model
     else:
-        dataset = create_dataset_from_paramss_and_resultss(
+        dataset = create_dataset_from_params_and_results(
             task_paramss, resultss, domain.solver_config, domain.task_type, None, None
         )
         conf = CostPredictorWithEncoderConfig(costpred_model, ae)

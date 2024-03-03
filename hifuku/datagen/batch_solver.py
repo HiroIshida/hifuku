@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Process, get_context
 from pathlib import Path
-from typing import Generic, List, Optional, Sequence, Tuple, Type, Union
+from typing import Generic, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import threadpoolctl
@@ -28,17 +28,6 @@ from hifuku.datagen.utils import split_indices
 logger = logging.getLogger(__name__)
 
 TrajectoryMaybeList = Union[List[Trajectory], Trajectory]
-
-
-def duplicate_init_solution_if_not_list(
-    init_solution: Optional[TrajectoryMaybeList], n_inner_task: int
-) -> Sequence[Optional[Trajectory]]:
-    init_solutions: Sequence[Optional[Trajectory]]
-    if isinstance(init_solution, List):
-        init_solutions = init_solution
-    else:
-        init_solutions = [init_solution] * n_inner_task
-    return init_solutions
 
 
 class BatchTaskSolver(Generic[ConfigT, ResultT], ABC):
@@ -61,11 +50,11 @@ class BatchTaskSolver(Generic[ConfigT, ResultT], ABC):
 
     def solve_batch(
         self,
-        task_paramss: np.ndarray,
-        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
+        task_params: np.ndarray,
+        init_solutions: Optional[List[Trajectory]] = None,
         use_default_solver: bool = False,
         tmp_n_max_call_mult_factor: float = 1.0,
-    ) -> List[Tuple[ResultT, ...]]:
+    ) -> List[ResultT]:
         """
         tmp_n_max_call_mult_factor is used to increase the n_max_call temporarily.
         This is beneficiall when we want to train a cost predictor such taht
@@ -93,7 +82,7 @@ class BatchTaskSolver(Generic[ConfigT, ResultT], ABC):
         if self.n_limit_batch is None:
             logger.debug("n_limit_batch is not set. detremine now...")
             max_ram_usage = 16 * 10**9
-            task_for_measure_size = self.task_type.from_task_params(task_paramss[0])
+            task_for_measure_size = self.task_type.from_task_param(task_params[0])
             serialize_ram_size_each = len(pickle.dumps(task_for_measure_size)) * 2
             max_size = int(max_ram_usage // serialize_ram_size_each)
             logger.debug(
@@ -104,26 +93,29 @@ class BatchTaskSolver(Generic[ConfigT, ResultT], ABC):
             max_size = self.n_limit_batch
         logger.debug("max_size is set to {}".format(max_size))
 
-        indices = range(len(task_paramss))
-        indices_list = np.array_split(indices, np.ceil(len(task_paramss) / max_size))
+        indices = range(len(task_params))
+        indices_list = np.array_split(indices, np.ceil(len(task_params) / max_size))
 
-        resultss = []
+        if init_solutions is None:
+            init_solutions = [None] * len(task_params)
+
+        results = []
         for indices_part in indices_list:
             init_solutions_est_list_part = [init_solutions[i] for i in indices_part]
-            results_part = self._solve_batch_impl(task_paramss[indices_part], init_solutions_est_list_part, use_default_solver=use_default_solver)  # type: ignore
-            resultss.extend(results_part)
+            results_part = self._solve_batch_impl(task_params[indices_part], init_solutions_est_list_part, use_default_solver=use_default_solver)  # type: ignore
+            results.extend(results_part)
 
         # FIXME: dirty hack (B)
         self.config.n_max_call = n_max_call_original
-        return resultss
+        return results
 
     @abstractmethod
     def _solve_batch_impl(
         self,
-        task_paramss: np.ndarray,
-        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
+        task_params: np.ndarray,
+        init_solutions: Union[List[Trajectory], List[None]],
         use_default_solver: bool = False,
-    ) -> List[Tuple[ResultT, ...]]:
+    ) -> List[ResultT]:
         ...
 
 
@@ -149,15 +141,15 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
 
     def _solve_batch_impl(
         self,
-        task_paramss: np.ndarray,
-        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
+        task_params: np.ndarray,
+        init_solutions: Union[List[Trajectory], List[None]],
         use_default_solver: bool = False,
-    ) -> List[Tuple[ResultT, ...]]:
+    ) -> List[ResultT]:
 
-        assert len(task_paramss) == len(init_solutions)
-        assert len(task_paramss) > 0
+        assert len(task_params) == len(init_solutions)
+        assert len(task_params) > 0
 
-        n_process = min(self.n_process, len(task_paramss))
+        n_process = min(self.n_process, len(task_params))
         logger.info("*n_process: {}".format(n_process))
         logger.info("use_default_solver: {}".format(use_default_solver))
 
@@ -168,31 +160,26 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
                 # NOTE: sovle_default does not return ResultT ...
                 # Maybe we should replace ResultT with ResultProtocol ??
                 # return [tuple(task.solve_default()) for task in task_params]  # type: ignore
-                resultss = []
-                for task_params in task_paramss:
-                    task = self.task_type.from_task_params(task_params)
-                    results = tuple(task.solve_default())
-                    resultss.append(results)
-                return resultss
+                results = []
+                for task_param in task_params:
+                    task = self.task_type.from_task_param(task_param)
+                    result = task.solve_default()
+                    results.append(result)
+                return results
             else:
-                results_list: List[Tuple[ResultT, ...]] = []
                 n_max_call = self.config.n_max_call
                 logger.debug("*n_max_call: {}".format(n_max_call))
 
                 solver = self.solver_t.init(self.config)
-                for task_params, init_solution in zip(task_paramss, init_solutions):
-                    task = self.task_type.from_task_params(task_params)
-                    init_solutions_per_inner = duplicate_init_solution_if_not_list(
-                        init_solution, task.n_inner_task
-                    )
-                    tasks = task.export_problems()
-                    results: List[ResultT] = []
-                    for task, init_solution_per_inner in zip(tasks, init_solutions_per_inner):
-                        solver.setup(task)
-                        result = solver.solve(init_solution_per_inner)
-                        results.append(result)
-                    results_list.append(tuple(results))
-                return results_list
+                results = []
+                for task_param, init_solution in zip(task_params, init_solutions):
+                    assert not isinstance(init_solution, list)
+                    task = self.task_type.from_task_param(task_param)
+                    problem = task.export_problem()
+                    solver.setup(problem)
+                    result = solver.solve(init_solution)
+                    results.append(result)
+                return results
         else:
             # python's known bug when forking process while using logging module
             # https://stackoverflow.com/questions/65080123/python-multiprocessing-pool-some-process-in-deadlock-when-forked-but-runs-when-s
@@ -203,8 +190,8 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
                 assert not hn.lock.locked()
 
             args = []
-            for idx in range(len(task_paramss)):
-                args.append((idx, task_paramss[idx], init_solutions[idx]))
+            for idx in range(len(task_params)):
+                args.append((idx, task_params[idx], init_solutions[idx]))
 
             with ProcessPoolExecutor(
                 n_process,
@@ -216,8 +203,8 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
                     tqdm.tqdm(executor.map(self._pool_solve_single, args), total=len(args))
                 )
             idx_results_pairs_sorted = sorted(idx_results_pairs, key=lambda x: x[0])  # type: ignore
-            _, resultss = zip(*idx_results_pairs_sorted)
-            return list(resultss)
+            _, results = zip(*idx_results_pairs_sorted)
+            return results
 
     @staticmethod
     def _pool_setup(  # used only in process pool
@@ -243,22 +230,17 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
         global _use_default_solver
         global _task_type
 
-        task_idx, task_params, init_solutions = args
-        task = _task_type.from_task_params(task_params)  # type: ignore
+        task_idx, task_param, init_solution = args
+        task = _task_type.from_task_param(task_param)  # type: ignore
         # NOTE: a lot of type: ignore due to global variables
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             if _use_default_solver:  # type: ignore
-                results = task.solve_default()
+                result = task.solve_default()
             else:
-                init_solutions = duplicate_init_solution_if_not_list(
-                    init_solutions, task.n_inner_task
-                )
-                results = []
-                for task, init_solution in zip(task.export_problems(), init_solutions):
-                    _solver.setup(task)  # type: ignore
-                    result = _solver.solve(init_solution)  # type: ignore
-                    results.append(result)
-        return task_idx, tuple(results)
+                problem = task.export_problem()
+                _solver.setup(problem)
+                result = _solver.solve(init_solution)
+        return task_idx, result
 
 
 HostPortPair = Tuple[str, int]
@@ -295,35 +277,35 @@ class DistributedBatchTaskSolver(ClientBase[SolveTaskRequest], BatchTaskSolver[C
             response = send_request(conn, request)
         file_path = tmp_path / str(uuid.uuid4())
         with file_path.open(mode="wb") as f:
-            pickle.dump((indices, response.results_list), f)
+            pickle.dump((indices, response.results), f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
     def _solve_batch_impl(
         self,
-        task_paramss: np.ndarray,
-        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
+        task_params: np.ndarray,
+        init_solutions: Union[List[Trajectory], List[None]],
         use_default_solver: bool = False,
-    ) -> List[Tuple[ResultT, ...]]:
+    ) -> List[ResultT]:
         try:
             return self._solve_batch_impl_inner(
-                task_paramss, init_solutions, use_default_solver=use_default_solver
+                task_params, init_solutions, use_default_solver=use_default_solver
             )
         except ValueError:
             logger.error("Probably something wrong with connection. Retry...")
             return self._solve_batch_impl_inner(
-                task_paramss, init_solutions, use_default_solver=use_default_solver
+                task_params, init_solutions, use_default_solver=use_default_solver
             )
 
     def _solve_batch_impl_inner(
         self,
-        task_paramss: np.ndarray,
-        init_solutions: Sequence[Optional[TrajectoryMaybeList]],
+        task_params: np.ndarray,
+        init_solutions: Union[List[Trajectory], List[None]],
         use_default_solver: bool = False,
-    ) -> List[Tuple[ResultT, ...]]:
+    ) -> List[ResultT]:
         logger.debug("use_default_solver: {}".format(use_default_solver))
 
-        n_task = len(task_paramss)
+        n_task = len(task_params)
         n_task_table = self.determine_assignment_per_server(n_task)
         indices_list = split_indices(n_task, list(n_task_table.values()))
 
@@ -337,10 +319,10 @@ class DistributedBatchTaskSolver(ClientBase[SolveTaskRequest], BatchTaskSolver[C
                     n_process = self.hostport_cpuinfo_map[hostport].n_cpu
                 else:
                     n_process = self.n_process_per_server
-                task_paramss_part = task_paramss[indices]
+                task_params_part = task_params[indices]
                 init_solutions_part = [init_solutions[i] for i in indices]
                 req = SolveTaskRequest(
-                    task_paramss_part,
+                    task_params_part,
                     self.solver_t,
                     self.config,
                     self.task_type,
@@ -348,7 +330,7 @@ class DistributedBatchTaskSolver(ClientBase[SolveTaskRequest], BatchTaskSolver[C
                     n_process,
                     use_default_solver,
                 )
-                if len(task_paramss_part) > 0:
+                if len(task_params_part) > 0:
                     p = Process(
                         target=self.send_and_recive_and_write,
                         args=(hostport, req, indices, td_path),
@@ -359,12 +341,12 @@ class DistributedBatchTaskSolver(ClientBase[SolveTaskRequest], BatchTaskSolver[C
             for p in process_list:
                 p.join()
 
-            results_list_all: List[List[ResultT]] = []
+            results_all: List[ResultT] = []
             indices_all: List[int] = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
                     try:
-                        indices_part, results_list_part = pickle.load(f)
+                        indices_part, results_part = pickle.load(f)
                     except Exception as e:
                         temp_file_path = "/tmp/malignant_pickle.pkl"
                         shutil.move(str(file_path), temp_file_path)
@@ -373,15 +355,15 @@ class DistributedBatchTaskSolver(ClientBase[SolveTaskRequest], BatchTaskSolver[C
                         )
                         raise e
 
-                    results_list_all.extend(results_list_part)
+                    results_all.extend(results_part)
                     indices_all.extend(indices_part)
 
-            idx_result_pairs = list(zip(indices_all, results_list_all))
+            idx_result_pairs = list(zip(indices_all, results_all))
             idx_result_pairs_sorted = sorted(idx_result_pairs, key=lambda x: x[0])  # type: ignore
             _, results = zip(*idx_result_pairs_sorted)
             ret = list(results)
-            if len(ret) != len(task_paramss):
-                message = f"len(ret) != len(task_paramss) ({len(ret)} != {len(task_paramss)})"
+            if len(ret) != len(task_params):
+                message = f"len(ret) != len(task_params) ({len(ret)} != {len(task_params)})"
                 logger.error(message)
                 raise ValueError(message)
         return ret  # type: ignore

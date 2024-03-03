@@ -63,10 +63,10 @@ class MultiProcessBatchTaskSampler(BatchTaskSampler[TaskT]):
                     executor.map(self._process_pool_sample_task, range(n_sample)), total=n_sample
                 )
             )
-        intr_descs_sampled = np.array(tmp)
-        assert intr_descs_sampled.ndim == 3
-        assert intr_descs_sampled.shape[0] == n_sample
-        return intr_descs_sampled
+        params = np.array(tmp)
+        assert params.ndim == 2
+        assert params.shape[0] == n_sample
+        return params
 
     @staticmethod
     def _process_pool_setup(_pool: PredicatedTaskPool[TaskT], _n_thread: int):
@@ -99,9 +99,9 @@ class DistributeBatchTaskSampler(ClientBase[SampleTaskRequest], BatchTaskSampler
         with http_connection(*hostport) as conn:
             response = send_request(conn, request)
         file_path = tmp_path / str(uuid.uuid4())
-        assert len(response.task_paramss) > 0
+        assert len(response.task_params) > 0
         with file_path.open(mode="wb") as f:
-            pickle.dump((response.task_paramss), f)
+            pickle.dump((response.task_params), f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
@@ -131,12 +131,11 @@ class DistributeBatchTaskSampler(ClientBase[SampleTaskRequest], BatchTaskSampler
             for p in process_list:
                 p.join()
 
-            intr_descs = []
+            param_list = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    intr_descs_part = pickle.load(f)
-                    intr_descs.extend(intr_descs_part)
-        intr_desc_arr = np.array(intr_descs)
-        assert intr_desc_arr.ndim == 3
-        assert intr_desc_arr.shape[0] == n_sample
-        return intr_desc_arr
+                    param_list.extend(pickle.load(f))
+        params = np.array(param_list)
+        assert params.ndim == 2
+        assert params.shape[0] == n_sample
+        return params

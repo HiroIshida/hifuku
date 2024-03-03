@@ -91,50 +91,56 @@ def _test_SolutionLibrarySampler(
             # as dummy domain is easy, 0.3 should be satisfied (but might not in quite small probability)
             assert coverage > 0.3, f"iter={it}, coverage={coverage}"
 
-            # test warm start
-            lib = SolutionLibrary.load(td_path, device)
-            state = ActiveSamplerHistory.load(td_path)
-            assert state.total_iter == 2
-            lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
-            lib_sampler.setup_warmstart(state, lib)
-            time.sleep(2.0)  # for checking total_time
-            assert len(lib_sampler.presampled_tasks_paramss) > 0, "presampled tasks are not loaded"
-            ts = time.time()
-            lib_sampler.step_active_sampling()
-            elapsed += time.time() - ts
-            assert (
-                abs(lib_sampler.sampler_history.total_time - elapsed) < 1.0
-            )  # sec. might depend on testing environment...
-            assert lib_sampler.sampler_history.total_iter == 3
+            test_warmstart = True
+            if test_warmstart:
+                # test warm start
+                lib = SolutionLibrary.load(td_path, device)
+                state = ActiveSamplerHistory.load(td_path)
+                assert state.total_iter == 2
+                lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
+                lib_sampler.setup_warmstart(state, lib)
+                time.sleep(2.0)  # for checking total_time
+                assert (
+                    len(lib_sampler.presampled_tasks_params) > 0
+                ), "presampled tasks are not loaded"
+                ts = time.time()
+                lib_sampler.step_active_sampling()
+                elapsed += time.time() - ts
+                assert (
+                    abs(lib_sampler.sampler_history.total_time - elapsed) < 1.0
+                )  # sec. might depend on testing environment...
+                assert lib_sampler.sampler_history.total_iter == 3
 
-            coverage_after_warm = lib_sampler.sampler_history.coverage_est_history[-1]
-            # as dummy domain is easy, 0.5 should be satisfied (but might not in quite small probability)
-            assert coverage_after_warm > 0.5, f"coverage_after_warm={coverage_after_warm}"
+                coverage_after_warm = lib_sampler.sampler_history.coverage_est_history[-1]
+                # as dummy domain is easy, 0.5 should be satisfied (but might not in quite small probability)
+                assert coverage_after_warm > 0.5, f"coverage_after_warm={coverage_after_warm}"
 
-            # test coverage estimation's consistency
-            a = lib_sampler.sampler_history.coverage_est_history[-1]
-            b = lib_sampler.measure_coverage(lib_sampler.tasks_validation)
-            assert abs(a - b) < 1e-6, f"coverage estimation is not consistent: {a} vs {b}"
+                # test coverage estimation's consistency
+                a = lib_sampler.sampler_history.coverage_est_history[-1]
+                b = lib_sampler.measure_coverage(lib_sampler.tasks_validation)
+                assert abs(a - b) < 1e-6, f"coverage estimation is not consistent: {a} vs {b}"
 
             # test library based solver usage
             lib = lib_sampler.library
             solver = LibraryBasedGuaranteedSolver.init(lib, solver_type, solcon)
             est_true_count = 0
             fp_count = 0
-            for _ in range(100):
-                task = task_type.sample(1)
+            n = 300
+            for _ in range(n):
+                task = task_type.sample()
                 solver.setup(task)
                 ret = solver.solve()
                 if solver.previous_est_positive:
                     est_true_count += 1
                     if ret.traj is None:
                         fp_count += 1
-            coverage = est_true_count / 100
+            coverage = est_true_count / n
             coverage_expected = lib_sampler.sampler_history.coverage_est_history[-1]
             assert abs(coverage - lib_sampler.sampler_history.coverage_est_history[-1]) < 0.2
             logger.info(f"coverage={coverage}, coverage_expected={coverage_expected}")
-            fprate = fp_count / 100
+            fprate = fp_count / est_true_count
             fprate_expected = lconfig.acceptable_false_positive_rate
+            logger.info(f"fprate={fprate}, fprate_expected={fprate_expected}")
             assert abs(fprate - lconfig.acceptable_false_positive_rate) < 0.1
             logger.info(f"fprate={fprate}, fprate_expected={fprate_expected}")
 

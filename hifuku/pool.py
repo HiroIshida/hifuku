@@ -13,14 +13,18 @@ TaskT = TypeVar("TaskT", bound=TaskBase)
 @dataclass
 class PredicatedTaskPool(Generic[TaskT], Iterator[Optional[np.ndarray]]):
     task_type: Type[TaskT]
-    n_task_inner: int
     predicate: Callable[[TaskT], bool]
-    max_trial_factor: int
+    timeout: int = 60
 
     def __next__(self) -> Optional[np.ndarray]:
-        ret = self.task_type.predicated_sample(
-            self.n_task_inner, self.predicate, self.max_trial_factor
-        )
+        try:
+            ret = self.task_type.sample(predicate=self.predicate, timeout=self.timeout)
+            return ret.to_task_param()
+        except TimeoutError:
+            # TODO: is it better to return None or raise an exception?
+            logger.warning(f"TimeoutError in {self.task_type.sample.__name__}")
+            return None
+
         if ret is None:
             return None
         return ret.to_task_params()
@@ -29,10 +33,9 @@ class PredicatedTaskPool(Generic[TaskT], Iterator[Optional[np.ndarray]]):
 @dataclass
 class TaskPool(Generic[TaskT], Iterator[np.ndarray]):
     task_type: Type[TaskT]
-    n_task_inner: int
 
     def __next__(self) -> np.ndarray:
-        return self.task_type.sample(self.n_task_inner).to_task_params()
+        return self.task_type.sample().to_task_param()
 
     def as_predicated(self) -> PredicatedTaskPool[TaskT]:
         return cast(PredicatedTaskPool[TaskT], self)
@@ -40,4 +43,4 @@ class TaskPool(Generic[TaskT], Iterator[np.ndarray]):
     def make_predicated(
         self, predicate: Callable[[TaskT], bool], max_trial_factor: int
     ) -> PredicatedTaskPool[TaskT]:
-        return PredicatedTaskPool(self.task_type, self.n_task_inner, predicate, max_trial_factor)
+        return PredicatedTaskPool(self.task_type, predicate, max_trial_factor)

@@ -63,7 +63,7 @@ class PostHandler(BaseHTTPRequestHandler):
             request.solver_t, request.config, request.task_type, request.n_process
         )
         results_list = gen.solve_batch(
-            request.task_paramss, request.init_solutions, request.use_default_solver
+            request.task_params, request.init_solutions, request.use_default_solver
         )
 
         elapsed_time = time.time() - ts
@@ -77,7 +77,7 @@ class PostHandler(BaseHTTPRequestHandler):
         # Without this line, all the processes will do pre-computation
         # by themself in MultiProcessBatchTaskSampler which sometimes
         # stall the entire procedure
-        request.pool.task_type.sample(1, standard=True)  # don't delete
+        request.pool.task_type.sample(standard=True)  # don't delete (cache)
 
         ts = time.time()
         logging.info("request: {}".format(request))
