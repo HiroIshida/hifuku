@@ -14,10 +14,7 @@ from rpbench.articulated.pr2.jskfridge import (
     JskFridgeVerticalReachingTask,
     JskFridgeVerticalReachingTask2,
 )
-from rpbench.articulated.pr2.minifridge import (
-    FixedPR2MiniFridgeTask,
-    MovingPR2MiniFridgeTask,
-)
+from rpbench.articulated.pr2.minifridge import FixedPR2MiniFridgeTask, PR2MiniFridgeTask
 from rpbench.interface import TaskBase
 from rpbench.two_dimensional.bubbly_world import (
     BubblyComplexMeshPointConnectTask,
@@ -95,17 +92,17 @@ class FixedPR2MiniFridge_SQP(DomainProtocol):
     solver_config = SQPBasedSolverConfig(
         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
     )
-    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+    auto_encoder_project_name = "PR2MiniFridge-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
-class MovingPR2MiniFridge_SQP(DomainProtocol):
-    task_type = MovingPR2MiniFridgeTask
+class PR2MiniFridge_SQP(DomainProtocol):
+    task_type = PR2MiniFridgeTask
     solver_type = SQPBasedSolver
     solver_config = SQPBasedSolverConfig(
         n_wp=60, n_max_call=5, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
     )
-    auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
+    auto_encoder_project_name = "PR2MiniFridge-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
@@ -446,7 +443,7 @@ def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> f
 def select_domain(domain_name: str) -> Type[DomainProtocol]:
     class DomainCollection(Enum):
         fixed_pr2_minifridge_sqp = FixedPR2MiniFridge_SQP
-        moving_pr2_minifridge_sqp = MovingPR2MiniFridge_SQP
+        pr2_minifridge_sqp = PR2MiniFridge_SQP
         jsk_fridge_sqp = JSKFridge_SQP
         jsk_fridge_rrt2000 = JSKFridge_RRT2000
         jsk_fridge_rrt5000 = JSKFridge_RRT5000
