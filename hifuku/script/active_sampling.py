@@ -11,19 +11,12 @@ from mohou.trainer import TrainConfig
 
 from hifuku.core import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.domain import select_domain
-from hifuku.neuralnet import (
-    CostPredictorWithEncoder,
-    NeuralAutoEncoderBase,
-    NullAutoEncoder,
-    PixelAutoEncoder,
-)
+from hifuku.neuralnet import NullAutoEncoder, PixelAutoEncoder
 from hifuku.script_utils import (
     create_default_logger,
     filter_warnings,
     get_project_path,
     load_compatible_autoencoder,
-    load_library,
-    load_sampler_history,
     watch_memory,
 )
 
@@ -146,21 +139,8 @@ if __name__ == "__main__":
         project_path,
         use_distributed=use_distributed,
         n_limit_batch_solver=args.n_limit_batch,
+        warm_start=warm_start,
     )
-
-    if warm_start:
-        history = load_sampler_history(domain_name, postfix=project_name_postfix)
-        library = load_library(domain_name, "cuda", postfix=project_name_postfix)
-        lib_sampler.setup_warmstart(history, library)
-        if use_pretrained_ae:
-            assert lib_sampler.library.ae_model_shared is not None
-        else:
-            assert lib_sampler.library.ae_model_shared is None
-            predictor_pre = lib_sampler.library.predictors[-1]
-            assert isinstance(predictor_pre, CostPredictorWithEncoder)
-            assert isinstance(predictor_pre.ae_model, NeuralAutoEncoderBase)
-            n_grid_pre = predictor_pre.ae_model.config.n_grid
-            assert n_grid == n_grid_pre
 
     for i in range(n_step):
         profs = lib_sampler.sampler_history.elapsed_time_history

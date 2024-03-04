@@ -584,6 +584,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         test_false_positive_rate: bool = False,
         n_limit_batch_solver: Optional[int] = None,
         device: Optional[torch.device] = None,
+        warm_start: bool = False,
     ) -> "SimpleSolutionLibrarySampler[TaskT, ConfigT, ResultT]":
         """
         use will be used only if either of solver and sampler is not set
@@ -594,16 +595,50 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         _, _, _, values = inspect.getargvalues(frame)
         logger.info("arg of initialize: {}".format(values))
 
-        meta_data = asdict(config)
         if device is None:
             device = detect_device()
         assert ae_model.get_device() == device
-        library = SolutionLibrary.initialize(
-            solver_config.n_max_call,
-            None if config.train_with_encoder else ae_model,
-            meta_data,
-        )
-        sampler_state = ActiveSamplerHistory.init(config.sampling_number_factor)
+        meta_data = asdict(config)
+
+        # setup library
+        if warm_start:
+            try:
+                library = SolutionLibrary.load(project_path, torch.device(device))
+                library.put_on_device(device)
+            except Exception as e:
+                message = f"failed to load library from warm start. {e}"
+                logger.error(message)
+                raise RuntimeError(message)
+            loaded_metadata = library.meta_data
+
+            for k, v in meta_data.items():
+                if k in loaded_metadata:
+                    if loaded_metadata[k] != v:
+                        message = "metadata mismatch in warm start. {} != {}".format(
+                            loaded_metadata[k], v
+                        )
+                        # warning because it's not fatal
+                        logger.warning(message)
+                else:
+                    message = f"metadata mismatch in warm start. {k} is not in loaded metadata"
+                    logger.warning(message)
+        else:
+            library = SolutionLibrary.initialize(
+                solver_config.n_max_call,
+                None if config.train_with_encoder else ae_model,
+                meta_data,
+            )
+
+        # setup sampler history
+        if warm_start:
+            try:
+                sampler_history = ActiveSamplerHistory.load(project_path)
+            except Exception as e:
+                message = f"failed to load sampler history from warm start. {e}"
+                logger.error(message)
+                raise RuntimeError(message)
+        else:
+            sampler_history = ActiveSamplerHistory.init(config.sampling_number_factor)
 
         # setup solver, sampler, optimizer
         if solver is None:
@@ -632,29 +667,47 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         if task_pool is None:
             task_pool = TaskPool(task_type)
 
-        logger.info("start creating validation set")
+        # setup validation set
         project_path.mkdir(exist_ok=True)
         validation_cache_path = project_path / "{}-validation_set.cache".format(task_type.__name__)
-        if validation_cache_path.exists():
+        if warm_start:
+            assert validation_cache_path.exists(), "validation cache must exist in warm start"
             with validation_cache_path.open(mode="rb") as f:
                 tasks_validation: np.ndarray = pickle.load(f)
         else:
+            if validation_cache_path.exists():
+                raise RuntimeError(
+                    f"validation cache {validation_cache_path} must not exist in cold start. remove it"
+                )
+            logger.info("start creating validation set")
             tasks_validation = sampler.sample_batch(
                 config.n_validation, TaskPool(task_type).as_predicated()
             )
-
             with validation_cache_path.open(mode="wb") as f:
                 pickle.dump(tasks_validation, f)
             logger.info("validation set with {} elements is created".format(len(tasks_validation)))
         assert len(tasks_validation) > 0
 
+        # setup presampled tasks
         presample_cache_path = project_path / cls.presampled_cache_file_name
-        if presample_cache_path.exists():
-            with presample_cache_path.open(mode="rb") as f:
-                presampled_task_params: np.ndarray = pickle.load(f)
+        presampled_task_params: Optional[np.ndarray] = None
+        if warm_start:
+            if not presample_cache_path.exists():
+                logger.warn("it's bit strange that presample cache does not exist in warm start...")
+                task_params = next(task_pool)  # sample once to get the shape
+                presampled_task_params = np.array([task_params])
+            else:
+                with presample_cache_path.open(mode="rb") as f:
+                    presampled_task_params = pickle.load(f)
         else:
+            if presample_cache_path.exists():
+                raise RuntimeError(
+                    f"presample cache {presample_cache_path} must not exist in cold start. remove it"
+                )
             task_params = next(task_pool)  # sample once to get the shape
             presampled_task_params = np.array([task_params])
+
+        assert isinstance(presampled_task_params, np.ndarray)
         assert presampled_task_params.ndim == 2
 
         logger.info("library sampler config: {}".format(config))
@@ -670,15 +723,11 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             biases_optimizer,
             test_false_positive_rate,
             project_path,
-            sampler_state,
+            sampler_history,
             device,
             ae_model if config.train_with_encoder else None,
             presampled_task_params,
         )
-
-    def setup_warmstart(self, history: ActiveSamplerHistory, library: SolutionLibrary) -> None:
-        self.sampler_history = history
-        self.library = library
 
     def step_active_sampling(self) -> bool:
         """

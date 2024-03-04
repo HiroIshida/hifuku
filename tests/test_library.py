@@ -1,3 +1,4 @@
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -8,11 +9,9 @@ import torch
 from mohou.trainer import TrainConfig
 
 from hifuku.core import (
-    ActiveSamplerHistory,
     LibraryBasedGuaranteedSolver,
     LibrarySamplerConfig,
     SimpleSolutionLibrarySampler,
-    SolutionLibrary,
 )
 from hifuku.domain import DomainProtocol, DummyDomain, DummyMeshDomain
 from hifuku.neuralnet import (
@@ -67,8 +66,15 @@ def _test_SolutionLibrarySampler(
 
             args = (task_type, solver_type, solcon, ae_model, lconfig, td_path)
             kwargs = {"solver": batch_solver, "sampler": sampler, "device": device}
+            kwargs_with_warmstart = kwargs.copy()
+            kwargs_with_warmstart["warm_start"] = True
 
-            # main test
+            with pytest.raises(RuntimeError):
+                # supposed to fail as warm_start is True but no cache exists
+                lib_sampler = SimpleSolutionLibrarySampler.initialize(
+                    *args, **kwargs_with_warmstart
+                )
+
             lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
             elapsed = 0.0
             for it in range(2):
@@ -93,12 +99,17 @@ def _test_SolutionLibrarySampler(
 
             test_warmstart = True
             if test_warmstart:
-                # test warm start
-                lib = SolutionLibrary.load(td_path, device)
-                state = ActiveSamplerHistory.load(td_path)
-                assert state.total_iter == 2
-                lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
-                lib_sampler.setup_warmstart(state, lib)
+                # add warm_start = True to kwargs
+                lib_sampler = SimpleSolutionLibrarySampler.initialize(
+                    *args, **kwargs_with_warmstart
+                )
+
+                # check if cached stuff are loaded
+                assert lib_sampler.sampler_history.total_iter == 2
+                assert len(lib_sampler.library.predictors) == 2
+                assert len(lib_sampler.tasks_validation) > 0
+                assert len(lib_sampler.presampled_tasks_params) > 100
+
                 time.sleep(2.0)  # for checking total_time
                 assert (
                     len(lib_sampler.presampled_tasks_params) > 0
@@ -143,6 +154,17 @@ def _test_SolutionLibrarySampler(
             logger.info(f"fprate={fprate}, fprate_expected={fprate_expected}")
             assert abs(fprate - lconfig.acceptable_false_positive_rate) < 0.1
             logger.info(f"fprate={fprate}, fprate_expected={fprate_expected}")
+
+            # supposed to fail if we now try to cold start with warm_start = False
+            with pytest.raises(RuntimeError):
+                lib_sampler = SimpleSolutionLibrarySampler.initialize(*args, **kwargs)
+            # after removing cache, then we can cold start
+            for pth in td_path.glob("*"):
+                if pth.is_dir():
+                    shutil.rmtree(pth)
+                else:
+                    pth.unlink()
+            SimpleSolutionLibrarySampler.initialize(*args, **kwargs)  # ok
 
 
 dom = [DummyDomain, DummyMeshDomain]
