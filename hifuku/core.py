@@ -23,13 +23,19 @@ from typing import (
 )
 
 import numpy as np
+import pypeln
 import torch
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 from mohou.utils import detect_device
 from ompl import set_ompl_random_seed
 from rpbench.interface import AbstractTaskSolver, TaskBase
-from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
+from skmp.solver.interface import (
+    AbstractScratchSolver,
+    ConfigProtocol,
+    ConfigT,
+    ResultT,
+)
 from skmp.trajectory import Trajectory
 
 from hifuku.coverage import RealEstAggregate, optimize_latest_bias
@@ -516,6 +522,7 @@ class LibrarySamplerConfig:
     n_solution_candidate: int = 100
     n_difficult: int = 500
     early_stopping_patience: int = 10
+    n_pipeline_chunk: int = 5  # 1 is equivalent to no pipeline
 
     # same for all settings (you dont have to tune)
     n_task_inner: int = 1  # this should be 1 always (2024/02/24)
@@ -911,28 +918,31 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             with presample_cache_path.open(mode="wb") as f:
                 pickle.dump(self.presampled_tasks_params, f)
         assert len(self.presampled_tasks_params) >= n_task
-        tasks = self.presampled_tasks_params[:n_task]
+        params = self.presampled_tasks_params[:n_task]
 
-        logger.info("start generating dataset")
-        init_solutions = [init_solution] * len(tasks)
-        results = self.solver.solve_batch(
-            tasks,
-            init_solutions,
-            tmp_n_max_call_mult_factor=self.config.tmp_n_max_call_mult_factor,
-        )
-
-        logger.info("creating dataset")
-        weights = None
-        dataset = create_dataset_from_params_and_results(
-            tasks,
-            results,
+        # solve_batch is usually on server and dataset creation is on local
+        # Thus, we split the tasks into chunks and do pipeline processing
+        # https://en.wikipedia.org/wiki/Pipeline_(computing)
+        stage_context = self._pypeln_StageContext(
+            self.solver,
+            init_solution,
+            self.config,
             self.solver_config,
             self.task_type,
-            weights,
-            self.library.ae_model_shared,
-            self.config.clamp_factor,
+            self.ae_model_pretrained,
         )
-
+        n_chunk = self.config.n_pipeline_chunk
+        params_list = np.array_split(params, n_chunk)
+        args = ((stage_context, p) for p in params_list)
+        # use thread as _pypeln_stage_create use multiprcesin inside
+        stage1 = pypeln.thread.map(self._pypeln_stage_solve, args, workers=1, maxsize=1)
+        stage2 = pypeln.thread.map(self._pypeln_stage_create, stage1, workers=1, maxsize=1)
+        dataset = None
+        for dataset_partial in stage2:
+            if dataset is None:
+                dataset = dataset_partial
+            else:
+                dataset = dataset.add(dataset_partial)
         profile_info.t_dataset = time.time() - ts_dataset
 
         logger.info("start training model")
@@ -985,6 +995,39 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         model.eval()
         profile_info.t_train = time.time() - ts_train
         return model
+
+    @dataclass
+    class _pypeln_StageContext:
+        batch_solver: BatchTaskSolver
+        init_solution: Trajectory
+        config: LibrarySamplerConfig
+        solver_config: ConfigProtocol
+        task_type: Type[TaskBase]
+        ae_model: Optional[AutoEncoderBase]
+
+    @staticmethod
+    def _pypeln_stage_solve(arg):
+        context, params = arg
+        init_solutions = [context.init_solution] * len(params)
+        results = context.batch_solver.solve_batch(
+            params,
+            init_solutions,
+            tmp_n_max_call_mult_factor=context.config.tmp_n_max_call_mult_factor,
+        )
+        return context, params, results
+
+    @staticmethod
+    def _pypeln_stage_create(arg):
+        context, params, results = arg
+        return create_dataset_from_params_and_results(
+            params,
+            results,
+            context.solver_config,
+            context.task_type,
+            None,
+            context.ae_model,
+            context.config.clamp_factor,
+        )
 
     def _sample_solution_canidates(
         self,
