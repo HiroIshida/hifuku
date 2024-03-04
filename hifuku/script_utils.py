@@ -50,7 +50,7 @@ def load_compatible_autoencoder(
             logger.info("Initialize {} with default config {}".format(T.__name__, conf))
             ae = T(conf)  # type: ignore
         ae.put_on_device(detect_device())
-        return ae_model
+        return ae
 
 
 def get_project_path(
