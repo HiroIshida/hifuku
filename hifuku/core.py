@@ -29,12 +29,7 @@ from mohou.trainer import TrainCache, TrainConfig, train
 from mohou.utils import detect_device
 from ompl import set_ompl_random_seed
 from rpbench.interface import AbstractTaskSolver, TaskBase
-from skmp.solver.interface import (
-    AbstractScratchSolver,
-    ConfigT,
-    ResultProtocol,
-    ResultT,
-)
+from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
 from hifuku.coverage import RealEstAggregate, optimize_latest_bias
@@ -926,76 +921,8 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             tmp_n_max_call_mult_factor=self.config.tmp_n_max_call_mult_factor,
         )
 
-        use_weighting = False
-        if use_weighting:
-            # this modification of loss function using cost may be related to the following articles
-            # Good introduction:
-            # https://machinelearningmastery.com/cost-sensitive-learning-for-imbalanced-classification/
-            # A concise review:
-            # Haixiang, Guo, et al. "Learning from class-imbalanced data: Review of methods and applications." Expert systems with applications 73 (2017): 220-239.
-
-            # NOTE about the performance
-            # the result here suggests that performance is not improved by this modification
-            # https://github.com/HiroIshida/hifuku/pull/27
-            # https://github.com/HiroIshida/hifuku/issues/28
-            # assert False  # 2024/01/22
-
-            # 2024/02/21: changed weighting scheme refering Tanimoto, Akira, et al. "Improving imbalanced classification using near-miss instances." Expert Systems with Applications 201 (2022): 117130.
-            # NOTE about the performance: with_weightning
-            # [INFO] 2024-02-21 00:52:47,981 hifuku.library.core: current coverage est history: [0.1137, 0.2119, 0.2149, 0.2209, 0.2574, 0.3029, 0.3264, 0.3277, 0.3328, 0.3385, 0.3385, 0.3455]
-            # [INFO] 2024-02-21 01:12:58,221 hifuku.library.core: optimal coverage estimate is set to 0.3455
-            # [INFO] 2024-02-21 01:35:03,758 hifuku.library.core: optimal coverage estimate is set to 0.3455
-            # [INFO] 2024-02-21 01:57:14,569 hifuku.library.core: optimal coverage estimate is set to 0.3455
-            # without weighting ...
-            # [INFO] 2024-02-20 12:43:03,258 hifuku.library.core: current coverage est history: [0.105, 0.1683, 0.2526, 0.2599, 0.2599, 0.2677, 0.2961, 0.3197, 0.3199, 0.3213, 0.3297, 0.342, 0.3583, 0.3691, 0.4017, 0.466, 0.466, 0.466, 0.4825, 0.4847, 0.4847, 0.5061, 0.5126, 0.5482, 0.5649, 0.6106, 0.6142]
-            # Seems that performance rather worse
-            # assert False  # 2024/2/21
-
-            # 2024/2/22:
-            # Even after modification n_inner = 1, the above tendency is the case (weighting is bit worse than the original).
-            # Even worse, as weighting requires infer for each samples, the weight determination becomes particulary costly
-            # when n_inner = 1
-            assert False, "don't use. Really. (2024/2/23)"
-            weights = torch.ones((len(tasks), tasks[0].n_inner_task))
-            n_total = len(tasks) * tasks[0].n_inner_task
-
-            # actually ...
-            def res_to_nit(res: ResultProtocol) -> float:
-                if res.traj is not None:
-                    return float(res.n_call)
-                else:
-                    return np.inf
-
-            this_nitss = torch.tensor([[res_to_nit(r) for r in results] for results in results])
-            solved_by_this = this_nitss < self.library.cost_threshold()
-            logger.info(f"rate of solved by this: {torch.sum(solved_by_this) / n_total}")
-
-            # compute if each task is difficult or not
-            if len(self.library.predictors) > 0:
-                infer_resultss = [self.library.infer(task) for task in tasks]
-                infer_nitss = torch.tensor(
-                    [[e.nit for e in infer_results] for infer_results in infer_resultss]
-                )
-                unsolvable_yet = infer_nitss > self.library.cost_threshold()
-                logger.info(f"rate of unsolvable yet: {torch.sum(unsolvable_yet) / n_total}")
-            else:
-                unsolvable_yet = torch.ones(len(tasks), tasks[0].n_inner_task, dtype=bool)
-
-            # if unsolvable so far but solved by this, such sample is quite valuable for training
-            bools_unsolvable_yet_and_solved_by_this = unsolvable_yet & solved_by_this
-            n_this = torch.sum(bools_unsolvable_yet_and_solved_by_this)
-            logger.info(f"rate of solved by only this: {n_this / n_total}")
-            n_other = n_total - n_this
-
-            c_plus = n_total / (n_this * 2)
-            c_minus = n_total / (n_other * 2)
-            logger.info(f"c_plus: {c_plus}, c_minus: {c_minus}")
-            weights[bools_unsolvable_yet_and_solved_by_this] = c_plus
-            weights[~bools_unsolvable_yet_and_solved_by_this] = c_minus
-        else:
-            weights = None
-
         logger.info("creating dataset")
+        weights = None
         dataset = create_dataset_from_params_and_results(
             tasks,
             results,
