@@ -34,7 +34,6 @@ if __name__ == "__main__":
     parser.add_argument("-type", type=str, default="tbrr_sqp", help="")
     parser.add_argument("-n", type=int, default=100, help="")
     parser.add_argument("-n_limit_batch", type=int, help="", default=50000)
-    parser.add_argument("-n_grid", type=int)
     parser.add_argument("-conf", type=str)
     parser.add_argument("-post", type=str)
     parser.add_argument("--warm", action="store_true", help="warm start")
@@ -94,11 +93,12 @@ if __name__ == "__main__":
     p_watchdog = multiprocessing.Process(target=watch_memory, args=(5.0,))
     p_watchdog.start()
 
-    n_grid: Optional[Literal[56, 112]] = args.n_grid
-    if use_pretrained_ae:
-        assert n_grid is None
-    else:
-        assert n_grid is not None
+    n_grid = None
+    if not use_pretrained_ae:
+        task_type = domain.task_type
+        task = task_type.sample()
+        mat = task.export_task_expression(use_matrix=True).get_matrix()
+        n_grid: Optional[Literal[56, 112]] = mat.shape[0]
     ae_model = load_compatible_autoencoder(domain_name, use_pretrained_ae, n_grid)
 
     if not isinstance(ae_model, NullAutoEncoder) and use_pretrained_ae:
