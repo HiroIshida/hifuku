@@ -963,7 +963,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         ts_train = time.time()
         # determine 1dim tensor dimension by temp creation of a task
         # TODO: should I implement this as a method?
-        task = self.task_type.sample(standard=True)
+        task = self.task_type.sample()
         exp = task.export_task_expression(use_matrix=True)
         vector_desc = exp.get_vector()
         n_dim_vector_description = vector_desc.shape[0]
