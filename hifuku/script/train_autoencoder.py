@@ -13,6 +13,7 @@ from mohou.trainer import TrainCache, TrainConfig, train
 from rpbench.interface import TaskBase
 from torch.utils.data import Dataset
 
+from hifuku.datagen.utils import split_number
 from hifuku.domain import select_domain
 from hifuku.neuralnet import AutoEncoderConfig, PixelAutoEncoder
 from hifuku.script_utils import create_default_logger
@@ -67,9 +68,18 @@ if __name__ == "__main__":
     logger.info("create dateset from scratch")
     n_sample = args.sample
 
-    dummy_args = [None] * n_sample
-    with ProcessPoolExecutor(12, initializer=initialize, initargs=(task_type,)) as pool:
-        mat_list = list(tqdm.tqdm(pool.map(create_matrix, dummy_args), total=n_sample))
+    # Somehow, if process all the sample at once with ProcessPoolExecutor, as the iteration goes on
+    # processing starts to slow down. So, I split the number of samples into 10 parts and process them
+    n_sample_list = split_number(n_sample, 10)
+    assert sum(n_sample_list) == n_sample
+
+    mat_list = []
+    for i, n in enumerate(n_sample_list):
+        dummy_args = [None] * n
+        with ProcessPoolExecutor(20, initializer=initialize, initargs=(task_type,)) as pool:
+            mat_list_part = list(tqdm.tqdm(pool.map(create_matrix, dummy_args), total=n))
+        mat_list.extend(mat_list_part)
+
     dataset = MyDataset(mat_list)
     model = PixelAutoEncoder(AutoEncoderConfig(n_grid=n_grid))
 
