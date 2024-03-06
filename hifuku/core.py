@@ -944,6 +944,9 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         )
 
         if self.config.already_solvable_as_failure:
+            # NOTE: 2023/03/07: this method is found to be rather ineffective
+            # this is probably because by considering as already-covered as failure
+            # the rich information provided by theses sample are lost.
             results = self._consider_already_solvable_as_failure(tasks, results)
         logger.info("creating dataset")
         weights = None
