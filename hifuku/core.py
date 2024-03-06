@@ -517,6 +517,9 @@ class LibrarySamplerConfig:
     n_difficult: int = 500
     early_stopping_patience: int = 10
 
+    # experimental
+    already_solvable_as_failure: bool = False
+
     # same for all settings (you dont have to tune)
     n_task_inner: int = 1  # this should be 1 always (2024/02/24)
     sample_from_difficult_region: bool = True
@@ -886,6 +889,25 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
 
         return result.best_biases, aggregate, result.coverage
 
+    def _consider_already_solvable_as_failure(
+        self, params: np.ndarray, results: List[ResultT]
+    ) -> List[ResultT]:
+        if len(self.library.predictors) == 0:
+            logger.info("no predictor in the library. do nothing")
+            return results
+
+        logger.info("consider already solvable as failure")
+        results_new: List[ResultT] = []
+        for param, result in tqdm.tqdm(zip(params, results)):
+            task = self.task_type.from_task_param(param)
+            inf_res = self.library.infer(task)
+            already_solvable = inf_res.cost <= self.library.max_admissible_cost
+            copied = copy.deepcopy(result)
+            if already_solvable:
+                copied.traj = None  # traj = None means failure
+            results_new.append(copied)
+        return results_new
+
     def _train_predictor(
         self,
         init_solution: Trajectory,
@@ -921,6 +943,8 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             tmp_n_max_call_mult_factor=self.config.tmp_n_max_call_mult_factor,
         )
 
+        if self.config.already_solvable_as_failure:
+            results = self._consider_already_solvable_as_failure(tasks, results)
         logger.info("creating dataset")
         weights = None
         dataset = create_dataset_from_params_and_results(
