@@ -54,6 +54,12 @@ if __name__ == "__main__":
     if project_name_postfix == "none":
         project_name_postfix = None
 
+    # if postfix can be interpreted as float, then store it to acceptable_fp variable
+    try:
+        acceptable_fp = float(project_name_postfix)
+    except ValueError:
+        acceptable_fp = None
+
     torch.backends.cudnn.enabled = False
     assert torch.cuda.is_available()
 
@@ -82,6 +88,7 @@ if __name__ == "__main__":
         lsconfig = parse_config_yaml(dic)
         if not use_pretrained_ae:
             assert lsconfig.train_with_encoder
+    assert lsconfig.acceptable_false_positive_rate == acceptable_fp
     logger.info("lsconfig: {}".format(lsconfig))
 
     if not use_pretrained_ae:
