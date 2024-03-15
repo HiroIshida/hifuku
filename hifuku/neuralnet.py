@@ -130,6 +130,43 @@ def create_dataset_from_params_and_results(
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float = 2.0,
 ) -> CostPredictorDataset:
+    # the reason why we need additional wrapper is to avoid running out of memory
+    # if number of task is too large, and we process such data in parallel
+
+    n_task = len(task_params)
+    if n_task > 1000000:
+        task_params_list = [task_params[: n_task // 2], task_params[n_task // 2 :]]
+        results_list = [results[: n_task // 2], results[n_task // 2 :]]
+        if weights is None:
+            weights_list = [None, None]
+        else:
+            weights_list = [weights[: n_task // 2], weights[n_task // 2 :]]
+    else:
+        task_params_list = [task_params]
+        results_list = [results]
+        weights_list = [weights]
+    dataset_list = []
+    for task_params, results, weights in zip(task_params_list, results_list, weights_list):
+        print(f"Creating dataset from {len(task_params)} tasks")
+        dataset = _create_dataset_from_params_and_results(
+            task_params, results, solver_config, task_type, weights, ae_model, clamp_factor
+        )
+        dataset_list.append(dataset)
+    dataset = dataset_list[0]
+    for d in dataset_list[1:]:
+        dataset.add(d)
+    return dataset
+
+
+def _create_dataset_from_params_and_results(
+    task_params: np.ndarray,
+    results: List[ResultProtocol],
+    solver_config,
+    task_type: Type[TaskBase],
+    weights: Optional[Tensor],
+    ae_model: Optional[AutoEncoderBase],
+    clamp_factor: float = 2.0,
+) -> CostPredictorDataset:
 
     n_process = 6
     # use multiprocessing.
@@ -153,7 +190,7 @@ def create_dataset_from_params_and_results(
     # spawn is maybe necessary to avoid the error in torch multiprocessing
     with multiprocessing.get_context("spawn").Pool(n_process) as pool:
         dataset_list = pool.starmap(
-            _create_dataset_from_params_and_results,
+            __create_dataset_from_params_and_results,
             [
                 (
                     task_params,
@@ -176,7 +213,7 @@ def create_dataset_from_params_and_results(
     return dataset
 
 
-def _create_dataset_from_params_and_results(
+def __create_dataset_from_params_and_results(
     task_params: np.ndarray,
     results,
     solver_config: ConfigProtocol,
