@@ -2,7 +2,6 @@ import copy
 import logging
 import multiprocessing
 from abc import ABC, abstractmethod
-from collections import namedtuple
 from dataclasses import dataclass
 from typing import Any, List, Literal, Optional, Tuple, Type
 
@@ -130,43 +129,6 @@ def create_dataset_from_params_and_results(
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float = 2.0,
 ) -> CostPredictorDataset:
-    # the reason why we need additional wrapper is to avoid running out of memory
-    # if number of task is too large, and we process such data in parallel
-
-    n_task = len(task_params)
-    if n_task > 1000000:
-        task_params_list = [task_params[: n_task // 2], task_params[n_task // 2 :]]
-        results_list = [results[: n_task // 2], results[n_task // 2 :]]
-        if weights is None:
-            weights_list = [None, None]
-        else:
-            weights_list = [weights[: n_task // 2], weights[n_task // 2 :]]
-    else:
-        task_params_list = [task_params]
-        results_list = [results]
-        weights_list = [weights]
-    dataset_list = []
-    for task_params, results, weights in zip(task_params_list, results_list, weights_list):
-        print(f"Creating dataset from {len(task_params)} tasks")
-        dataset = _create_dataset_from_params_and_results(
-            task_params, results, solver_config, task_type, weights, ae_model, clamp_factor
-        )
-        dataset_list.append(dataset)
-    dataset = dataset_list[0]
-    for d in dataset_list[1:]:
-        dataset.add(d)
-    return dataset
-
-
-def _create_dataset_from_params_and_results(
-    task_params: np.ndarray,
-    results: List[ResultProtocol],
-    solver_config,
-    task_type: Type[TaskBase],
-    weights: Optional[Tensor],
-    ae_model: Optional[AutoEncoderBase],
-    clamp_factor: float = 2.0,
-) -> CostPredictorDataset:
 
     n_process = 6
     # use multiprocessing.
@@ -190,7 +152,7 @@ def _create_dataset_from_params_and_results(
     # spawn is maybe necessary to avoid the error in torch multiprocessing
     with multiprocessing.get_context("spawn").Pool(n_process) as pool:
         dataset_list = pool.starmap(
-            __create_dataset_from_params_and_results,
+            _create_dataset_from_params_and_results,
             [
                 (
                     task_params,
@@ -213,7 +175,7 @@ def _create_dataset_from_params_and_results(
     return dataset
 
 
-def __create_dataset_from_params_and_results(
+def _create_dataset_from_params_and_results(
     task_params: np.ndarray,
     results,
     solver_config: ConfigProtocol,
@@ -235,10 +197,30 @@ def __create_dataset_from_params_and_results(
             if weights is None:
                 weights = torch.ones(len(task_params))
 
-            Processed = namedtuple("processed", ["encoded", "vector", "cost", "weight"])
+            # preallocate memory for each data type
+            # dummy run to determine the size of mesh_like_stacked
+            task = task_type.from_task_param(task_params[0])
+            expression = task.export_task_expression(use_matrix=True)
+            matrix = expression.get_matrix()
+            mesh_like_stacked = None
+            if matrix is not None:
+                if ae_model is None:
+                    mat_size = torch.from_numpy(matrix).float().unsqueeze(0).size()
+                    stacked_size = (len(task_params),) + mat_size
+                else:
+                    mat_torch = torch.from_numpy(matrix).float().unsqueeze(0)
+                    encoded = ae_model.encode(mat_torch.unsqueeze(0)).squeeze(0).detach()
+                    stacked_size = (len(task_params),) + encoded.size()
+                mesh_like_stacked = torch.zeros(stacked_size)
 
-            processed_list = []
-            for task_param, result, weight in tqdm.tqdm(zip(task_params, results, weights)):
+            vector_size = expression.get_vector().size
+            vector_stacked = torch.zeros((len(task_params), vector_size))
+            costs = torch.zeros(len(task_params))
+
+            for i in tqdm.tqdm(range(len(task_params))):
+                task_param = task_params[i]
+                result = results[i]
+
                 task = task_type.from_task_param(task_param)
                 expression = task.export_task_expression(use_matrix=True)
                 matrix = expression.get_matrix()
@@ -249,39 +231,16 @@ def __create_dataset_from_params_and_results(
                         encoded = mat_torch  # just don't encode
                     else:
                         encoded = ae_model.encode(mat_torch.unsqueeze(0)).squeeze(0).detach()
+                    assert mesh_like_stacked is not None
+                    mesh_like_stacked[i] = encoded
 
                 vector = expression.get_vector()
                 vector_torch = torch.from_numpy(vector).float()
+                vector_stacked[i] = vector_torch
                 cost = get_clamped_cost(result)
+                costs[i] = cost
 
-                processed = Processed(encoded, vector_torch, cost, weight)
-                processed_list.append(processed)
-
-            # convert all
-            no_world_mat = processed_list[0].encoded is None
-            if no_world_mat:
-                mesh_likes = None
-            else:
-                mesh_likes = torch.stack([p.encoded for p in processed_list], dim=0)
-                if ae_model is None:
-                    assert mesh_likes.ndim == 4
-                else:
-                    assert mesh_likes.ndim == 2
-            # vectorss = torch.vstack([p.vectors for p in processed_list])
-            vectors = torch.stack([p.vector for p in processed_list], dim=0)
-            assert vectors.ndim == 2
-            # costss = torch.vstack([p.costs for p in processed_list])
-            costs = torch.from_numpy(np.array([p.cost for p in processed_list])).float()
-            assert costs.ndim == 1
-
-            weights = torch.from_numpy(np.array([p.weight for p in processed_list])).float()
-            assert weights.ndim == 1
-            return CostPredictorDataset(
-                mesh_likes,
-                vectors,
-                costs,
-                weights,
-            )
+            return CostPredictorDataset(mesh_like_stacked, vector_stacked, costs, weights)
 
 
 @dataclass
