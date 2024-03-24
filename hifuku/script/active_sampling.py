@@ -39,6 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("--warm", action="store_true", help="warm start")
     parser.add_argument("--untrained", action="store_true", help="use untrained autoencoder")
     parser.add_argument("--local", action="store_true", help="don't use distributed computers")
+    parser.add_argument("--hour", type=int, default=24, help="time limit in hours")
 
     args = parser.parse_args()
     domain_name: str = args.type
@@ -154,8 +155,8 @@ if __name__ == "__main__":
         if len(profs) > 0:
             time_total = sum([info.t_total for info in profs])  # type: ignore[misc]
             logger.info("time_total: {}".format(time_total))
-            if time_total > 3600 * 24:
-                logger.info("time_total > 24 hours, break")
+            if time_total > 3600 * args.hour:
+                logger.info(f"time_total > {args.hour} hours, break")
                 break
 
         sampling_successful = lib_sampler.step_active_sampling()
