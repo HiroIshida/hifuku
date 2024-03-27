@@ -132,6 +132,19 @@ class PR2MiniFridge_RRT2000(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
+class PR2MiniFridge_RRT8000(DomainProtocol):
+    task_type = PR2MiniFridgeTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=8000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "PR2MiniFridge-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
 # class ClutteredFridgeRealistic_SQP(DomainProtocol):
 #     task_type = TabletopClutteredFridgeReachingRealisticTask
 #     solver_type = SQPBasedSolver
@@ -472,6 +485,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         pr2_minifridge_sqp = PR2MiniFridge_SQP
         pr2_minifridge_rrt500 = PR2MiniFridge_RRT500
         pr2_minifridge_rrt2000 = PR2MiniFridge_RRT2000
+        pr2_minifridge_rrt8000 = PR2MiniFridge_RRT8000
         jsk_fridge_sqp = JSKFridge_SQP
         jsk_fridge_rrt2000 = JSKFridge_RRT2000
         jsk_fridge_rrt5000 = JSKFridge_RRT5000
