@@ -387,7 +387,6 @@ class LibraryBasedSolverBase(AbstractTaskSolver[TaskT, ConfigT, ResultT]):
     ) -> "LibraryBasedSolverBase[TaskT, ConfigT, ResultT]":
         # internal solver's timeout must be None
         # because inference time must be considered in timeout for fairness
-        assert config.n_max_call == library.max_admissible_cost
         timeout_stashed = config.timeout  # stash this
         config.timeout = None
         solver = solver_type.init(config)
@@ -441,6 +440,9 @@ class LibraryBasedSolverBase(AbstractTaskSolver[TaskT, ConfigT, ResultT]):
 
 @dataclass
 class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[TaskT, ConfigT, ResultT]):
+    def __post_init__(self):
+        assert self.solver.config.n_max_call == self.library.max_admissible_cost
+
     def _solve(self) -> ResultT:
         self.previous_est_positive = None
         self.previous_false_positive = None
@@ -469,6 +471,9 @@ class LibraryBasedGuaranteedSolver(LibraryBasedSolverBase[TaskT, ConfigT, Result
 
 @dataclass
 class LibraryBasedHeuristicSolver(LibraryBasedSolverBase[TaskT, ConfigT, ResultT]):
+    def __post_init__(self):
+        assert self.solver.config.n_max_call > 10000  # heuristic solver must run until timeout
+
     def _solve(self) -> ResultT:
         ts = time.time()
         assert self.task is not None
