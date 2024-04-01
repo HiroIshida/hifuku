@@ -341,6 +341,22 @@ class HumanoidTableRarmReaching2_SQP_Domain(DomainProtocol):
     auto_encoder_type = NullAutoEncoder
 
 
+class HumanoidTableRarmReaching2_SQP10_Domain(DomainProtocol):
+    task_type = HumanoidTableReachingTask2
+    solver_type = SQPBasedSolver
+    solver_config = SQPBasedSolverConfig(
+        n_wp=40,
+        n_max_call=10,
+        motion_step_satisfaction="explicit",
+        verbose=False,
+        ctol_eq=1e-3,
+        ctol_ineq=1e-3,
+        ineq_tighten_coef=0.0,
+    )
+    auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
+
+
 class HumanoidTableRarmReaching3_SQP_Domain(DomainProtocol):
     task_type = HumanoidTableReachingTask3
     solver_type = SQPBasedSolver
@@ -513,6 +529,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         jsk_fridge_vertical2_rrt2000 = JSKFridgeVertical2_RRT2000
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         humanoid_trr2_sqp = HumanoidTableRarmReaching2_SQP_Domain
+        humanoid_trr2_sqp10 = HumanoidTableRarmReaching2_SQP10_Domain
         humanoid_trr3_sqp = HumanoidTableRarmReaching3_SQP_Domain
         humanoid_tcrr_sqp = HumanoidTableClutteredRarmReaching_SQP_Domain
         humanoid_tcrr2_sqp = HumanoidTableClutteredRarmReaching2_SQP_Domain
