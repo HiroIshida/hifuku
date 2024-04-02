@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class AutoEncoderBase(ABC):
     @abstractmethod
-    def encode(self, X: torch.Tensor) -> torch.Tensor:
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
         ...
 
     @property
@@ -52,7 +52,7 @@ class NullAutoEncoder(AutoEncoderBase):
     def __init__(self):
         self.device = torch.device("cpu")
 
-    def encode(self, X: torch.Tensor) -> torch.Tensor:
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
         # assume that X is empty tensor
         assert X.ndim == 2
         n_batch, dummy = X.shape
@@ -209,7 +209,7 @@ def _create_dataset_from_params_and_results(
                     stacked_size = (len(task_params),) + mat_size
                 else:
                     mat_torch = torch.from_numpy(matrix).float().unsqueeze(0)
-                    encoded = ae_model.encode(mat_torch.unsqueeze(0)).squeeze(0).detach()
+                    encoded = ae_model.forward(mat_torch.unsqueeze(0)).squeeze(0).detach()
                     stacked_size = (len(task_params),) + encoded.size()
                 mesh_like_stacked = torch.zeros(stacked_size)
 
@@ -230,7 +230,7 @@ def _create_dataset_from_params_and_results(
                     if ae_model is None:
                         encoded = mat_torch  # just don't encode
                     else:
-                        encoded = ae_model.encode(mat_torch.unsqueeze(0)).squeeze(0).detach()
+                        encoded = ae_model.forward(mat_torch.unsqueeze(0)).squeeze(0).detach()
                     assert mesh_like_stacked is not None
                     mesh_like_stacked[i] = encoded
 
@@ -300,7 +300,8 @@ class CostPredictor(ModelBase[CostPredictorConfig]):
 
         vectors = torch.concat([mesh_features, descriptor], dim=1)
         cost_pred = self.linears(vectors)
-        solution_pred = None
+
+        solution_pred = torch.empty(0)  # dummy for backward compatibility
         return cost_pred, solution_pred
 
     def loss(self, sample: Tuple[Tensor, Tensor, Tensor, Tensor]) -> LossDict:
@@ -349,7 +350,7 @@ class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
     def get_device(self) -> torch.device:
         return self.device
 
-    def encode(self, mesh: Tensor) -> Tensor:
+    def forward(self, mesh: Tensor) -> Tensor:
         return self.encoder(mesh)
 
     def loss(self, mesh: Tensor) -> LossDict:
@@ -497,14 +498,14 @@ class CostPredictorWithEncoder(ModelBase[CostPredictorWithEncoderConfig]):
     def forward_multi_inner(self, mesh: Tensor, descs: Tensor) -> Tensor:
         # descs shares the same mesh
         n_inner, _ = descs.shape
-        encoded = self.ae_model.encode(mesh)
+        encoded = self.ae_model.forward(mesh)
         encoded_repeated = encoded.repeat((n_inner, 1))
         costs_pred, _ = self.costpred_model.forward((encoded_repeated, descs))
         return costs_pred
 
     def forward(self, sample: Tuple[Tensor, Tensor]) -> Tensor:
         meshes, descs = sample
-        encoded = self.ae_model.encode(meshes)
+        encoded = self.ae_model.forward(meshes)
         costs_pred, _ = self.costpred_model.forward((encoded, descs))
         costs_pred = costs_pred.flatten()
         return costs_pred

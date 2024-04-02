@@ -24,6 +24,7 @@ from typing import (
 
 import numpy as np
 import torch
+import torch.nn as nn
 import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 from mohou.utils import detect_device
@@ -183,6 +184,7 @@ class SolutionLibrary:
     biases: List[float]
     uuidval: str
     meta_data: Dict
+    jit_compiled: bool = False
 
     def __post_init__(self):
         if self.ae_model_shared is not None:
@@ -233,6 +235,40 @@ class SolutionLibrary:
             pred: CostPredictorWithEncoder = self.predictors[0]  # type: ignore[assignment]
             return pred.device
 
+    def jit_compile(self) -> None:
+        print("compling...")
+        assert self.device.type == "cuda"
+        if self.ae_model_shared is not None:
+            if isinstance(self.ae_model_shared, NullAutoEncoder):
+                msg = "jit compiling pure fully-connected layers somehow degrades performance..."
+                raise RuntimeError(msg)
+
+            if isinstance(self.ae_model_shared, nn.Module):
+                n_grid = self.ae_model_shared.config.n_grid
+                dummy_input = torch.rand(1, 1, n_grid, n_grid).cuda()
+                traced = torch.jit.trace(self.ae_model_shared.eval(), (dummy_input,))
+                self.ae_model_shared = torch.jit.optimize_for_inference(traced)
+
+            pred_config = self.predictors[0].config
+            dummy_input = (
+                torch.rand(1, pred_config.dim_conv_bottleneck).cuda(),
+                torch.rand(1, pred_config.dim_task_descriptor).cuda(),
+            )
+        else:
+            pred_config = self.predictors[0].config
+            assert isinstance(pred_config, CostPredictorWithEncoderConfig)
+            dim_vector = pred_config.costpred_model.config.dim_task_descriptor
+            n_grid = pred_config.ae_model.config.n_grid
+            image_input = torch.rand(1, 1, n_grid, n_grid)
+            vec_input = torch.rand(1, dim_vector)
+            dummy_input = (image_input.cuda(), vec_input.cuda())
+
+        for i in range(len(self.predictors)):
+            traced = torch.jit.trace(self.predictors[i], (dummy_input,))
+            self.predictors[i] = torch.jit.optimize_for_inference(traced)
+        print("done")
+        self.jit_compiled = True
+
     def _infer_cost(self, task: TaskBase) -> np.ndarray:
         assert len(self.predictors) > 0
         has_shared_ae = self.ae_model_shared is not None
@@ -246,24 +282,35 @@ class SolutionLibrary:
         matrix = expression.get_matrix()
         assert matrix is not None
         world_mat_np = np.expand_dims(matrix, axis=(0, 1))
-        vecs_np = np.array([expression.get_vector()])
-        world_mat_torch = torch.from_numpy(world_mat_np).float().to(self.device)
-        vecs_torch = torch.from_numpy(vecs_np).float().to(self.device)
+        vec_np = np.array([expression.get_vector()])
+
+        if self.jit_compiled:
+            device = torch.device("cuda")
+        else:
+            device = self.device
+
+        world_mat_torch = torch.from_numpy(world_mat_np).float().to(device)
+        vec_torch = torch.from_numpy(vec_np).float().to(device)
 
         cost_list = []
         for pred, bias in zip(self.predictors, self.biases):
-            assert isinstance(pred, CostPredictorWithEncoder)
-            costs = pred.forward_multi_inner(world_mat_torch, vecs_torch)  # type: ignore
+            # assert isinstance(pred, CostPredictorWithEncoder)
+            costs = pred.forward((world_mat_torch, vec_torch))  # type: ignore
             cost_list.append(costs.item() + bias)
         return np.array(cost_list)
 
     def _infer_cost_with_shared_ae(self, task: TaskBase) -> np.ndarray:
         assert self.ae_model_shared is not None
 
+        if self.jit_compiled:
+            device = torch.device("cuda")
+        else:
+            device = self.device
+
         expression = task.export_task_expression(use_matrix=True)
         vecs_np = np.array([expression.get_vector()])
         vecs_torch = torch.from_numpy(vecs_np)
-        vecs_torch = vecs_torch.float().to(self.device)
+        vecs_torch = vecs_torch.float().to(device)
 
         matrix = expression.get_matrix()
         if matrix is None:
@@ -271,10 +318,10 @@ class SolutionLibrary:
         else:
             matrix_np = np.expand_dims(matrix, axis=(0, 1))
             matrix_torch = torch.from_numpy(matrix_np)
-            matrix_torch = matrix_torch.float().to(self.device)
+            matrix_torch = matrix_torch.float().to(device)
 
         n_batch = 1
-        encoded: torch.Tensor = self.ae_model_shared.encode(matrix_torch)
+        encoded: torch.Tensor = self.ae_model_shared.forward(matrix_torch)
         encoded_repeated = encoded.repeat(n_batch, 1)
 
         cost_list = []
