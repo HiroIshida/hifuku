@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Literal, Optional
 
 import numpy as np
+import psutil
 import torch
 import yaml
 from mohou.trainer import TrainConfig
@@ -49,6 +50,14 @@ if __name__ == "__main__":
     use_pretrained_ae: bool = not args.untrained
     library_sampling_conf_path_str: Optional[str] = args.conf
     project_name_postfix: Optional[str] = args.post
+
+    # first of all, we check that cpu-affinity of root process is set properly
+    aff_root_process = psutil.Process(1).cpu_affinity()
+    n_logical = psutil.cpu_count(logical=True)
+    aff_isolated = set(list(range(n_logical))) - set(aff_root_process)
+    assert (
+        len(aff_isolated) <= 2
+    )  # we may use 2 logical core for benchmarking but we must keep other cores free
 
     # require explicitly setting to None
     assert project_name_postfix is not None
