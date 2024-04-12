@@ -1,9 +1,10 @@
 import copy
 import logging
 import multiprocessing
+import zlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List, Literal, Optional, Tuple, Type
+from typing import Any, List, Literal, Optional, Tuple, Type, Union
 
 import numpy as np
 import threadpoolctl
@@ -74,9 +75,12 @@ class NullAutoEncoder(AutoEncoderBase):
         return self.device
 
 
+CompressedBytes = Tuple[bytes, Tuple[int, ...]]  # tuple for shape as we need it to reconstruct
+
+
 @dataclass
 class CostPredictorDataset(Dataset):
-    mesh_likes: Optional[torch.Tensor]
+    mesh_likes: Union[List[CompressedBytes], torch.Tensor, None]
     descriptions: torch.Tensor
     costs: torch.Tensor
     weights: torch.Tensor
@@ -91,7 +95,11 @@ class CostPredictorDataset(Dataset):
 
         if self.mesh_likes is not None:
             assert other.mesh_likes is not None
-            mesh_likes = torch.vstack([self.mesh_likes, other.mesh_likes])
+            if isinstance(self.mesh_likes, list):
+                assert isinstance(other.mesh_likes, list)
+                mesh_likes = self.mesh_likes + other.mesh_likes
+            else:
+                mesh_likes = torch.vstack([self.mesh_likes, other.mesh_likes])
         else:
             assert other.mesh_likes is None
             mesh_likes = None
@@ -112,6 +120,14 @@ class CostPredictorDataset(Dataset):
             mesh_like_here = torch.empty(0)
         else:
             mesh_like_here = self.mesh_likes[idx]
+            if isinstance(mesh_like_here, tuple):  # meaning that it's compressed
+                b, shape = mesh_like_here
+                mesh_like_here = torch.from_numpy(
+                    np.frombuffer(zlib.decompress(b), dtype=np.float32)
+                )
+                full_shape = (1,) + shape
+                mesh_like_here = mesh_like_here.view(full_shape)
+
         return (
             mesh_like_here,
             self.descriptions[idx],
@@ -128,7 +144,12 @@ def create_dataset_from_params_and_results(
     weights: Optional[Tensor],
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float = 2.0,
+    compress_mesh: bool = False,
 ) -> CostPredictorDataset:
+
+    if ae_model is not None:  # meaning image is encoded to vector
+        if compress_mesh:
+            raise ValueError("it's meaningless to compress mesh if image is encoded")
 
     n_process = 6
     # use multiprocessing.
@@ -162,6 +183,7 @@ def create_dataset_from_params_and_results(
                     weights,
                     ae_model_copied,
                     clamp_factor,
+                    compress_mesh,
                 )
                 for task_params, results, weights in zip(
                     task_params_list, results_list, weights_list
@@ -183,6 +205,7 @@ def _create_dataset_from_params_and_results(
     weights: Optional[Tensor],
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float,
+    compress_mesh: bool,
 ) -> CostPredictorDataset:
     def get_clamped_cost(result) -> int:
         if result.traj is None:
@@ -202,16 +225,20 @@ def _create_dataset_from_params_and_results(
             task = task_type.from_task_param(task_params[0])
             expression = task.export_task_expression(use_matrix=True)
             matrix = expression.get_matrix()
-            mesh_like_stacked = None
+            mesh_likes = None
             if matrix is not None:
                 if ae_model is None:
-                    mat_size = torch.from_numpy(matrix).float().unsqueeze(0).size()
-                    stacked_size = (len(task_params),) + mat_size
+                    if compress_mesh:
+                        mesh_likes = [None] * len(task_params)
+                    else:
+                        mat_size = torch.from_numpy(matrix).float().unsqueeze(0).size()
+                        stacked_size = (len(task_params),) + mat_size
+                        mesh_likes = torch.zeros(stacked_size)
                 else:
                     mat_torch = torch.from_numpy(matrix).float().unsqueeze(0)
                     encoded = ae_model.forward(mat_torch.unsqueeze(0)).squeeze(0).detach()
                     stacked_size = (len(task_params),) + encoded.size()
-                mesh_like_stacked = torch.zeros(stacked_size)
+                    mesh_likes = torch.zeros(stacked_size)
 
             vector_size = expression.get_vector().size
             vector_stacked = torch.zeros((len(task_params), vector_size))
@@ -224,15 +251,21 @@ def _create_dataset_from_params_and_results(
                 task = task_type.from_task_param(task_param)
                 expression = task.export_task_expression(use_matrix=True)
                 matrix = expression.get_matrix()
-                encoded: Optional[torch.Tensor] = None
+                encoded: Union[torch.Tensor, CompressedBytes, None] = None
                 if matrix is not None:
                     mat_torch = torch.from_numpy(matrix).float().unsqueeze(0)
                     if ae_model is None:
-                        encoded = mat_torch  # just don't encode
+                        if compress_mesh:
+                            assert isinstance(matrix, np.ndarray)
+                            matrix_32 = matrix.astype(np.float32)
+                            b = zlib.compress(matrix_32.tobytes())
+                            encoded = (b, matrix.shape)
+                        else:
+                            encoded = mat_torch  # just don't encode
                     else:
                         encoded = ae_model.forward(mat_torch.unsqueeze(0)).squeeze(0).detach()
-                    assert mesh_like_stacked is not None
-                    mesh_like_stacked[i] = encoded
+                    assert mesh_likes is not None
+                    mesh_likes[i] = encoded
 
                 vector = expression.get_vector()
                 vector_torch = torch.from_numpy(vector).float()
@@ -240,7 +273,7 @@ def _create_dataset_from_params_and_results(
                 cost = get_clamped_cost(result)
                 costs[i] = cost
 
-            return CostPredictorDataset(mesh_like_stacked, vector_stacked, costs, weights)
+            return CostPredictorDataset(mesh_likes, vector_stacked, costs, weights)
 
 
 @dataclass
