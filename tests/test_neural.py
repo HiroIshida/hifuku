@@ -73,7 +73,7 @@ def get_sol_tasks_and_results(domain):
     return sol, task_params, results
 
 
-def _test_dataset(domain, use_weight: bool, encode_image: bool):
+def _test_dataset(domain, use_weight: bool, encode_image: bool, compress_mesh: bool):
     # for domain in [DummyMeshDomain, DummyDomain]:
     sol_tasks_and_results = get_sol_tasks_and_results(domain)
     device = torch.device("cpu")
@@ -97,7 +97,13 @@ def _test_dataset(domain, use_weight: bool, encode_image: bool):
     # for encode_image in [True, False]:
     if encode_image:
         dataset = create_dataset_from_params_and_results(
-            task_params, results, domain.solver_config, domain.task_type, weightss, ae
+            task_params,
+            results,
+            domain.solver_config,
+            domain.task_type,
+            weightss,
+            ae,
+            compress_mesh=compress_mesh,
         )
     else:
         dataset = create_dataset_from_params_and_results(
@@ -128,23 +134,25 @@ def _test_dataset(domain, use_weight: bool, encode_image: bool):
 
 
 @pytest.mark.parametrize(
-    "domain, use_weight, encode_image",
+    "domain, use_weight, encode_image, compress_mesh",
     [
-        (DummyMeshDomain, True, True),
-        (DummyMeshDomain, True, False),
-        (DummyMeshDomain, False, True),
-        (DummyMeshDomain, False, False),
-        (DummyDomain, True, True),
-        (DummyDomain, True, False),
-        (DummyDomain, False, True),
-        (DummyDomain, False, False),
+        (DummyMeshDomain, True, True, False),
+        (DummyMeshDomain, True, False, False),
+        (DummyMeshDomain, False, True, False),
+        (DummyMeshDomain, False, False, False),
+        (DummyMeshDomain, False, False, True),
+        (DummyDomain, True, True, False),
+        (DummyDomain, True, False, False),
+        (DummyDomain, False, True, False),
+        (DummyDomain, False, False, False),
+        (DummyDomain, False, False, True),
     ],
 )
-def test_dataset(domain, use_weight, encode_image):
-    _test_dataset(domain, use_weight, encode_image)
+def test_dataset(domain, use_weight, encode_image, compress_mesh):
+    _test_dataset(domain, use_weight, encode_image, compress_mesh)
 
 
-def _test_training(domain, use_pretrained_ae: bool):
+def _test_training(domain, use_pretrained_ae: bool, compress_mesh: bool):
     domain = DummyMeshDomain
     sol_tasks_and_results = get_sol_tasks_and_results(domain)
     device = torch.device("cpu")
@@ -165,7 +173,13 @@ def _test_training(domain, use_pretrained_ae: bool):
         model = costpred_model
     else:
         dataset = create_dataset_from_params_and_results(
-            task_params, results, domain.solver_config, domain.task_type, None, None
+            task_params,
+            results,
+            domain.solver_config,
+            domain.task_type,
+            None,
+            None,
+            compress_mesh=compress_mesh,
         )
         conf = CostPredictorWithEncoderConfig(costpred_model, ae)
         model = CostPredictorWithEncoder(conf, device=device)
@@ -177,8 +191,18 @@ def _test_training(domain, use_pretrained_ae: bool):
 
 
 @pytest.mark.parametrize(
-    "domain, use_pretrained_ae",
-    [(DummyMeshDomain, True), (DummyMeshDomain, False), (DummyDomain, True), (DummyDomain, False)],
+    "domain, use_pretrained_ae, compress_mesh",
+    [
+        (DummyMeshDomain, True, False),
+        (DummyMeshDomain, False, False),
+        (DummyMeshDomain, False, True),
+        (DummyDomain, True, False),
+        (DummyDomain, False, False),
+    ],
 )
-def tset_training(domain, use_pretrained_ae):
-    _test_training(domain, use_pretrained_ae)
+def test_training(domain, use_pretrained_ae, compress_mesh):
+    _test_training(domain, use_pretrained_ae, compress_mesh)
+
+
+if __name__ == "__main__":
+    _test_training(DummyMeshDomain, False, True)

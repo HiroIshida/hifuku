@@ -557,6 +557,9 @@ class LibrarySamplerConfig:
     sampling_number_factor: float = 5000
     acceptable_false_positive_rate: float = 0.1
 
+    # if active sampling stop after memory error... and joint training ...
+    compress_matrix: bool = False
+
     # maybe you have to tune maybe ...
     inc_coef_mult_snf: float = 1.1  # snf stands for sampling_number_factor
     dec_coef_mult_snf: float = 0.9
@@ -1007,6 +1010,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             weights,
             self.library.ae_model_shared,
             self.config.clamp_factor,
+            compress_mesh=self.config.compress_matrix,
         )
 
         profile_info.t_dataset = time.time() - ts_dataset
@@ -1057,6 +1061,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             self.config.train_config,
             early_stopping_patience=self.config.early_stopping_patience,
             device=self.device,
+            num_workers=6,
         )
         model.eval()
         profile_info.t_train = time.time() - ts_train

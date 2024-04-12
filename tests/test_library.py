@@ -24,7 +24,10 @@ from hifuku.script_utils import create_default_logger
 
 
 def _test_SolutionLibrarySampler(
-    domain: Type[DomainProtocol], train_with_encoder: bool, device: torch.device
+    domain: Type[DomainProtocol],
+    train_with_encoder: bool,
+    device: torch.device,
+    compress_matrix: bool,
 ):
     task_type = domain.task_type
     solcon = domain.solver_config
@@ -44,6 +47,8 @@ def _test_SolutionLibrarySampler(
         n_validation=1000,
         n_validation_inner=1,
         clamp_factor=1.5,
+        compress_matrix=compress_matrix,
+        train_with_encoder=train_with_encoder,
     )
 
     test_devices = [torch.device("cpu")]
@@ -173,13 +178,16 @@ if torch.cuda.is_available():
     device = [torch.device("cpu"), torch.device("cuda")]
 else:
     device = [torch.device("cpu")]  # in ci
-parameter_matrix = [(d, e, dev) for d in dom for e in encode for dev in device]
+parameter_matrix = [(d, e, dev, False) for d in dom for e in encode for dev in device]
+param = (DummyMeshDomain, True, torch.device("cpu"), True)
+parameter_matrix += [param]
 
 
-@pytest.mark.parametrize("domain, train_with_encoder, device", parameter_matrix)
-def test_SolutionLibrarySampler(domain, train_with_encoder, device):
-    _test_SolutionLibrarySampler(domain, train_with_encoder, device)
+@pytest.mark.parametrize("domain, train_with_encoder, device, compress_matrix", parameter_matrix)
+def test_SolutionLibrarySampler(domain, train_with_encoder, device, compress_matrix):
+    _test_SolutionLibrarySampler(domain, train_with_encoder, device, compress_matrix)
 
 
 if __name__ == "__main__":
-    _test_SolutionLibrarySampler(DummyDomain, False, torch.device("cpu"))
+    param = (DummyMeshDomain, True, torch.device("cpu"), True)
+    _test_SolutionLibrarySampler(*param)
