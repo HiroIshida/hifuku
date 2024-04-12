@@ -239,9 +239,6 @@ class SolutionLibrary:
         print("compling...")
         assert self.device.type == "cuda"
         if self.ae_model_shared is not None:
-            if isinstance(self.ae_model_shared, NullAutoEncoder):
-                msg = "jit compiling pure fully-connected layers somehow degrades performance..."
-                raise RuntimeError(msg)
 
             if isinstance(self.ae_model_shared, nn.Module):
                 n_grid = self.ae_model_shared.config.n_grid
@@ -266,7 +263,7 @@ class SolutionLibrary:
         for i in range(len(self.predictors)):
             traced = torch.jit.trace(self.predictors[i], (dummy_input,))
             self.predictors[i] = torch.jit.optimize_for_inference(traced)
-        print("done")
+        print("done. note that you must warm up the gpu by running the inference once")
         self.jit_compiled = True
 
     def _infer_cost(self, task: TaskBase) -> np.ndarray:
