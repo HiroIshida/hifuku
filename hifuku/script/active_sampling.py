@@ -4,7 +4,6 @@ import resource
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
-import numpy as np
 import psutil
 import torch
 import yaml
@@ -12,7 +11,6 @@ from mohou.trainer import TrainConfig
 
 from hifuku.core import LibrarySamplerConfig, SimpleSolutionLibrarySampler
 from hifuku.domain import select_domain
-from hifuku.neuralnet import NullAutoEncoder, PixelAutoEncoder
 from hifuku.script_utils import (
     create_default_logger,
     filter_warnings,
@@ -117,35 +115,6 @@ if __name__ == "__main__":
         mat = task.export_task_expression(use_matrix=True).get_matrix()
         n_grid: Optional[Literal[56, 112]] = mat.shape[0]
     ae_model = load_compatible_autoencoder(domain_name, use_pretrained_ae, n_grid)
-
-    if not isinstance(ae_model, NullAutoEncoder) and use_pretrained_ae:
-        # check if the autoencoder is properly trained
-        task = domain.task_type.sample()
-        expression = task.export_task_expression(use_matrix=True)
-        matrix = expression.get_matrix()
-        assert matrix is not None
-        world_mat_np = np.expand_dims(matrix, axis=(0, 1)).astype(float)
-        world_mat_torch = torch.from_numpy(world_mat_np).float().to(ae_model.get_device())
-        assert isinstance(ae_model, PixelAutoEncoder)
-        decoded = ae_model.decoder(ae_model.encoder(world_mat_torch))
-        mat_reconstructed = decoded.detach().cpu().squeeze().numpy()
-
-        # compare mesh and mesh_reconstructed side by side in matplotlib
-        # import matplotlib.pyplot as plt
-
-        # fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        # n_grid = ae_model.config.n_grid
-        # axes[0].imshow(mesh_np.reshape(n_grid, n_grid))
-        # axes[1].imshow(mesh_reconstructed.reshape(n_grid, n_grid))
-
-        # def close_plot_after_timeout(timeout):
-        #     plt.pause(timeout)
-        #     plt.close()
-
-        # # close automatically after 5 seconds
-        # t = threading.Thread(target=close_plot_after_timeout, args=(4,))
-        # t.start()
-        # plt.show()
 
     lib_sampler = SimpleSolutionLibrarySampler.initialize(
         domain.task_type,
