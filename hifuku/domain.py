@@ -15,7 +15,11 @@ from rpbench.articulated.pr2.jskfridge import (
     JskFridgeVerticalReachingTask,
     JskFridgeVerticalReachingTask2,
 )
-from rpbench.articulated.pr2.minifridge import FixedPR2MiniFridgeTask, PR2MiniFridgeTask
+from rpbench.articulated.pr2.minifridge import (
+    FixedPR2MiniFridgeTask,
+    PR2MiniFridgeTask,
+    PR2MiniFridgeVoxelTask,
+)
 from rpbench.interface import TaskBase
 from rpbench.two_dimensional.bubbly_world import (
     BubblyComplexMeshPointConnectTask,
@@ -44,7 +48,12 @@ from hifuku.datagen.batch_solver import (
     DistributedBatchTaskSolver,
     MultiProcessBatchTaskSolver,
 )
-from hifuku.neuralnet import AutoEncoderBase, NullAutoEncoder, PixelAutoEncoder
+from hifuku.neuralnet import (
+    AutoEncoderBase,
+    NullAutoEncoder,
+    PixelAutoEncoder,
+    VoxelAutoEncoder,
+)
 
 
 class DomainProtocol(Protocol):
@@ -144,6 +153,32 @@ class PR2MiniFridge_RRT8000(DomainProtocol):
     )
     auto_encoder_project_name = "PR2MiniFridge-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
+
+
+class PR2MiniFridgeVoxel_RRT500(DomainProtocol):
+    task_type = PR2MiniFridgeVoxelTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=500,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "PR2MiniFridge-VoxelAutoEncoder"
+    auto_encoder_type = VoxelAutoEncoder
+
+
+class PR2MiniFridgeVoxel_RRT2000(DomainProtocol):
+    task_type = PR2MiniFridgeVoxelTask
+    solver_type = OMPLSolver
+    solver_config = OMPLSolverConfig(
+        n_max_call=2000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "PR2MiniFridge-VoxelAutoEncoder"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 # class ClutteredFridgeRealistic_SQP(DomainProtocol):
@@ -519,6 +554,8 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         pr2_minifridge_rrt500 = PR2MiniFridge_RRT500
         pr2_minifridge_rrt2000 = PR2MiniFridge_RRT2000
         pr2_minifridge_rrt8000 = PR2MiniFridge_RRT8000
+        pr2_minifridge_voxel_rrt500 = PR2MiniFridgeVoxel_RRT500
+        pr2_minifridge_voxel_rrt2000 = PR2MiniFridgeVoxel_RRT2000
         jsk_fridge_sqp = JSKFridge_SQP
         jsk_fridge_rrt2000 = JSKFridge_RRT2000
         jsk_fridge_rrt5000 = JSKFridge_RRT5000
