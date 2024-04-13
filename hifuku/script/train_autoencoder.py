@@ -85,4 +85,4 @@ if __name__ == "__main__":
 
     tcache = TrainCache.from_model(model)
     config = TrainConfig(n_epoch=10000)
-    train(path, tcache, dataset, early_stopping_patience=100)
+    train(path, tcache, dataset, early_stopping_patience=100, num_workers=6)
