@@ -27,7 +27,7 @@ jobs:
                 python-version: ${{ matrix.python-version }}
             - name: install dep package
               run: |
-                  sudo apt-get update && sudo apt install libunwind-dev && sudo apt-get install libgoogle-glog-dev  # voxbloxpy
+                  sudo apt-get update && sudo apt install libunwind-dev && sudo apt-get install libgoogle-glog-dev libeigen3-dev # voxbloxpy
                   pip3 install ompl-thin --prefer-binary
                   pip3 install scikit-build
                   cd /tmp && git clone git@github.com:HiroIshida/scikit-motionplan.git && cd scikit-motionplan && pip3 install .
