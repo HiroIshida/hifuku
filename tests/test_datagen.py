@@ -77,10 +77,12 @@ def server():
 
 @lru_cache(maxsize=1)
 def compute_init_traj() -> Trajectory:
-    task = task_type.sample(standard=True)
-    res = task.solve_default()
-    assert res.traj is not None
-    return res.traj
+    for _ in range(20):
+        task = task_type.sample()
+        res = task.solve_default()
+        if res.traj is not None:
+            return res.traj
+    assert False
 
 
 def test_batch_solver_init_solutions():
