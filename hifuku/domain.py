@@ -1,8 +1,14 @@
 import time
+from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, Optional, Protocol, Type
 
 import tqdm
+from plainmp.ompl_solver import OMPLSolver as plainOMPLSolver
+from plainmp.ompl_solver import OMPLSolverConfig as plainOMPLSolverConfig
+from plainmp.ompl_solver import OMPLSolverResult as plainOMPLSolverResult
+from plainmp.problem import Problem
+from rpbench.articulated.fetch.tidyup_table import TidyupTableTask
 from rpbench.articulated.jaxon.below_table import (
     HumanoidTableClutteredReachingTask,
     HumanoidTableClutteredReachingTask2,
@@ -56,6 +62,25 @@ from hifuku.neuralnet import (
 )
 
 
+# plainmp => skmp adapter
+@dataclass
+class PlainOMPLSolverWrapper:
+    solver: plainOMPLSolver
+    problem: Optional[Problem]
+
+    @classmethod
+    def init(cls, config: plainOMPLSolverConfig):
+        return cls(plainOMPLSolver(config), None)
+
+    def setup(self, problem: Problem):
+        self.problem = problem
+
+    def solve(self, guess=None) -> plainOMPLSolverResult:
+        assert self.problem is not None
+        ret = self.solver.solve(self.problem, guess)
+        return ret
+
+
 class DomainProtocol(Protocol):
     task_type: ClassVar[Type[TaskBase]]
     solver_type: ClassVar[Type[AbstractScratchSolver]]
@@ -94,6 +119,19 @@ class DomainProtocol(Protocol):
     @classmethod
     def get_distributed_batch_sampler(cls, *args, **kwargs) -> DistributeBatchTaskSampler:
         return DistributeBatchTaskSampler(*args, **kwargs)
+
+
+class FetchTidyupTable(DomainProtocol):
+    task_type = TidyupTableTask
+    solver_type = PlainOMPLSolverWrapper
+    solver_config = plainOMPLSolverConfig(
+        n_max_call=1000,
+        n_max_satisfaction_trial=1,
+        expbased_planner_backend="ertconnect",
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "FetchTidyupTable-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
 
 
 class FixedPR2MiniFridge_SQP(DomainProtocol):
@@ -549,6 +587,7 @@ def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> f
 
 def select_domain(domain_name: str) -> Type[DomainProtocol]:
     class DomainCollection(Enum):
+        fetch_tidyup = FetchTidyupTable
         fixed_pr2_minifridge_sqp = FixedPR2MiniFridge_SQP
         pr2_minifridge_sqp = PR2MiniFridge_SQP
         pr2_minifridge_rrt500 = PR2MiniFridge_RRT500
