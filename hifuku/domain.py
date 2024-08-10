@@ -27,14 +27,21 @@ from rpbench.articulated.pr2.minifridge import (
     PR2MiniFridgeVoxelTask,
 )
 from rpbench.interface import TaskBase
-from rpbench.two_dimensional.bubbly_world import (
-    BubblyComplexMeshPointConnectTask,
-    BubblyEmptyMeshPointConnectTask,
-    BubblyModerateMeshPointConnectTask,
-    BubblySimpleMeshPointConnectTask,
-    DoubleIntegratorOptimizationSolver,
-    DoubleIntegratorPlanningConfig,
-)
+
+try:
+    from rpbench.two_dimensional.bubbly_world import (
+        BubblyComplexMeshPointConnectTask,
+        BubblyEmptyMeshPointConnectTask,
+        BubblyModerateMeshPointConnectTask,
+        BubblySimpleMeshPointConnectTask,
+        DoubleIntegratorOptimizationSolver,
+        DoubleIntegratorPlanningConfig,
+    )
+
+    DISBMP_AVAILABLE = True
+except ImportError:
+    DISBMP_AVAILABLE = False
+
 from rpbench.two_dimensional.dummy import (
     DummyConfig,
     DummyMeshTask,
@@ -494,48 +501,61 @@ class HumanoidTableClutteredRarmReaching2_SQP3_Domain(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
-class DoubleIntegratorBubblyEmpty_SQP(DomainProtocol):
-    task_type = BubblyEmptyMeshPointConnectTask
-    solver_type = DoubleIntegratorOptimizationSolver
-    solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=200,
-        n_max_call=5,
-    )
-    auto_encoder_project_name = "BubblyWorldEmpty-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
+if DISBMP_AVAILABLE:
 
+    class DoubleIntegratorBubblyEmpty_SQP(DomainProtocol):
+        task_type = BubblyEmptyMeshPointConnectTask
+        solver_type = DoubleIntegratorOptimizationSolver
+        solver_config = DoubleIntegratorPlanningConfig(
+            n_wp=200,
+            n_max_call=5,
+        )
+        auto_encoder_project_name = "BubblyWorldEmpty-AutoEncoder"
+        auto_encoder_type = PixelAutoEncoder
 
-class DoubleIntegratorBubblySimple_SQP(DomainProtocol):
-    task_type = BubblySimpleMeshPointConnectTask
-    solver_type = DoubleIntegratorOptimizationSolver
-    solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=200,
-        n_max_call=5,
-    )
-    auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
+    class DoubleIntegratorBubblySimple_SQP(DomainProtocol):
+        task_type = BubblySimpleMeshPointConnectTask
+        solver_type = DoubleIntegratorOptimizationSolver
+        solver_config = DoubleIntegratorPlanningConfig(
+            n_wp=200,
+            n_max_call=5,
+        )
+        auto_encoder_project_name = "BubblyWorldSimple-AutoEncoder"
+        auto_encoder_type = PixelAutoEncoder
 
+    class DoubleIntegratorBubblyModerate_SQP(DomainProtocol):
+        task_type = BubblyModerateMeshPointConnectTask
+        solver_type = DoubleIntegratorOptimizationSolver
+        solver_config = DoubleIntegratorPlanningConfig(
+            n_wp=200,
+            n_max_call=5,
+        )
+        auto_encoder_project_name = None
+        auto_encoder_type = PixelAutoEncoder
 
-class DoubleIntegratorBubblyModerate_SQP(DomainProtocol):
-    task_type = BubblyModerateMeshPointConnectTask
-    solver_type = DoubleIntegratorOptimizationSolver
-    solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=200,
-        n_max_call=5,
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = PixelAutoEncoder
+    class DoubleIntegratorBubblyComplex_SQP(DomainProtocol):
+        task_type = BubblyComplexMeshPointConnectTask
+        solver_type = DoubleIntegratorOptimizationSolver
+        solver_config = DoubleIntegratorPlanningConfig(
+            n_wp=200,
+            n_max_call=5,
+        )
+        auto_encoder_project_name = "BubblyWorldComplex-AutoEncoder"
+        auto_encoder_type = PixelAutoEncoder
 
+else:
 
-class DoubleIntegratorBubblyComplex_SQP(DomainProtocol):
-    task_type = BubblyComplexMeshPointConnectTask
-    solver_type = DoubleIntegratorOptimizationSolver
-    solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=200,
-        n_max_call=5,
-    )
-    auto_encoder_project_name = "BubblyWorldComplex-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
+    class DoubleIntegratorBubblyEmpty_SQP(DomainProtocol):
+        ...
+
+    class DoubleIntegratorBubblySimple_SQP(DomainProtocol):
+        ...
+
+    class DoubleIntegratorBubblyModerate_SQP(DomainProtocol):
+        ...
+
+    class DoubleIntegratorBubblyComplex_SQP(DomainProtocol):
+        ...
 
 
 class DummyDomain(DomainProtocol):
