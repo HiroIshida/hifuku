@@ -4,11 +4,9 @@ setup_requires = []
 
 install_requires = [
     "pyinstrument",
-    "voxbloxpy",
     "scikit-motionplan",
     "rpbench",
     "mohou",
-    "pyclustering",
     "threadpoolctl",
     "cmaes",
     "numba",
