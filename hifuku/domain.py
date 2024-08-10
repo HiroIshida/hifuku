@@ -133,7 +133,7 @@ class FetchTidyupTable(DomainProtocol):
     solver_type = PlainOMPLSolverWrapper
     solver_config = plainOMPLSolverConfig(
         n_max_call=1000,
-        n_max_satisfaction_trial=1,
+        n_max_ik_trial=1,
         expbased_planner_backend="ertconnect",
         ertconnect_eps=0.1,
     )
