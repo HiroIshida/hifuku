@@ -30,6 +30,8 @@ from rpbench.articulated.pr2.minifridge import (
 )
 from rpbench.interface import TaskBase
 
+from hifuku import is_plainmp_old
+
 try:
     from rpbench.two_dimensional.bubbly_world import (
         BubblyComplexMeshPointConnectTask,
