@@ -82,10 +82,10 @@ class PostHandler(BaseHTTPRequestHandler):
         ts = time.time()
         logging.info("request: {}".format(request))
         sampler = MultiProcessBatchTaskSampler[TaskT](request.n_process)
-        tasks = sampler.sample_batch(request.n_sample, request.pool)
+        tasks, n_trial_total = sampler.sample_batch(request.n_sample, request.pool)
         assert len(tasks) > 0
         elapsed_time = time.time() - ts
-        resp = SampleTaskResponse(tasks, elapsed_time)
+        resp = SampleTaskResponse(tasks, n_trial_total, elapsed_time)
         return resp
 
     def process_DetermineMarginsRequest(

@@ -568,6 +568,7 @@ class LibrarySamplerConfig:
     n_solution_candidate: int = 100
     n_difficult: int = 500
     early_stopping_patience: int = 10
+    sample_difficult_parallel: bool = False
 
     # experimental
     already_solvable_as_failure: bool = False
@@ -730,7 +731,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                     f"validation cache {validation_cache_path} must not exist in cold start. remove it"
                 )
             logger.info("start creating validation set")
-            tasks_validation = sampler.sample_batch(
+            tasks_validation, _ = sampler.sample_batch(
                 config.n_validation, TaskPool(task_type).as_predicated()
             )
             with validation_cache_path.open(mode="wb") as f:
@@ -978,7 +979,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 f"presampled {len(self.presampled_tasks_params)} tasks are not enough. populate more: {n_required}"
             )
             predicated_pool = self.task_pool.as_predicated()
-            tasks = self.sampler.sample_batch(n_required, predicated_pool)
+            tasks, _ = self.sampler.sample_batch(n_required, predicated_pool)
             self.presampled_tasks_params = np.concatenate([self.presampled_tasks_params, tasks])
             # save it to cache
             presample_cache_path = project_path / self.presampled_cache_file_name
@@ -1107,10 +1108,10 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         feasible_solutions: List[Trajectory] = []
         while True:
             logger.info("{} sample batch".format(prefix))
-            tasks1 = self.sampler.sample_batch(
+            tasks1, _ = self.sampler.sample_batch(
                 n_batch_little_difficult, predicated_pool_bit_difficult
             )
-            tasks2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
+            tasks2, _ = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
             assert tasks1.ndim == 2
             assert tasks2.ndim == 2
             tasks = np.concatenate([tasks1, tasks2], axis=0)
@@ -1134,25 +1135,33 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         self,
         n_sample: int,
         task_pool: TaskPool[TaskT],
-    ) -> Tuple[np.ndarray, np.ndarray]:
-
-        difficult_params_list: List[np.ndarray] = []
-        easy_params_list: List[np.ndarray] = []
-        with tqdm.tqdm(total=n_sample) as pbar:
-            while len(difficult_params_list) < n_sample:
-                logger.debug("try sampling difficutl task...")
-                task_param = next(task_pool)
-                task = self.task_type.from_task_param(task_param)
-                infer_res = self.library.infer(task)
-                cost = infer_res.cost
-                is_difficult = cost > self.solver_config.n_max_call
-                if is_difficult:
-                    logger.debug("sampled! number: {}".format(len(difficult_params_list)))
-                    difficult_params_list.append(task_param)
-                    pbar.update(1)
-                else:
-                    easy_params_list.append(task_param)
-        return np.array(difficult_params_list), np.array(easy_params_list)
+        sample_difficult_parallel: bool = False,
+    ) -> Tuple[np.ndarray, int]:
+        if sample_difficult_parallel:
+            pred = DifficultTaskPredicate(
+                task_pool.task_type, self.library, self.solver_config.n_max_call
+            )
+            task_pool_pred = task_pool.make_predicated2(pred)
+            return self.sampler.sample_batch(n_sample, task_pool_pred)
+        else:
+            difficult_params_list: List[np.ndarray] = []
+            easy_params_list: List[np.ndarray] = []
+            with tqdm.tqdm(total=n_sample) as pbar:
+                while len(difficult_params_list) < n_sample:
+                    logger.debug("try sampling difficutl task...")
+                    task_param = next(task_pool)
+                    task = self.task_type.from_task_param(task_param)
+                    infer_res = self.library.infer(task)
+                    cost = infer_res.cost
+                    is_difficult = cost > self.solver_config.n_max_call
+                    if is_difficult:
+                        logger.debug("sampled! number: {}".format(len(difficult_params_list)))
+                        difficult_params_list.append(task_param)
+                        pbar.update(1)
+                    else:
+                        easy_params_list.append(task_param)
+            n_trial_total = len(difficult_params_list) + len(easy_params_list)
+            return np.array(difficult_params_list), n_trial_total
 
     def _select_solution_candidates(
         self, candidates: List[Trajectory], task_params: np.ndarray
@@ -1201,10 +1210,9 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 difficult_params = np.array([next(self.task_pool) for _ in range(n_difficult)])
                 n_total = len(difficult_params)
             else:
-                difficult_params, easy_params = self._sample_difficult_tasks(
-                    n_difficult, self.task_pool
+                difficult_params, n_total = self._sample_difficult_tasks(
+                    n_difficult, self.task_pool, self.config.sample_difficult_parallel
                 )
-                n_total = len(difficult_params) + len(easy_params)
 
             best_solution, n_solved_max = self._select_solution_candidates(
                 solution_candidates, difficult_params

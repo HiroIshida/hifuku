@@ -109,6 +109,7 @@ class SampleTaskRequest(Generic[TaskT], MainRequest):
 @dataclass
 class SampleTaskResponse(MainResponse):
     task_params: np.ndarray
+    n_trial_total: int
     elapsed_time: float
 
     def ignore_fields(self) -> Tuple[str, ...]:

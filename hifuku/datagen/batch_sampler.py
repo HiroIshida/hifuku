@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from multiprocessing import get_context
 from pathlib import Path
-from typing import Generic, Optional, Tuple
+from typing import Generic, List, Optional, Tuple
 
 import numpy as np
 import threadpoolctl
@@ -18,6 +18,7 @@ import tqdm
 from hifuku.datagen.http_datagen.client import ClientBase
 from hifuku.datagen.http_datagen.request import (
     SampleTaskRequest,
+    SampleTaskResponse,
     http_connection,
     send_request,
 )
@@ -32,7 +33,9 @@ HostPortPair = Tuple[str, int]
 @dataclass
 class BatchTaskSampler(Generic[TaskT], ABC):
     @abstractmethod
-    def sample_batch(self, n_sample: int, pool: PredicatedTaskPool[TaskT]) -> np.ndarray:
+    def sample_batch(
+        self, n_sample: int, pool: PredicatedTaskPool[TaskT]
+    ) -> Tuple[np.ndarray, int]:
         ...
 
 
@@ -48,7 +51,9 @@ class MultiProcessBatchTaskSampler(BatchTaskSampler[TaskT]):
         self.n_process = n_process
         self.n_thread = n_thread
 
-    def sample_batch(self, n_sample: int, pool: PredicatedTaskPool[TaskT]) -> np.ndarray:
+    def sample_batch(
+        self, n_sample: int, pool: PredicatedTaskPool[TaskT]
+    ) -> Tuple[np.ndarray, int]:
         assert n_sample > 0
         n_process = min(self.n_process, n_sample)
 
@@ -58,15 +63,18 @@ class MultiProcessBatchTaskSampler(BatchTaskSampler[TaskT]):
             initargs=(pool, self.n_thread),
             mp_context=get_context("fork"),
         ) as executor:
-            tmp = list(
+            # left is task_params, right is n_trial
+            tmp: List[Tuple[TaskT, int]] = list(
                 tqdm.tqdm(
                     executor.map(self._process_pool_sample_task, range(n_sample)), total=n_sample
                 )
             )
-        params = np.array(tmp)
+        params = np.array([t[0] for t in tmp])
+        n_trial_sum = sum(t[1] for t in tmp)
+
         assert params.ndim == 2
         assert params.shape[0] == n_sample
-        return params
+        return params, n_trial_sum
 
     @staticmethod
     def _process_pool_setup(_pool: PredicatedTaskPool[TaskT], _n_thread: int):
@@ -79,15 +87,17 @@ class MultiProcessBatchTaskSampler(BatchTaskSampler[TaskT]):
         logger.debug("random seed set to {}".format(unique_seed))
 
     @staticmethod
-    def _process_pool_sample_task(_) -> TaskT:
+    def _process_pool_sample_task(_) -> Tuple[np.ndarray, int]:
         global pool, n_thread  # shared in the forked process
 
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             with num_torch_thread(n_thread):  # type: ignore
+                n_trial = 0
                 while True:
+                    n_trial += 1
                     task = next(pool)  # type: ignore
                     if task is not None:
-                        return task
+                        return task, n_trial
 
 
 class DistributeBatchTaskSampler(ClientBase[SampleTaskRequest], BatchTaskSampler[TaskT]):
@@ -101,11 +111,13 @@ class DistributeBatchTaskSampler(ClientBase[SampleTaskRequest], BatchTaskSampler
         file_path = tmp_path / str(uuid.uuid4())
         assert len(response.task_params) > 0
         with file_path.open(mode="wb") as f:
-            pickle.dump((response.task_params), f)
+            pickle.dump(response, f)
         logger.debug("saved to {}".format(file_path))
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
-    def sample_batch(self, n_sample: int, pool: PredicatedTaskPool[TaskT]) -> np.ndarray:
+    def sample_batch(
+        self, n_sample: int, pool: PredicatedTaskPool[TaskT]
+    ) -> Tuple[np.ndarray, int]:
         assert n_sample > 0
         n_sample_table = self.determine_assignment_per_server(n_sample)
 
@@ -131,11 +143,14 @@ class DistributeBatchTaskSampler(ClientBase[SampleTaskRequest], BatchTaskSampler
             for p in process_list:
                 p.join()
 
-            param_list = []
+            n_trial_total = 0
+            param_list: List[np.ndarray] = []
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
-                    param_list.extend(pickle.load(f))
+                    resp: SampleTaskResponse = pickle.load(f)
+                    param_list.extend(resp.task_params)
+                    n_trial_total += resp.n_trial_total
         params = np.array(param_list)
         assert params.ndim == 2
         assert params.shape[0] == n_sample
-        return params
+        return params, n_trial_total
