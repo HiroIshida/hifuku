@@ -106,6 +106,18 @@ class DistributeBatchTaskSampler(ClientBase[SampleTaskRequest], BatchTaskSampler
         logger.debug("send_and_recive_and_write finished on pid: {}".format(os.getpid()))
 
     def sample_batch(self, n_sample: int, pool: PredicatedTaskPool[TaskT]) -> np.ndarray:
+        # TODO: 2024/10/2: adhoc implementation for in hurry for the rebuttle deadline
+        # something wrong with the multiprocessing in server (memory leak?)
+        # and server shutdown after a while. so...
+        m_max = 1000000
+        n_send = n_sample // m_max
+        m_list = [m_max] * n_send + [n_sample % m_max] if n_sample % m_max > 0 else []
+        params_list = []
+        for m in m_list:
+            params_list.append(self._sample_batch(m, pool))
+        return np.concatenate(params_list)
+
+    def _sample_batch(self, n_sample: int, pool: PredicatedTaskPool[TaskT]) -> np.ndarray:
         assert n_sample > 0
         n_sample_table = self.determine_assignment_per_server(n_sample)
 
