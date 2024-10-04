@@ -145,6 +145,40 @@ def create_dataset_from_params_and_results(
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float = 2.0,
     compress_mesh: bool = False,
+    n_max: int = 2000000,
+) -> CostPredictorDataset:
+    n_param = len(task_params)
+    n_split = n_param // n_max + 1
+    indices_list = np.array_split(np.arange(n_param), n_split)
+    dataset_all = None
+    for indices in indices_list:
+        dataset = create_dataset_from_params_and_results_sub(
+            task_params[indices],
+            np.array(results)[indices],
+            solver_config,
+            task_type,
+            weights[indices] if weights is not None else None,
+            ae_model,
+            clamp_factor,
+            compress_mesh,
+        )
+        if dataset_all is None:
+            dataset_all = dataset
+        else:
+            dataset_all.add(dataset)
+            print(f"adding to dataset {len(dataset_all)}")
+    return dataset_all
+
+
+def create_dataset_from_params_and_results_sub(
+    task_params: np.ndarray,
+    results: List[ResultProtocol],
+    solver_config,
+    task_type: Type[TaskBase],
+    weights: Optional[Tensor],
+    ae_model: Optional[AutoEncoderBase],
+    clamp_factor: float = 2.0,
+    compress_mesh: bool = False,
 ) -> CostPredictorDataset:
 
     if ae_model is not None:  # meaning image is encoded to vector
@@ -157,6 +191,7 @@ def create_dataset_from_params_and_results(
     n_data = len(task_params)
 
     split_indices_list = np.array_split(np.arange(n_data), n_process)
+    split_indices_list = [indices for indices in split_indices_list if len(indices) > 0]
     task_params_list = [task_params[indices] for indices in split_indices_list]
     results_list = [list(np.array(results)[indices]) for indices in split_indices_list]
     if weights is None:
