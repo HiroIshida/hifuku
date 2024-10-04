@@ -240,6 +240,15 @@ class MultiProcessBatchTaskSolver(BatchTaskSolver[ConfigT, ResultT]):
                 problem = task.export_problem()
                 _solver.setup(problem)
                 result = _solver.solve(init_solution)
+
+                # DIRTY workaround! (2024/10/5) to reduce memory usage
+                # in dataset creation, result.traj is None is checked
+                # to determine the solver is failed or not. However, the
+                # result.traj takes much memory. Thus, we set it to
+                # np.empty((0)) to reduce memory usage but keep the
+                # same behavior.
+                if result.traj is not None:
+                    result.traj = Trajectory(np.empty((0)))
         return task_idx, result
 
 
