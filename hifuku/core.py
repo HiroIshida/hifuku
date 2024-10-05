@@ -568,6 +568,7 @@ class LibrarySamplerConfig:
     n_solution_candidate: int = 100
     n_difficult: int = 500
     early_stopping_patience: int = 10
+    use_cmaes: bool = True
 
     # experimental
     already_solvable_as_failure: bool = False
@@ -892,7 +893,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
 
         # solve the biases using cmaes if the library is not empty
         cmaes_result = None
-        if len(self.library.predictors) > 0:
+        if self.config.use_cmaes and len(self.library.predictors) > 0:
             logger.info("determine biases using cmaes")
             cma_std = self.solver_config.n_max_call * 0.5
             coverage_est_last = self.sampler_history.coverage_est_history[-1]
