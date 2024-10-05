@@ -28,6 +28,7 @@ from rpbench.two_dimensional.bubbly_world import (
     BubblySimpleMeshPointConnectTask,
     DoubleIntegratorOptimizationSolver,
     DoubleIntegratorPlanningConfig,
+    ParametricMazeTask1D,
 )
 from rpbench.two_dimensional.dummy import (
     DummyConfig,
@@ -456,6 +457,17 @@ class HumanoidTableClutteredRarmReaching2_SQP3_Domain(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
+class ParametricMazeTask1D_SQP(DomainProtocol):
+    task_type = ParametricMazeTask1D
+    solver_type = DoubleIntegratorOptimizationSolver
+    solver_config = DoubleIntegratorPlanningConfig(
+        n_wp=150,
+        n_max_call=10,
+    )
+    auto_encoder_project_name = None
+    auto_encoder_type = PixelAutoEncoder
+
+
 class DoubleIntegratorBubblyEmpty_SQP(DomainProtocol):
     task_type = BubblyEmptyMeshPointConnectTask
     solver_type = DoubleIntegratorOptimizationSolver
@@ -571,6 +583,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         humanoid_tcrr_sqp = HumanoidTableClutteredRarmReaching_SQP_Domain
         humanoid_tcrr2_sqp = HumanoidTableClutteredRarmReaching2_SQP_Domain
         humanoid_tcrr2_sqp3 = HumanoidTableClutteredRarmReaching2_SQP3_Domain
+        parametric_maze1d_sqp = ParametricMazeTask1D_SQP
         di_bubbly_moderate_sqp = DoubleIntegratorBubblyModerate_SQP
         di_bubbly_complex_sqp = DoubleIntegratorBubblyComplex_SQP
         di_bubbly_simple_sqp = DoubleIntegratorBubblySimple_SQP
