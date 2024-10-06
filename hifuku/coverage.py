@@ -9,6 +9,8 @@ import tqdm
 from cmaes import CMA
 from numba import jit
 
+from hifuku.extension import compute_coverage_and_fp_cpp
+
 logger = logging.getLogger(__name__)
 
 
@@ -185,6 +187,7 @@ def optimize_biases(
     cma_sigma: float,
     biases_guess: Optional[np.ndarray] = None,
     minimum_coverage: Optional[float] = None,
+    use_cpp: bool = True,
 ) -> Optional[OptimizeMarginsResult]:
 
     target_fp_rate_modified = target_fp_rate - 1e-3  # because penalty method is not tight
@@ -203,15 +206,39 @@ def optimize_biases(
     coverage_est = -np.inf
     fp_rate = -np.inf
 
-    realss = np.array([cr.reals for cr in aggregate_list], order="F")
-    estss = np.array([cr.ests for cr in aggregate_list], order="F")
+    if use_cpp:
+        realss = np.array([cr.reals for cr in aggregate_list]).transpose().flatten()
+        estss = np.array([cr.ests for cr in aggregate_list]).transpose().flatten()
+        n_path = len(aggregate_list)
+        n_mc = len(aggregate_list[0])
+    else:
+        realss = np.array([cr.reals for cr in aggregate_list], order="F")
+        estss = np.array([cr.ests for cr in aggregate_list], order="F")
 
     optimizer = CMA(mean=biases_guess, sigma=cma_sigma)
     for generation in tqdm.tqdm(range(1000)):
         solutions = []
         for _ in range(optimizer.population_size):
             x = optimizer.ask()
-            coverage_est, fp_rate = compute_coverage_and_fp_jit(x, realss, estss, threshold)
+
+            if use_cpp:
+                coverage_est_wrap = np.zeros(1)
+                fp_rate_wrap = np.zeros(1)
+                compute_coverage_and_fp_cpp(
+                    x,
+                    realss,
+                    estss,
+                    threshold,
+                    n_path,
+                    n_mc,
+                    coverage_est_wrap,
+                    fp_rate_wrap,
+                )
+                coverage_est = coverage_est_wrap[0]
+                fp_rate = fp_rate_wrap[0]
+            else:
+                coverage_est, fp_rate = compute_coverage_and_fp_jit(x, realss, estss, threshold)
+
             J = -coverage_est + 1e4 * max(fp_rate - target_fp_rate_modified, 0) ** 2
             solutions.append((x, J))
         optimizer.tell(solutions)
@@ -229,9 +256,25 @@ def optimize_biases(
         if optimizer.should_stop():
             break
 
-    coverage_est_cand, fp_rate_cand = compute_coverage_and_fp_jit(
-        best_biases, realss, estss, threshold
-    )
+    if use_cpp:
+        coverage_est_cand_wrap = np.zeros(1)
+        fp_rate_cand_wrap = np.zeros(1)
+        compute_coverage_and_fp_cpp(
+            best_biases,
+            realss,
+            estss,
+            threshold,
+            n_path,
+            n_mc,
+            coverage_est_cand_wrap,
+            fp_rate_cand_wrap,
+        )
+        coverage_est_cand = coverage_est_cand_wrap[0]
+        fp_rate_cand = fp_rate_cand_wrap[0]
+    else:
+        coverage_est_cand, fp_rate_cand = compute_coverage_and_fp_jit(
+            best_biases, realss, estss, threshold
+        )
     logger.info("[cma result] coverage: {}, fp: {}".format(coverage_est_cand, fp_rate_cand))
     if coverage_est_cand > minimum_coverage and fp_rate_cand < target_fp_rate:
         logger.info("cma result accepted")
