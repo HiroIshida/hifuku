@@ -358,6 +358,7 @@ class CostPredictor(ModelBase[CostPredictorConfig]):
 class AutoEncoderConfig(ModelConfigBase):
     dim_bottleneck: int = 200
     n_grid: Literal[56, 112] = 112
+    output_binary: bool = False
 
 
 VoxelAutoEncoderConfig = AutoEncoderConfig  # for backword compatibility TODO: remove this
@@ -407,7 +408,7 @@ class VoxelAutoEncoder(NeuralAutoEncoderBase):
         n_channel = 1
         # NOTE: DO NOT add bath normalization layer
         encoder_layers = [
-            nn.Conv3d(n_channel, 8, (3, 3, 2), padding=1, stride=(2, 2, 1)),
+            nn.Conv3d(n_channel, 8, (3, 3, 3), padding=1, stride=(2, 2, 2)),
             nn.ReLU(inplace=True),
             nn.Conv3d(8, 16, (3, 3, 3), padding=1, stride=(2, 2, 2)),
             nn.ReLU(inplace=True),
@@ -432,8 +433,10 @@ class VoxelAutoEncoder(NeuralAutoEncoderBase):
             nn.ReLU(inplace=True),
             nn.ConvTranspose3d(16, 8, 4, padding=1, stride=2),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose3d(8, 1, (4, 4, 3), padding=1, stride=(2, 2, 1)),
+            nn.ConvTranspose3d(8, 1, (4, 4, 4), padding=1, stride=(2, 2, 2)),
         ]
+        if config.output_binary:
+            decoder_layers.append(nn.Sigmoid())
         self.decoder = nn.Sequential(*decoder_layers)
 
 

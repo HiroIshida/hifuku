@@ -1,33 +1,37 @@
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from typing import List
 
 import numpy as np
 import threadpoolctl
 import torch
+import tqdm
 from mohou.file import get_project_path
 from mohou.trainer import TrainCache, TrainConfig, train
-from rpbench.articulated.pr2.minifridge import PR2MiniFridgeTask
+from rpbench.articulated.world.jail import JailWorld
 from torch.utils.data import Dataset
 
-from hifuku.domain import PR2MiniFridgeVoxel_RRT2000
 from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
-from hifuku.pool import TaskPool
 from hifuku.script_utils import create_default_logger
+
+
+def sample_task_param(_):
+    return JailWorld.sample().serialize()
 
 
 @dataclass
 class MyDataset(Dataset):
-    task_params: np.ndarray
+    task_params: List[np.ndarray]
 
-    def __init__(self, n_sample: int, distributed: bool = False):
-        # sample tasks beforehand as it is too time-consuming to be done in the training loop
-        domain = PR2MiniFridgeVoxel_RRT2000
-        if distributed:
-            sampler = domain.get_distributed_batch_sampler()
-        else:
-            sampler = domain.get_multiprocess_batch_sampler()
-        pool = TaskPool(domain.task_type)
-        task_params = sampler.sample_batch(n_sample, pool)
-        self.task_params = task_params
+    def __init__(self, n_sample: int):
+        with ProcessPoolExecutor() as executor:
+            self.task_params = list(
+                tqdm.tqdm(
+                    executor.map(sample_task_param, range(n_sample)),
+                    total=n_sample,
+                    desc="Sampling task parameters",
+                )
+            )
 
     def __len__(self) -> int:
         return len(self.task_params)
@@ -35,23 +39,20 @@ class MyDataset(Dataset):
     def __getitem__(self, idx) -> torch.Tensor:
         with threadpoolctl.threadpool_limits(limits=1, user_api="blas"):
             param = self.task_params[idx]
-            task = PR2MiniFridgeTask.from_task_param(param)
-            vmap = task.world.create_voxelmap()
+            world = JailWorld.deserialize(param)
+            vmap = world.voxels.to_3darray()
             vmap = vmap[np.newaxis, :]
         return torch.from_numpy(vmap).float()
 
 
 if __name__ == "__main__":
-    dataset = MyDataset(n_sample=50000, distributed=True)
-    domain = PR2MiniFridgeVoxel_RRT2000
-    pp = get_project_path(domain.auto_encoder_project_name)
-    warm = True
-    if warm:
-        tcache = TrainCache.load_latest(pp, VoxelAutoEncoder)
-        tconfig = TrainConfig(n_epoch=150)
-    else:
-        model = VoxelAutoEncoder(VoxelAutoEncoderConfig())
-        tcache = TrainCache.from_model(model)
-        tconfig = TrainConfig(n_epoch=300)
+    dataset = MyDataset(n_sample=3000)
+    pp = get_project_path("unko")
+    model = VoxelAutoEncoder(VoxelAutoEncoderConfig(n_grid=56, output_binary=True))
+    dummy_input = torch.randn(1, 1, 56, 56, 56)
+    out = model(dummy_input)
+
+    tcache = TrainCache.from_model(model)
+    tconfig = TrainConfig(n_epoch=300)
     logger = create_default_logger(pp, "train_voxel_autoencoder")
     train(pp, tcache, dataset, tconfig, num_workers=10)
