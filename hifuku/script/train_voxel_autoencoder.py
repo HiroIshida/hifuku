@@ -1,3 +1,6 @@
+import datetime
+import hashlib
+import os
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from typing import List
@@ -15,16 +18,23 @@ from hifuku.neuralnet import VoxelAutoEncoder, VoxelAutoEncoderConfig
 from hifuku.script_utils import create_default_logger
 
 
+def setup_worker():
+    pid = os.getpid()
+    now = datetime.datetime.now()
+    seed = pid + now.second + now.microsecond
+    np.random.seed(seed)
+
+
 def sample_task_param(_):
     return JailWorld.sample().serialize()
 
 
 @dataclass
 class MyDataset(Dataset):
-    task_params: List[np.ndarray]
+    task_params: List[bytes]
 
     def __init__(self, n_sample: int):
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(10, initializer=setup_worker) as executor:
             self.task_params = list(
                 tqdm.tqdm(
                     executor.map(sample_task_param, range(n_sample)),
@@ -32,6 +42,12 @@ class MyDataset(Dataset):
                     desc="Sampling task parameters",
                 )
             )
+        # check hash and check that no overlap
+        hashes = set()
+        for param in self.task_params:
+            h = hashlib.sha256(param).digest()
+            assert h not in hashes
+            hashes.add(h)
 
     def __len__(self) -> int:
         return len(self.task_params)
@@ -53,6 +69,6 @@ if __name__ == "__main__":
     out = model(dummy_input)
 
     tcache = TrainCache.from_model(model)
-    tconfig = TrainConfig(n_epoch=300)
+    tconfig = TrainConfig(n_epoch=10000)
     logger = create_default_logger(pp, "train_voxel_autoencoder")
-    train(pp, tcache, dataset, tconfig, num_workers=10)
+    train(pp, tcache, dataset, early_stopping_patience=100, num_workers=6)
