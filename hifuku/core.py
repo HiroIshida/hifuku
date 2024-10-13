@@ -29,7 +29,13 @@ import tqdm
 from mohou.trainer import TrainCache, TrainConfig, train
 from mohou.utils import detect_device
 from ompl import set_ompl_random_seed
-from rpbench.interface import AbstractTaskSolver, TaskBase
+from rpbench.interface import (
+    AbstractTaskSolver,
+    TaskBase,
+    concat_param_seq,
+    pack_param_seq,
+    shuffle_param_seq,
+)
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
@@ -755,10 +761,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                     f"presample cache {presample_cache_path} must not exist in cold start. remove it"
                 )
             task_params = next(task_pool)  # sample once to get the shape
-            presampled_task_params = np.array([task_params])
-
-        assert isinstance(presampled_task_params, np.ndarray)
-        assert presampled_task_params.ndim == 2
+            presampled_task_params = pack_param_seq([task_params])
 
         logger.info("library sampler config: {}".format(config))
         return cls(
@@ -979,7 +982,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
             )
             predicated_pool = self.task_pool.as_predicated()
             tasks = self.sampler.sample_batch(n_required, predicated_pool)
-            self.presampled_tasks_params = np.concatenate([self.presampled_tasks_params, tasks])
+            self.presampled_tasks_params = concat_param_seq(self.presampled_tasks_params, tasks)
             # save it to cache
             presample_cache_path = project_path / self.presampled_cache_file_name
             with presample_cache_path.open(mode="wb") as f:
@@ -1111,14 +1114,12 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 n_batch_little_difficult, predicated_pool_bit_difficult
             )
             tasks2 = self.sampler.sample_batch(n_batch_difficult, predicated_pool_difficult)
-            assert tasks1.ndim == 2
-            assert tasks2.ndim == 2
-            tasks = np.concatenate([tasks1, tasks2], axis=0)
+            tasks = concat_param_seq(tasks1, tasks2)
 
             # NOTE: shuffling is required asin the following sectino, for loop is existed
             # as soon as number of candidates exceeds n_sample
             # we need to "mixutre" bit-difficult and difficult tasks
-            np.random.shuffle(tasks)
+            tasks = shuffle_param_seq(tasks)
 
             logger.info("{} solve batch".format(prefix))
             results = self.solver.solve_batch(tasks, None, use_default_solver=True)
@@ -1152,7 +1153,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                     pbar.update(1)
                 else:
                     easy_params_list.append(task_param)
-        return np.array(difficult_params_list), np.array(easy_params_list)
+        return pack_param_seq(difficult_params_list), pack_param_seq(easy_params_list)
 
     def _select_solution_candidates(
         self, candidates: List[Trajectory], task_params: np.ndarray
@@ -1164,7 +1165,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         n_cand = len(candidates)
         for cand in candidates:
             candidates_repeated.extend([cand] * n_task)
-        tasks_repeated = np.array(list(task_params) * n_cand)
+        tasks_repeated = pack_param_seq(list(task_params) * n_cand)
         results = self.solver.solve_batch(tasks_repeated, candidates_repeated)
         assert len(results) == n_task * n_cand
 
@@ -1198,7 +1199,9 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
 
             logger.info("sample difficult tasks")
             if self.at_first_iteration():
-                difficult_params = np.array([next(self.task_pool) for _ in range(n_difficult)])
+                difficult_params = pack_param_seq(
+                    [next(self.task_pool) for _ in range(n_difficult)]
+                )
                 n_total = len(difficult_params)
             else:
                 difficult_params, easy_params = self._sample_difficult_tasks(

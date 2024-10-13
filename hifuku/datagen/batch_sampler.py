@@ -14,6 +14,7 @@ from typing import Generic, Optional, Tuple
 import numpy as np
 import threadpoolctl
 import tqdm
+from rpbench.interface import pack_param_seq
 
 from hifuku.datagen.http_datagen.client import ClientBase
 from hifuku.datagen.http_datagen.request import (
@@ -63,9 +64,8 @@ class MultiProcessBatchTaskSampler(BatchTaskSampler[TaskT]):
                     executor.map(self._process_pool_sample_task, range(n_sample)), total=n_sample
                 )
             )
-        params = np.array(tmp)
-        assert params.ndim == 2
-        assert params.shape[0] == n_sample
+        params = pack_param_seq(tmp)
+        assert len(params) == n_sample
         return params
 
     @staticmethod
@@ -135,7 +135,6 @@ class DistributeBatchTaskSampler(ClientBase[SampleTaskRequest], BatchTaskSampler
             for file_path in td_path.iterdir():
                 with file_path.open(mode="rb") as f:
                     param_list.extend(pickle.load(f))
-        params = np.array(param_list)
-        assert params.ndim == 2
-        assert params.shape[0] == n_sample
+        params = pack_param_seq(param_list)
+        assert len(params) == n_sample
         return params
