@@ -4,7 +4,7 @@ from hifuku.pool import TaskPool
 
 
 def test_simple_pool():
-    pool = TaskPool(DummyTask, 10)
+    pool = TaskPool(DummyTask)
 
     for _ in range(5):
         next(pool)
@@ -14,5 +14,6 @@ def test_simple_pool():
         assert next(pool_pred) is not None
 
     pool_pred = pool.make_predicated(lambda x: False, 40)
+    pool_pred.timeout = 0.2
     for _ in range(5):
         assert next(pool_pred) is None

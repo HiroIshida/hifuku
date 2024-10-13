@@ -42,7 +42,7 @@ def test_network():
 
     for model in [model1, model2, model3]:
         n_batch = 10
-        mesh = torch.zeros(n_batch, 1, 56, 56, 28)
+        mesh = torch.zeros(n_batch, 1, 56, 56, 56)
         mesh_encoded = ae.encoder(mesh)
         descriptions = torch.zeros(n_batch, 12)
         nits = torch.zeros(n_batch, 1)
