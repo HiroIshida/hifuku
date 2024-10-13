@@ -364,6 +364,25 @@ class AutoEncoderConfig(ModelConfigBase):
 VoxelAutoEncoderConfig = AutoEncoderConfig  # for backword compatibility TODO: remove this
 
 
+class ReconstructionLossMixin:
+    def loss(self, mesh: Tensor) -> LossDict:
+        self.loss_called = True
+        encoded = self.encoder(mesh)
+        reconst = self.decoder(encoded)
+        loss = nn.MSELoss()(mesh, reconst)
+        return LossDict({"reconstruction": loss})
+
+
+class ReferenceComparisonMixin:
+    def loss(self, sample) -> LossDict:
+        mesh, against = sample
+        self.loss_called = True
+        encoded = self.encoder(mesh)
+        reconst = self.decoder(encoded)
+        loss = nn.MSELoss()(against, reconst)
+        return LossDict({"comparison": loss})
+
+
 class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
     encoder: nn.Sequential
     decoder: nn.Sequential
@@ -387,13 +406,6 @@ class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
     def forward(self, mesh: Tensor) -> Tensor:
         return self.encoder(mesh)
 
-    def loss(self, mesh: Tensor) -> LossDict:
-        self.loss_called = True
-        encoded = self.encoder(mesh)
-        reconst = self.decoder(encoded)
-        loss = nn.MSELoss()(mesh, reconst)
-        return LossDict({"reconstruction": loss})
-
     @property
     def n_bottleneck(self) -> int:
         return self.config.dim_bottleneck
@@ -403,7 +415,7 @@ class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
         ...
 
 
-class VoxelAutoEncoder(NeuralAutoEncoderBase):
+class VoxelAutoEncoder(ReferenceComparisonMixin, NeuralAutoEncoderBase):
     def _setup_from_config(self, config: AutoEncoderConfig) -> None:
         n_channel = 1
         # NOTE: DO NOT add bath normalization layer
@@ -440,7 +452,7 @@ class VoxelAutoEncoder(NeuralAutoEncoderBase):
         self.decoder = nn.Sequential(*decoder_layers)
 
 
-class PixelAutoEncoder(NeuralAutoEncoderBase):
+class PixelAutoEncoder(ReconstructionLossMixin, NeuralAutoEncoderBase):
     def _setup_from_config(self, config: AutoEncoderConfig) -> None:
         if config.n_grid == 112:
             n_channel = 1
