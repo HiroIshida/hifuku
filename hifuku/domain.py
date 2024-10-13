@@ -10,6 +10,7 @@ from plainmp.ompl_solver import OMPLSolver as plainOMPLSolver
 from plainmp.ompl_solver import OMPLSolverConfig as plainOMPLSolverConfig
 from plainmp.ompl_solver import OMPLSolverResult as plainOMPLSolverResult
 from plainmp.problem import Problem
+from rpbench.articulated.fetch.jail_insert import JailInsertTask
 from rpbench.articulated.fetch.tidyup_table import TidyupTableTask, TidyupTableTask2
 from rpbench.articulated.jaxon.below_table import (
     HumanoidTableClutteredReachingTask,
@@ -157,6 +158,17 @@ class FetchTidyupTable2(DomainProtocol):
     solver_config = plainOMPLSolverConfig(**kwargs)
     auto_encoder_project_name = "FetchTidyupTable-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
+
+
+class FetchJailInsert(DomainProtocol):
+    task_type = JailInsertTask
+    solver_type = PlainOMPLSolverWrapper
+    kwargs = {"n_max_call": 50000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1}
+    if is_plainmp_old():
+        kwargs["expbased_planner_backend"] = "ertconnect"
+    solver_config = plainOMPLSolverConfig(**kwargs)
+    auto_encoder_project_name = "FetchJailInsert-AutoEncoder"
+    auto_encoder_type = VoxelAutoEncoder
 
 
 class FixedPR2MiniFridge_SQP(DomainProtocol):
@@ -625,6 +637,7 @@ def measure_time_per_call(domain: Type[DomainProtocol], n_sample: int = 10) -> f
 
 def select_domain(domain_name: str) -> Type[DomainProtocol]:
     class DomainCollection(Enum):
+        fetch_jail = FetchJailInsert
         fetch_tidyup = FetchTidyupTable
         fetch_tidyup2 = FetchTidyupTable2
         fixed_pr2_minifridge_sqp = FixedPR2MiniFridge_SQP
