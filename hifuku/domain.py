@@ -163,7 +163,7 @@ class FetchTidyupTable2(DomainProtocol):
 class FetchJailInsert(DomainProtocol):
     task_type = JailInsertTask
     solver_type = PlainOMPLSolverWrapper
-    kwargs = {"n_max_call": 50000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1}
+    kwargs = {"n_max_call": 50000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1, "timeout": 5.0}
     if is_plainmp_old():
         kwargs["expbased_planner_backend"] = "ertconnect"
     solver_config = plainOMPLSolverConfig(**kwargs)
@@ -174,7 +174,7 @@ class FetchJailInsert(DomainProtocol):
 class FetchConwayJailInsert(DomainProtocol):
     task_type = ConwayJailInsertTask
     solver_type = PlainOMPLSolverWrapper
-    kwargs = {"n_max_call": 50000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1}
+    kwargs = {"n_max_call": 50000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1, "timeout": 5.0}
     if is_plainmp_old():
         kwargs["expbased_planner_backend"] = "ertconnect"
     solver_config = plainOMPLSolverConfig(**kwargs)
