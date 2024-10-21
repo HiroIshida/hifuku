@@ -9,6 +9,7 @@ import tqdm
 from plainmp.ompl_solver import OMPLSolver as plainOMPLSolver
 from plainmp.ompl_solver import OMPLSolverConfig as plainOMPLSolverConfig
 from plainmp.ompl_solver import OMPLSolverResult as plainOMPLSolverResult
+from plainmp.ompl_solver import TerminateState
 from plainmp.problem import Problem
 from rpbench.articulated.fetch.jail_insert import ConwayJailInsertTask, JailInsertTask
 from rpbench.articulated.fetch.tidyup_table import TidyupTableTask, TidyupTableTask2
@@ -73,16 +74,24 @@ from hifuku.neuralnet import (
     VoxelAutoEncoder,
 )
 
-
 # plainmp => skmp adapter
+
+
+class PlainOMPLResultWrapper(plainOMPLSolverResult):
+    @classmethod
+    def abnormal(cls) -> "PlainOMPLResultWrapper":
+        return cls(None, None, -1, TerminateState.FAIL_SATISFACTION)
+
+
 @dataclass
 class PlainOMPLSolverWrapper:
     solver: plainOMPLSolver
     problem: Optional[Problem]
+    config: plainOMPLSolverConfig
 
     @classmethod
     def init(cls, config: plainOMPLSolverConfig):
-        return cls(plainOMPLSolver(config), None)
+        return cls(plainOMPLSolver(config), None, config)
 
     def setup(self, problem: Problem):
         self.problem = problem
@@ -91,6 +100,9 @@ class PlainOMPLSolverWrapper:
         assert self.problem is not None
         ret = self.solver.solve(self.problem, guess)
         return ret
+
+    def get_result_type(self) -> "Type[PlainOMPLResultWrapper]":
+        return PlainOMPLResultWrapper
 
 
 class DomainProtocol(Protocol):

@@ -58,6 +58,8 @@ from hifuku.neuralnet import (
     CostPredictorWithEncoder,
     CostPredictorWithEncoderConfig,
     NullAutoEncoder,
+    PixelAutoEncoder,
+    VoxelAutoEncoder,
     create_dataset_from_params_and_results,
 )
 from hifuku.pool import TaskPool, TaskT
@@ -248,7 +250,10 @@ class SolutionLibrary:
 
             if isinstance(self.ae_model_shared, nn.Module):
                 n_grid = self.ae_model_shared.config.n_grid
-                dummy_input = torch.rand(1, 1, n_grid, n_grid).cuda()
+                if isinstance(self.ae_model_shared, PixelAutoEncoder):
+                    dummy_input = torch.rand(1, 1, n_grid, n_grid).cuda()
+                elif isinstance(self.ae_model_shared, VoxelAutoEncoder):
+                    dummy_input = torch.rand(1, 1, n_grid, n_grid, n_grid).cuda()
                 traced = torch.jit.trace(self.ae_model_shared.eval(), (dummy_input,))
                 self.ae_model_shared = torch.jit.optimize_for_inference(traced)
 
