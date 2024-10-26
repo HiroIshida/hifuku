@@ -33,6 +33,7 @@ from rpbench.two_dimensional.bubbly_world import (
     ParametricMazeTask3D,
     ParametricMazeTask4D,
     ParametricMazeTask5D,
+    ParametricMazeSpecialTask
 )
 from rpbench.two_dimensional.dummy import (
     DummyConfig,
@@ -510,6 +511,17 @@ class ParametricMazeTask5D_SQP(DomainProtocol):
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
         n_wp=750,
+        n_max_call=10,
+    )
+    auto_encoder_project_name = None
+    auto_encoder_type = NullAutoEncoder
+
+
+class ParametricMazeTask4D_SQP(DomainProtocol):
+    task_type = ParametricMazeSpecialTask
+    solver_type = DoubleIntegratorOptimizationSolver
+    solver_config = DoubleIntegratorPlanningConfig(
+        n_wp=600,
         n_max_call=10,
     )
     auto_encoder_project_name = None
