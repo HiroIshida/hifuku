@@ -139,5 +139,10 @@ if __name__ == "__main__":
 
         sampling_successful = lib_sampler.step_active_sampling()
 
+        latest_est = lib_sampler.sampler_history.coverage_est_history[-1]
+        if latest_est > 0.98:
+            logger.info("coverage > 0.98, break")
+            break
+
     p_watchdog.terminate()
     p_watchdog.join()
