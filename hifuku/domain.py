@@ -565,7 +565,7 @@ class ParametricMazeTask5D_SQP(DomainProtocol):
     auto_encoder_type = NullAutoEncoder
 
 
-class ParametricMazeTask4D_SQP(DomainProtocol):
+class ParametricMazeSpecialTask_SQP(DomainProtocol):
     task_type = ParametricMazeSpecialTask
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
@@ -696,6 +696,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         parametric_maze3d_sqp = ParametricMazeTask3D_SQP
         parametric_maze4d_sqp = ParametricMazeTask4D_SQP
         parametric_maze5d_sqp = ParametricMazeTask5D_SQP
+        parametric_maze_special_sqp = ParametricMazeSpecialTask_SQP
         parametric_circles1d_sqp = ParametricCirclesTask1D_SQP
         parametric_circles2d_sqp = ParametricCirclesTask2D_SQP
         parametric_circles3d_sqp = ParametricCirclesTask3D_SQP
