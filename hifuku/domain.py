@@ -470,7 +470,7 @@ class ParametricCirclesTask1D_SQP(DomainProtocol):
     task_type = ParametricCirclesTask1D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=150,
+        n_wp=600,
         n_max_call=10,
     )
     auto_encoder_project_name = None
@@ -481,7 +481,7 @@ class ParametricCirclesTask2D_SQP(DomainProtocol):
     task_type = ParametricCirclesTask2D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=300,
+        n_wp=600,
         n_max_call=10,
     )
     auto_encoder_project_name = None
@@ -492,7 +492,7 @@ class ParametricCirclesTask3D_SQP(DomainProtocol):
     task_type = ParametricCirclesTask3D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=450,
+        n_wp=600,
         n_max_call=10,
     )
     auto_encoder_project_name = None
