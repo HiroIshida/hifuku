@@ -37,7 +37,6 @@ from rpbench.two_dimensional.bubbly_world import (
     ParametricMazeTask2D,
     ParametricMazeTask3D,
     ParametricMazeTask4D,
-    ParametricMazeTask5D,
 )
 from rpbench.two_dimensional.dummy import (
     DummyConfig,
@@ -471,7 +470,7 @@ class ParametricCirclesTask1D_SQP(DomainProtocol):
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
         n_wp=600,
-        n_max_call=10,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -482,7 +481,7 @@ class ParametricCirclesTask2D_SQP(DomainProtocol):
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
         n_wp=600,
-        n_max_call=10,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -493,7 +492,7 @@ class ParametricCirclesTask3D_SQP(DomainProtocol):
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
         n_wp=600,
-        n_max_call=10,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -504,7 +503,7 @@ class ParametricCirclesTask4D_SQP(DomainProtocol):
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
         n_wp=600,
-        n_max_call=10,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -514,8 +513,8 @@ class ParametricMazeTask1D_SQP(DomainProtocol):
     task_type = ParametricMazeTask1D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=150,
-        n_max_call=10,
+        n_wp=600,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -525,8 +524,8 @@ class ParametricMazeTask2D_SQP(DomainProtocol):
     task_type = ParametricMazeTask2D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=300,
-        n_max_call=10,
+        n_wp=600,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -536,8 +535,8 @@ class ParametricMazeTask3D_SQP(DomainProtocol):
     task_type = ParametricMazeTask3D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=450,
-        n_max_call=10,
+        n_wp=600,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -548,18 +547,7 @@ class ParametricMazeTask4D_SQP(DomainProtocol):
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
         n_wp=600,
-        n_max_call=10,
-    )
-    auto_encoder_project_name = None
-    auto_encoder_type = NullAutoEncoder
-
-
-class ParametricMazeTask5D_SQP(DomainProtocol):
-    task_type = ParametricMazeTask5D
-    solver_type = DoubleIntegratorOptimizationSolver
-    solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=750,
-        n_max_call=10,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -570,7 +558,7 @@ class ParametricMazeSpecialTask_SQP(DomainProtocol):
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
         n_wp=600,
-        n_max_call=10,
+        n_max_call=5,
     )
     auto_encoder_project_name = None
     auto_encoder_type = NullAutoEncoder
@@ -695,7 +683,6 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         parametric_maze2d_sqp = ParametricMazeTask2D_SQP
         parametric_maze3d_sqp = ParametricMazeTask3D_SQP
         parametric_maze4d_sqp = ParametricMazeTask4D_SQP
-        parametric_maze5d_sqp = ParametricMazeTask5D_SQP
         parametric_maze_special_sqp = ParametricMazeSpecialTask_SQP
         parametric_circles1d_sqp = ParametricCirclesTask1D_SQP
         parametric_circles2d_sqp = ParametricCirclesTask2D_SQP
