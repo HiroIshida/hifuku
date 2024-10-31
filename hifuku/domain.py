@@ -469,7 +469,7 @@ class ParametricCirclesTask1D_SQP(DomainProtocol):
     task_type = ParametricCirclesTask1D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=600,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
@@ -480,7 +480,7 @@ class ParametricCirclesTask2D_SQP(DomainProtocol):
     task_type = ParametricCirclesTask2D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=600,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
@@ -491,7 +491,7 @@ class ParametricCirclesTask3D_SQP(DomainProtocol):
     task_type = ParametricCirclesTask3D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=600,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
@@ -502,7 +502,7 @@ class ParametricCirclesTask4D_SQP(DomainProtocol):
     task_type = ParametricCirclesTask4D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=600,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
@@ -513,7 +513,7 @@ class ParametricMazeTask1D_SQP(DomainProtocol):
     task_type = ParametricMazeTask1D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=1000,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
@@ -524,7 +524,7 @@ class ParametricMazeTask2D_SQP(DomainProtocol):
     task_type = ParametricMazeTask2D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=1000,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
@@ -535,7 +535,7 @@ class ParametricMazeTask3D_SQP(DomainProtocol):
     task_type = ParametricMazeTask3D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=1000,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
@@ -546,7 +546,7 @@ class ParametricMazeTask4D_SQP(DomainProtocol):
     task_type = ParametricMazeTask4D
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=1000,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
@@ -557,7 +557,7 @@ class ParametricMazeSpecialTask_SQP(DomainProtocol):
     task_type = ParametricMazeSpecialTask
     solver_type = DoubleIntegratorOptimizationSolver
     solver_config = DoubleIntegratorPlanningConfig(
-        n_wp=1000,
+        n_wp=200,
         n_max_call=5,
     )
     auto_encoder_project_name = None
