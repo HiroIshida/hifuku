@@ -96,7 +96,10 @@ class PlainOMPLSolverWrapper:
     def setup(self, problem: Problem):
         self.problem = problem
 
-    def solve(self, guess=None) -> plainOMPLSolverResult:
+    def solve(self, guess=None) -> PlainOMPLResultWrapper:
+        return self._solve(guess)
+
+    def _solve(self, guess=None) -> plainOMPLSolverResult:
         assert self.problem is not None
         ret = self.solver.solve(self.problem, guess)
         return ret
