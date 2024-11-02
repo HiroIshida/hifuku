@@ -39,6 +39,7 @@ from rpbench.interface import (
 from skmp.solver.interface import AbstractScratchSolver, ConfigT, ResultT
 from skmp.trajectory import Trajectory
 
+from hifuku.batch_network import BatchFCN
 from hifuku.coverage import RealEstAggregate, optimize_latest_bias
 from hifuku.datagen import (
     BatchBiasesOptimizerBase,
@@ -193,6 +194,7 @@ class SolutionLibrary:
     uuidval: str
     meta_data: Dict
     jit_compiled: bool = False
+    batch_predictor: Optional[Callable] = None
 
     def __post_init__(self):
         if self.ae_model_shared is not None:
@@ -243,7 +245,7 @@ class SolutionLibrary:
             pred: CostPredictorWithEncoder = self.predictors[0]  # type: ignore[assignment]
             return pred.device
 
-    def jit_compile(self) -> None:
+    def jit_compile(self, batch_predictor: bool = False) -> None:
         print("compling...")
         assert self.device.type == "cuda"
         if self.ae_model_shared is not None:
@@ -271,9 +273,41 @@ class SolutionLibrary:
             vec_input = torch.rand(1, dim_vector)
             dummy_input = (image_input.cuda(), vec_input.cuda())
 
-        for i in range(len(self.predictors)):
-            traced = torch.jit.trace(self.predictors[i], (dummy_input,))
-            self.predictors[i] = torch.jit.optimize_for_inference(traced)
+        if batch_predictor:
+            linear_list = []
+            expander_list = []
+            for pred in self.predictors:
+                linear_list.append(pred.linears)
+                expander_list.append(pred.description_expand_linears)
+            fcn_linears_batch = BatchFCN(linear_list).cuda()
+            fcn_expanders_batch = BatchFCN(expander_list).cuda()
+
+            class Tmp(nn.Module):
+                def __init__(self, fcn_linears, fcn_expanders, n):
+                    super().__init__()
+                    self.fcn_linears = fcn_linears
+                    self.fcn_expanders = fcn_expanders
+                    self.n = n
+
+                def forward(self, bottleneck, descriptor):
+                    expanded = self.fcn_expanders(descriptor)
+                    encoded = bottleneck.unsqueeze(1).expand(1, self.n, -1)
+                    concat = torch.cat((encoded, expanded), dim=2)
+                    tmp = self.fcn_linears(concat)
+                    return tmp.squeeze(2)
+
+                def cuda(self):
+                    self.fcn_linears.cuda()
+                    self.fcn_expanders.cuda()
+                    return super().cuda()
+
+            tmp = Tmp(fcn_linears_batch, fcn_expanders_batch, len(self.predictors)).cuda()
+            traced = torch.jit.trace(tmp, dummy_input)
+            self.batch_predictor = torch.jit.optimize_for_inference(traced)
+        else:
+            for i in range(len(self.predictors)):
+                traced = torch.jit.trace(self.predictors[i], (dummy_input,))
+                self.predictors[i] = torch.jit.optimize_for_inference(traced)
         print("done. note that you must warm up the gpu by running the inference once")
         self.jit_compiled = True
 
@@ -330,15 +364,20 @@ class SolutionLibrary:
 
         n_batch = 1
         encoded: torch.Tensor = self.ae_model_shared.forward(matrix_torch)
-        encoded_repeated = encoded.repeat(n_batch, 1)
 
-        cost_list = []
-        for pred, bias in zip(self.predictors, self.biases):
-            # bias is for correcting the overestimated inference
-            costs, _ = pred.forward((encoded_repeated, vecs_torch))
-            costs.item() + bias
-            cost_list.append(costs.item() + bias)
-        return np.array(cost_list)
+        if self.batch_predictor is not None:
+            assert self.jit_compiled, "batch predictor must be available only when jit compiled"
+            raw_costs = self.batch_predictor(encoded, vecs_torch)
+            costs_numpy = raw_costs.detach().cpu().numpy().flatten()
+            return costs_numpy + np.array(self.biases)
+        else:
+            encoded_repeated = encoded.repeat(n_batch, 1)
+            cost_list = []
+            for pred, bias in zip(self.predictors, self.biases):
+                costs, _ = pred.forward((encoded_repeated, vecs_torch))
+                costs.item() + bias
+                cost_list.append(costs.item() + bias)
+            return np.array(cost_list)
 
     def infer(self, task: TaskBase) -> InferenceResult:
         costs = self._infer_cost(task)
