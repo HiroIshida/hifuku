@@ -339,17 +339,20 @@ class SolutionLibrary:
             device = self.device
 
         expression = task.export_task_expression(use_matrix=True)
-        vecs_np = np.array([expression.get_vector()])
-        vecs_torch = torch.from_numpy(vecs_np)
-        vecs_torch = vecs_torch.float().to(device)
+        # NOTE(2024/11/3): avoid calling tensor.float() because it causes
+        # performance issue and deteoriation as well.
+        # this may be circumvented by limiting the torch thread number
+        # but this requires nonnegligible overhead. thus
+        vecs_np = np.array([expression.get_vector()]).astype(np.float32)
+        vecs_torch = torch.from_numpy(vecs_np).to(device)
 
         matrix = expression.get_matrix()
         if matrix is None:
             matrix_torch = torch.empty((1, 0))
         else:
-            matrix_np = np.expand_dims(matrix, axis=(0, 1))
-            matrix_torch = torch.from_numpy(matrix_np)
-            matrix_torch = matrix_torch.float().to(device)
+            # NOTE(2024/11/3): avoid calling tensor.float() (see above)
+            matrix_np = np.expand_dims(matrix, axis=(0, 1)).astype(np.float32)
+            matrix_torch = torch.from_numpy(matrix_np).to(device)
 
         n_batch = 1
         encoded: torch.Tensor = self.ae_model_shared.forward(matrix_torch)
