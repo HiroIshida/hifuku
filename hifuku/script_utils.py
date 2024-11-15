@@ -75,6 +75,7 @@ def load_library(
     device: Literal["cpu", "cuda"],
     project_path: Optional[Path] = None,
     postfix: Optional[str] = None,
+    n_experience_use: Optional[int] = None,
 ) -> SolutionLibrary:
 
     if isinstance(domain, str):
@@ -82,7 +83,9 @@ def load_library(
 
     if project_path is None:
         project_path = get_project_path(domain, postfix)
-    lib = SolutionLibrary.load(project_path, torch.device(device))
+    lib = SolutionLibrary.load(
+        project_path, device=torch.device(device), n_experience_use=n_experience_use
+    )
     return lib
 
 
