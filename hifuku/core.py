@@ -405,7 +405,12 @@ class SolutionLibrary:
             pickle.dump(dic, f)
 
     @classmethod
-    def load(cls, base_path: Path, device: Optional[torch.device] = None) -> "SolutionLibrary":
+    def load(
+        cls,
+        base_path: Path,
+        device: Optional[torch.device] = None,
+        n_experience_use: Optional[int] = None,
+    ) -> "SolutionLibrary":
         if device is None:
             if torch.cuda.is_available():
                 device = torch.device("cuda")
@@ -434,6 +439,7 @@ class SolutionLibrary:
             ae_model_shared.put_on_device(device)
         pred_pickled_list = dic["predictors"]
         pred_list = []
+
         for pred_pickled in pred_pickled_list:
             pred = pickle.loads(pred_pickled)
             pred.put_on_device(device)
@@ -441,12 +447,20 @@ class SolutionLibrary:
         biases = dic["biases"]
         init_solutions = pickle.loads(dic["init_solutions"])
         meta_data = dic["meta_data"]
+
+        if n_experience_use is None:
+            n_experience_use = len(pred_pickled_list)
+        if n_experience_use > len(pred_pickled_list):
+            raise ValueError(
+                "n_experience_use must be smaller than the number of predictors in the library"
+            )
+
         return cls(
             max_admissible_cost,
             ae_model_shared,
-            pred_list,
-            init_solutions,
-            biases,
+            pred_list[:n_experience_use],
+            init_solutions[:n_experience_use],
+            biases[:n_experience_use],
             uuidval,
             meta_data,
         )
