@@ -145,7 +145,7 @@ def create_dataset_from_params_and_results(
     ae_model: Optional[AutoEncoderBase],
     clamp_factor: float = 2.0,
     compress_mesh: bool = False,
-    n_max: int = 2000000,
+    n_max: int = 1000000,
 ) -> CostPredictorDataset:
     n_param = len(task_params)
     n_split = n_param // n_max + 1
