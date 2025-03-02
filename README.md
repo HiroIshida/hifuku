@@ -23,12 +23,16 @@ pip install git+https://github.com/HiroIshida/hifuku.git -v
 
 ## Reference
 This repo and relevant packages (`scikit-motionplan`, `rpbench`) are implemented for the following paper [https://arxiv.org/abs/2405.02968](https://arxiv.org/abs/2405.02968).
-For the specific commit at the timing of the paper submission, please refer to the tag `tro-submitted` of each repo.
+This repo is evolving for my phd thesis and for the accepted version of the paper see
+- hifuku: `tro-accepted` tag for Domain 4 and `rebuttal` branch for Domain 1-3.
+- rpbench: `tro-resubmit` tag for Domain 4 and `rebuttal` branch for Domain 1-3.
+- plainmp: `tro-resubmit` tag for Domain 4
+- scikit-motionplan: `tro-submit tag for Domain 1-3
 ```bibtex
 @article{ishida2024coverlib,
   title={CoverLib: Classifiers-equipped Experience Library by Iterative Problem Distribution Coverage Maximization for Domain-tuned Motion Planning},
   author={Ishida, Hirokazu and Hiraoka, Naoki and Okada, Kei and Inaba, Masayuki},
-  journal={arXiv preprint arXiv:2405.02968},
+  journal={IEEE Transactions on Robotics (T-RO)},
   year={2024}
 }
 ```
