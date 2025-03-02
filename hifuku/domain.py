@@ -12,7 +12,8 @@ from plainmp.ompl_solver import OMPLSolverResult as plainOMPLSolverResult
 from plainmp.ompl_solver import TerminateState
 from plainmp.problem import Problem
 from rpbench.articulated.fetch.jail_insert import ConwayJailInsertTask, JailInsertTask
-from rpbench.articulated.fetch.tidyup_table import TidyupTableTask, TidyupTableTask2
+
+# from rpbench.articulated.fetch.tidyup_table import TidyupTableTask, TidyupTableTask2
 from rpbench.articulated.jaxon.below_table import (
     HumanoidTableClutteredReachingTask,
     HumanoidTableClutteredReachingTask2,
@@ -30,6 +31,7 @@ from rpbench.articulated.pr2.minifridge import (
     PR2MiniFridgeTask,
     PR2MiniFridgeVoxelTask,
 )
+from rpbench.articulated.pr2.thesis_jsk_table import JskMessyTableTask
 from rpbench.interface import TaskBase
 
 from hifuku import is_plainmp_old
@@ -153,26 +155,26 @@ def is_plainmp_old():
     return packaging.version.parse(version_str) < packaging.version.parse("0.0.8")
 
 
-class FetchTidyupTable(DomainProtocol):
-    task_type = TidyupTableTask
-    solver_type = PlainOMPLSolverWrapper
-    kwargs = {"n_max_call": 1000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1}
-    if is_plainmp_old():
-        kwargs["expbased_planner_backend"] = "ertconnect"
-    solver_config = plainOMPLSolverConfig(**kwargs)
-    auto_encoder_project_name = "FetchTidyupTable-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class FetchTidyupTable2(DomainProtocol):
-    task_type = TidyupTableTask2
-    solver_type = PlainOMPLSolverWrapper
-    kwargs = {"n_max_call": 1000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1}
-    if is_plainmp_old():
-        kwargs["expbased_planner_backend"] = "ertconnect"
-    solver_config = plainOMPLSolverConfig(**kwargs)
-    auto_encoder_project_name = "FetchTidyupTable-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
+# class FetchTidyupTable(DomainProtocol):
+#     task_type = TidyupTableTask
+#     solver_type = PlainOMPLSolverWrapper
+#     kwargs = {"n_max_call": 1000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1}
+#     if is_plainmp_old():
+#         kwargs["expbased_planner_backend"] = "ertconnect"
+#     solver_config = plainOMPLSolverConfig(**kwargs)
+#     auto_encoder_project_name = "FetchTidyupTable-AutoEncoder"
+#     auto_encoder_type = PixelAutoEncoder
+#
+#
+# class FetchTidyupTable2(DomainProtocol):
+#     task_type = TidyupTableTask2
+#     solver_type = PlainOMPLSolverWrapper
+#     kwargs = {"n_max_call": 1000, "n_max_ik_trial": 1, "ertconnect_eps": 0.1}
+#     if is_plainmp_old():
+#         kwargs["expbased_planner_backend"] = "ertconnect"
+#     solver_config = plainOMPLSolverConfig(**kwargs)
+#     auto_encoder_project_name = "FetchTidyupTable-AutoEncoder"
+#     auto_encoder_type = PixelAutoEncoder
 
 
 class FetchJailInsert(DomainProtocol):
@@ -280,6 +282,18 @@ class PR2MiniFridgeVoxel_RRT2000(DomainProtocol):
     )
     auto_encoder_project_name = "PR2MiniFridge-VoxelAutoEncoder"
     auto_encoder_type = VoxelAutoEncoder
+
+
+class Pr2ThesisJskTable(DomainProtocol):
+    task_type = JskMessyTableTask
+    solver_type = PlainOMPLSolverWrapper
+    solver_config = plainOMPLSolverConfig(
+        n_max_call=10000,
+        n_max_ik_trial=1,
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "Pr2ThesisJskTable-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
 
 
 # class ClutteredFridgeRealistic_SQP(DomainProtocol):
@@ -665,8 +679,8 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
     class DomainCollection(Enum):
         fetch_jail = FetchJailInsert
         fetch_cjail = FetchConwayJailInsert
-        fetch_tidyup = FetchTidyupTable
-        fetch_tidyup2 = FetchTidyupTable2
+        # fetch_tidyup = FetchTidyupTable
+        # fetch_tidyup2 = FetchTidyupTable2
         fixed_pr2_minifridge_sqp = FixedPR2MiniFridge_SQP
         pr2_minifridge_sqp = PR2MiniFridge_SQP
         pr2_minifridge_rrt500 = PR2MiniFridge_RRT500
@@ -674,6 +688,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         pr2_minifridge_rrt8000 = PR2MiniFridge_RRT8000
         pr2_minifridge_voxel_rrt500 = PR2MiniFridgeVoxel_RRT500
         pr2_minifridge_voxel_rrt2000 = PR2MiniFridgeVoxel_RRT2000
+        pr2_thesis_jsk_table = Pr2ThesisJskTable
         jsk_fridge_sqp = JSKFridge_SQP
         jsk_fridge_rrt2000 = JSKFridge_RRT2000
         jsk_fridge_rrt5000 = JSKFridge_RRT5000
