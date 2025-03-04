@@ -1196,7 +1196,7 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         self,
         n_sample: int,
         task_pool: TaskPool[TaskT],
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
 
         difficult_params_list: List[np.ndarray] = []
         easy_params_list: List[np.ndarray] = []
@@ -1214,7 +1214,10 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                     pbar.update(1)
                 else:
                     easy_params_list.append(task_param)
-        return pack_param_seq(difficult_params_list), pack_param_seq(easy_params_list)
+        if len(easy_params_list) == 0:
+            return pack_param_seq(difficult_params_list), None
+        else:
+            return pack_param_seq(difficult_params_list), pack_param_seq(easy_params_list)
 
     def _select_solution_candidates(
         self, candidates: List[Trajectory], task_params: np.ndarray
@@ -1268,7 +1271,10 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
                 difficult_params, easy_params = self._sample_difficult_tasks(
                     n_difficult, self.task_pool
                 )
-                n_total = len(difficult_params) + len(easy_params)
+                if easy_params is None:
+                    n_total = len(difficult_params)
+                else:
+                    n_total = len(difficult_params) + len(easy_params)
 
             best_solution, n_solved_max = self._select_solution_candidates(
                 solution_candidates, difficult_params
