@@ -33,7 +33,9 @@ def create_matrix(_):
     sample = _task_type.sample()
     exp = sample.export_task_expression(use_matrix=True)
     mat = exp.get_matrix()
-    mat = np.expand_dims(mat, 0)
+    has_channel = mat.ndim == 3
+    if not has_channel:
+        mat = np.expand_dims(mat, 0)
     return mat
 
 
@@ -60,7 +62,13 @@ if __name__ == "__main__":
     mat = exp.get_matrix()
     assert mat is not None
 
-    n_grid = mat.shape[0]
+    has_channel = mat.ndim == 3
+    if has_channel:
+        n_channel = mat.shape[0]
+        n_grid = mat.shape[1]
+    else:
+        n_channel = 1
+        n_grid = mat.shape[0]
 
     path = get_project_path(domain.auto_encoder_project_name)
     path.mkdir(exist_ok=True, parents=True)
@@ -81,7 +89,7 @@ if __name__ == "__main__":
         mat_list.extend(mat_list_part)
 
     dataset = MyDataset(mat_list)
-    model = PixelAutoEncoder(AutoEncoderConfig(n_grid=n_grid))
+    model = PixelAutoEncoder(AutoEncoderConfig(n_grid=n_grid, n_channel=n_channel))
 
     tcache = TrainCache.from_model(model)
     config = TrainConfig(n_epoch=10000)

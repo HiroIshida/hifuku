@@ -270,7 +270,10 @@ def _create_dataset_from_params_and_results(
                         stacked_size = (len(task_params),) + mat_size
                         mesh_likes = torch.zeros(stacked_size)
                 else:
-                    mat_torch = torch.from_numpy(matrix).float().unsqueeze(0)
+                    has_channel = len(matrix.shape) == 3
+                    mat_torch = torch.from_numpy(matrix).float()
+                    if not has_channel:
+                        mat_torch = mat_torch.unsqueeze(0)
                     encoded = ae_model.forward(mat_torch.unsqueeze(0)).squeeze(0).detach()
                     stacked_size = (len(task_params),) + encoded.size()
                     mesh_likes = torch.zeros(stacked_size)
@@ -394,6 +397,7 @@ class AutoEncoderConfig(ModelConfigBase):
     dim_bottleneck: int = 200
     n_grid: Literal[56, 112] = 112
     output_binary: bool = False
+    n_channel: int = 1
 
 
 VoxelAutoEncoderConfig = AutoEncoderConfig  # for backword compatibility TODO: remove this
@@ -452,10 +456,10 @@ class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
 
 class VoxelAutoEncoder(ReferenceComparisonMixin, NeuralAutoEncoderBase):
     def _setup_from_config(self, config: AutoEncoderConfig) -> None:
-        n_channel = 1
+        assert config.n_channel == 1  # TODO
         # NOTE: DO NOT add bath normalization layer
         encoder_layers = [
-            nn.Conv3d(n_channel, 8, (3, 3, 3), padding=1, stride=(2, 2, 2)),
+            nn.Conv3d(config.n_channel, 8, (3, 3, 3), padding=1, stride=(2, 2, 2)),
             nn.ReLU(inplace=True),
             nn.Conv3d(8, 16, (3, 3, 3), padding=1, stride=(2, 2, 2)),
             nn.ReLU(inplace=True),
@@ -489,8 +493,8 @@ class VoxelAutoEncoder(ReferenceComparisonMixin, NeuralAutoEncoderBase):
 
 class PixelAutoEncoder(ReconstructionLossMixin, NeuralAutoEncoderBase):
     def _setup_from_config(self, config: AutoEncoderConfig) -> None:
+        n_channel = config.n_channel
         if config.n_grid == 112:
-            n_channel = 1
             encoder_layers = [
                 nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 56x56
                 nn.ReLU(inplace=True),
@@ -522,7 +526,6 @@ class PixelAutoEncoder(ReconstructionLossMixin, NeuralAutoEncoderBase):
                 nn.ConvTranspose2d(8, n_channel, 4, stride=2, padding=1),
             ]
         elif config.n_grid == 56:
-            n_channel = 1
             encoder_layers = [
                 nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 14x14
                 nn.ReLU(inplace=True),

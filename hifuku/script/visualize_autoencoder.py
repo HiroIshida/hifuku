@@ -28,12 +28,23 @@ if __name__ == "__main__":
         sample = task_type.sample()
         exp = sample.export_task_expression(use_matrix=True)
         mat = exp.get_matrix()
-        matten = torch.from_numpy(mat).float().unsqueeze(0).unsqueeze(0)
+        has_channel = len(mat.shape) == 3
+        if has_channel:
+            matten = torch.from_numpy(mat).float().unsqueeze(0)
+        else:
+            matten = torch.from_numpy(mat).float().unsqueeze(0).unsqueeze(0)
         matten = matten.to(ae.device)
         matten_reconst = ae.decoder(ae.encoder(matten))
-        mat_reconst = matten_reconst.squeeze(0).squeeze(0).cpu().detach().numpy()
+        target_channel = 1
+        if has_channel:
+            mat_reconst = matten_reconst.squeeze(0)[target_channel].cpu().detach().numpy()
+        else:
+            mat_reconst = matten_reconst.squeeze(0).squeeze(0).cpu().detach().numpy()
         # compare original and reconstructed side by side
         fig, ax = plt.subplots(1, 2)
-        ax[0].imshow(mat)
+        if has_channel:
+            ax[0].imshow(mat[target_channel])
+        else:
+            ax[0].imshow(mat)
         ax[1].imshow(mat_reconst)
         plt.show()

@@ -31,7 +31,10 @@ from rpbench.articulated.pr2.minifridge import (
     PR2MiniFridgeTask,
     PR2MiniFridgeVoxelTask,
 )
-from rpbench.articulated.pr2.thesis_jsk_table import JskMessyTableTask
+from rpbench.articulated.pr2.thesis_jsk_table import (
+    JskMessyTableTask,
+    JskMessyTableTaskWithChair,
+)
 from rpbench.interface import TaskBase
 
 from hifuku import is_plainmp_old
@@ -293,6 +296,18 @@ class Pr2ThesisJskTable(DomainProtocol):
         ertconnect_eps=0.1,
     )
     auto_encoder_project_name = "Pr2ThesisJskTable-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
+class Pr2ThesisJskTable2(DomainProtocol):
+    task_type = JskMessyTableTaskWithChair
+    solver_type = PlainOMPLSolverWrapper
+    solver_config = plainOMPLSolverConfig(
+        n_max_call=10000,
+        n_max_ik_trial=1,
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "Pr2ThesisJskTable2-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
@@ -689,6 +704,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         pr2_minifridge_voxel_rrt500 = PR2MiniFridgeVoxel_RRT500
         pr2_minifridge_voxel_rrt2000 = PR2MiniFridgeVoxel_RRT2000
         pr2_thesis_jsk_table = Pr2ThesisJskTable
+        pr2_thesis_jsk_table2 = Pr2ThesisJskTable2
         jsk_fridge_sqp = JSKFridge_SQP
         jsk_fridge_rrt2000 = JSKFridge_RRT2000
         jsk_fridge_rrt5000 = JSKFridge_RRT5000
