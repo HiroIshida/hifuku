@@ -23,6 +23,7 @@ if __name__ == "__main__":
     n_grid: Literal[56, 112] = mat.shape[0]  # type: ignore
 
     ae: NeuralAutoEncoderBase = load_compatible_autoencoder(domain, True, n_grid=n_grid)  # type: ignore
+    print(ae)
 
     for _ in range(10):
         sample = task_type.sample()

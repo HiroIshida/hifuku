@@ -15,7 +15,7 @@ from torch.utils.data import Dataset
 
 from hifuku.datagen.utils import split_number
 from hifuku.domain import select_domain
-from hifuku.neuralnet import AutoEncoderConfig, PixelAutoEncoder
+from hifuku.neuralnet import AutoEncoderConfig
 from hifuku.script_utils import create_default_logger
 
 
@@ -89,7 +89,8 @@ if __name__ == "__main__":
         mat_list.extend(mat_list_part)
 
     dataset = MyDataset(mat_list)
-    model = PixelAutoEncoder(AutoEncoderConfig(n_grid=n_grid, n_channel=n_channel))
+    model = domain.auto_encoder_type(AutoEncoderConfig(n_grid=n_grid, n_channel=n_channel))
+    # model = PixelAutoEncoder(AutoEncoderConfig(n_grid=n_grid, n_channel=n_channel))
 
     tcache = TrainCache.from_model(model)
     config = TrainConfig(n_epoch=10000)

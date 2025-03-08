@@ -74,6 +74,7 @@ from hifuku.datagen.batch_solver import (
 )
 from hifuku.neuralnet import (
     AutoEncoderBase,
+    ChannelSplitPixelAutoEncoder,
     NullAutoEncoder,
     PixelAutoEncoder,
     VoxelAutoEncoder,
@@ -308,7 +309,7 @@ class Pr2ThesisJskTable2(DomainProtocol):
         ertconnect_eps=0.1,
     )
     auto_encoder_project_name = "Pr2ThesisJskTable2-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
+    auto_encoder_type = ChannelSplitPixelAutoEncoder
 
 
 # class ClutteredFridgeRealistic_SQP(DomainProtocol):

@@ -301,7 +301,10 @@ def _create_dataset_from_params_and_results(
                         else:
                             encoded = mat_torch  # just don't encode
                     else:
-                        encoded = ae_model.forward(mat_torch.unsqueeze(0)).squeeze(0).detach()
+                        has_channel = len(matrix.shape) == 3
+                        if not has_channel:
+                            mat_torch = mat_torch.unsqueeze(0)
+                        encoded = ae_model.forward(mat_torch).squeeze(0).detach()
                     assert mesh_likes is not None
                     mesh_likes[i] = encoded
 
@@ -422,12 +425,23 @@ class ReferenceComparisonMixin:
         return LossDict({"comparison": loss})
 
 
+class Reshape(nn.Module):
+    def __init__(self, *args):
+        super().__init__()
+        self.shape = args
+
+    def forward(self, x):
+        return x.view(self.shape)
+
+
 class NeuralAutoEncoderBase(ModelBase[AutoEncoderConfig], AutoEncoderBase):
     encoder: nn.Sequential
     decoder: nn.Sequential
     loss_called: bool = False  # flag to show the model is trained
 
     class Reshape(nn.Module):
+        # This class is no longer necessary (defined above)
+        # but I keep it for pickle compatibility
         def __init__(self, *args):
             super().__init__()
             self.shape = args
@@ -477,7 +491,7 @@ class VoxelAutoEncoder(ReferenceComparisonMixin, NeuralAutoEncoderBase):
         decoder_layers = [
             nn.Linear(config.dim_bottleneck, 4096),
             nn.ReLU(inplace=True),
-            self.Reshape(-1, 64, 4, 4, 4),
+            Reshape(-1, 64, 4, 4, 4),
             nn.ConvTranspose3d(64, 32, 3, padding=1, stride=2),
             nn.ReLU(inplace=True),
             nn.ConvTranspose3d(32, 16, 4, padding=1, stride=2),
@@ -491,69 +505,146 @@ class VoxelAutoEncoder(ReferenceComparisonMixin, NeuralAutoEncoderBase):
         self.decoder = nn.Sequential(*decoder_layers)
 
 
+def create_pixel_encoder_decoder_112(
+    n_channel: int, dim_bottleneck: int
+) -> Tuple[nn.Sequential, nn.Sequential]:
+    encoder_layers = [
+        nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 56x56
+        nn.ReLU(inplace=True),
+        nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),  # 28x28
+        nn.ReLU(inplace=True),
+        nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),  # 14x14
+        nn.ReLU(inplace=True),
+        nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),  # 7x7
+        nn.ReLU(inplace=True),
+        nn.Conv2d(64, 128, 3, padding=1, stride=(2, 2)),  # 4x4
+        nn.ReLU(inplace=True),
+        nn.Flatten(),
+        nn.Linear(128 * 16, dim_bottleneck),
+        nn.ReLU(inplace=True),
+    ]
+
+    decoder_layers = [
+        nn.Linear(dim_bottleneck, 128 * 16),
+        nn.ReLU(inplace=True),
+        Reshape(-1, 128, 4, 4),
+        nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1),
+        nn.ReLU(inplace=True),
+        nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1),
+        nn.ReLU(inplace=True),
+        nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
+        nn.ReLU(inplace=True),
+        nn.ConvTranspose2d(16, 8, 4, stride=2, padding=1),
+        nn.ReLU(inplace=True),
+        nn.ConvTranspose2d(8, n_channel, 4, stride=2, padding=1),
+    ]
+    return nn.Sequential(*encoder_layers), nn.Sequential(*decoder_layers)
+
+
+def create_pixel_encoder_decoder_56(
+    n_channel: int, dim_bottleneck: int
+) -> Tuple[nn.Sequential, nn.Sequential]:
+    encoder_layers = [
+        nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 14x14
+        nn.ReLU(inplace=True),
+        nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),
+        nn.ReLU(inplace=True),
+        nn.Flatten(),
+        nn.Linear(1024, dim_bottleneck),
+        nn.ReLU(inplace=True),
+    ]
+
+    decoder_layers = [
+        nn.Linear(dim_bottleneck, 1024),
+        nn.ReLU(inplace=True),
+        Reshape(-1, 64, 4, 4),
+        nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1),
+        nn.ReLU(inplace=True),
+        nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
+        nn.ReLU(inplace=True),
+        nn.ConvTranspose2d(16, 4, 4, stride=2, padding=1),
+        nn.ReLU(inplace=True),
+        nn.ConvTranspose2d(4, 1, 4, stride=2, padding=1),
+    ]
+    return nn.Sequential(*encoder_layers), nn.Sequential(*decoder_layers)
+
+
 class PixelAutoEncoder(ReconstructionLossMixin, NeuralAutoEncoderBase):
     def _setup_from_config(self, config: AutoEncoderConfig) -> None:
         n_channel = config.n_channel
         if config.n_grid == 112:
-            encoder_layers = [
-                nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 56x56
-                nn.ReLU(inplace=True),
-                nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),  # 28x28
-                nn.ReLU(inplace=True),
-                nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),  # 14x14
-                nn.ReLU(inplace=True),
-                nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),  # 7x7
-                nn.ReLU(inplace=True),
-                nn.Conv2d(64, 128, 3, padding=1, stride=(2, 2)),  # 4x4
-                nn.ReLU(inplace=True),
-                nn.Flatten(),
-                nn.Linear(128 * 16, config.dim_bottleneck),
-                nn.ReLU(inplace=True),
-            ]
-
-            decoder_layers = [
-                nn.Linear(config.dim_bottleneck, 128 * 16),
-                nn.ReLU(inplace=True),
-                self.Reshape(-1, 128, 4, 4),
-                nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(16, 8, 4, stride=2, padding=1),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(8, n_channel, 4, stride=2, padding=1),
-            ]
+            encoder, decoder = create_pixel_encoder_decoder_112(n_channel, config.dim_bottleneck)
         elif config.n_grid == 56:
-            encoder_layers = [
-                nn.Conv2d(n_channel, 8, 3, padding=1, stride=(2, 2)),  # 14x14
-                nn.ReLU(inplace=True),
-                nn.Conv2d(8, 16, 3, padding=1, stride=(2, 2)),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(16, 32, 3, padding=1, stride=(2, 2)),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(32, 64, 3, padding=1, stride=(2, 2)),
-                nn.ReLU(inplace=True),
-                nn.Flatten(),
-                nn.Linear(1024, config.dim_bottleneck),
-                nn.ReLU(inplace=True),
-            ]
+            encoder, decoder = create_pixel_encoder_decoder_56(n_channel, config.dim_bottleneck)
+        else:
+            raise ValueError("only 56 or 112 is supported")
+        self.encoder = encoder
+        self.decoder = decoder
 
-            decoder_layers = [
-                nn.Linear(config.dim_bottleneck, 1024),
-                nn.ReLU(inplace=True),
-                self.Reshape(-1, 64, 4, 4),
-                nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(16, 4, 4, stride=2, padding=1),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(4, 1, 4, stride=2, padding=1),
-            ]
-        self.encoder = nn.Sequential(*encoder_layers)
-        self.decoder = nn.Sequential(*decoder_layers)
+
+# EXPERIMENTAL!!!
+class ChannelSplitPixelAutoEncoder(ModelBase[AutoEncoderConfig], AutoEncoderBase):
+    encoder_list: nn.ModuleList
+    decoder_list: nn.ModuleList
+    loss_called: bool = False  # flag to show the model is trained
+
+    @property
+    def trained(self) -> bool:
+        return self.loss_called
+
+    def get_device(self) -> torch.device:
+        return self.device
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: shape (N, C, H, W)
+        Returns:
+            Concatenated embedding of shape (N, C * dim_bottleneck)
+        """
+        # Encode each channel separately, then concatenate results
+        # x[:, i : i+1, :, :] => shape (N, 1, H, W)
+        encoded_list = []
+        for i in range(self.config.n_channel):
+            channel_i = x[:, i : i + 1, :, :]  # (N, 1, H, W)
+            encoded_i = self.encoder_list[i](channel_i)  # (N, dim_bottleneck)
+            encoded_list.append(encoded_i)
+
+        encoded = torch.cat(encoded_list, dim=1)  # (N, C * dim_bottleneck)
+        return encoded
+
+    def loss(self, x: torch.Tensor) -> LossDict:
+        self.loss_called = True
+        d = {}
+        for i in range(self.config.n_channel):
+            channel_i = x[:, i : i + 1, :, :]
+            encoded_i = self.encoder_list[i](channel_i)
+            reconst_i = self.decoder_list[i](encoded_i)
+            loss_i = nn.MSELoss()(channel_i, reconst_i)
+            d[f"reconstruction_{i}"] = loss_i
+        return LossDict(d)
+
+    @property
+    def n_bottleneck(self) -> int:
+        return self.config.dim_bottleneck
+
+    def _setup_from_config(self, config: AutoEncoderConfig) -> None:
+        encoders, decoders = [], []
+        for i in range(config.n_channel):
+            if config.n_grid == 112:
+                encoder, decoder = create_pixel_encoder_decoder_112(1, config.dim_bottleneck)
+            elif config.n_grid == 56:
+                encoder, decoder = create_pixel_encoder_decoder_56(1, config.dim_bottleneck)
+            else:
+                raise ValueError("only 56 or 112 is supported")
+            encoders.append(encoder)
+            decoders.append(decoder)
+        self.encoder_list = nn.ModuleList(encoders)
+        self.decoder_list = nn.ModuleList(decoders)
 
 
 @dataclass

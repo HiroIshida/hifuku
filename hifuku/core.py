@@ -54,6 +54,7 @@ from hifuku.datagen import (
 )
 from hifuku.neuralnet import (
     AutoEncoderBase,
+    ChannelSplitPixelAutoEncoder,
     CostPredictor,
     CostPredictorConfig,
     CostPredictorWithEncoder,
@@ -362,7 +363,11 @@ class SolutionLibrary:
             matrix_torch = torch.empty((1, 0))
         else:
             # NOTE(2024/11/3): avoid calling tensor.float() (see above)
-            matrix_np = np.expand_dims(matrix, axis=(0, 1)).astype(np.float32)
+            if isinstance(self.ae_model_shared, ChannelSplitPixelAutoEncoder):
+                # No need to expand the dimension for channel split pixel auto encoder
+                matrix_np = np.expand_dims(matrix, axis=(0,)).astype(np.float32)
+            else:
+                matrix_np = np.expand_dims(matrix, axis=(0, 1)).astype(np.float32)
             matrix_torch = torch.from_numpy(matrix_np).to(device)
 
         n_batch = 1
@@ -1091,10 +1096,17 @@ class SimpleSolutionLibrarySampler(Generic[TaskT, ConfigT, ResultT]):
         # train
         if self.train_pred_with_encoder:
             assert self.ae_model_pretrained is not None
-            n_bottleneck = self.ae_model_pretrained.n_bottleneck
+            ae_model = self.ae_model_pretrained
         else:
             assert self.library.ae_model_shared is not None
-            n_bottleneck = self.library.ae_model_shared.n_bottleneck
+            ae_model = self.library.ae_model_shared
+        n_bottleneck = ae_model.n_bottleneck
+
+        if isinstance(ae_model, ChannelSplitPixelAutoEncoder):
+            # NOTE: this case each channel is encoded separately
+            # Thus we need to multiply the number of channels
+            # it's quite adhoc though
+            n_bottleneck *= ae_model.config.n_channel
 
         if self.config.costpred_model_config is not None:
             costpred_model_conf = CostPredictorConfig(
