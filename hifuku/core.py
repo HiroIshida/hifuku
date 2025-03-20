@@ -369,7 +369,13 @@ class SolutionLibrary:
             matrix_torch = torch.empty((1, 0))
         else:
             # NOTE(2024/11/3): avoid calling tensor.float() (see above)
-            if isinstance(self.ae_model_shared, ChannelSplitPixelAutoEncoder):
+            is_channel_split = isinstance(self.ae_model_shared, ChannelSplitPixelAutoEncoder)
+            if self.jit_compiled:
+                is_channel_split = (
+                    self.ae_model_shared.original_name == "ChannelSplitPixelAutoEncoder"
+                )
+
+            if is_channel_split:
                 # No need to expand the dimension for channel split pixel auto encoder
                 matrix_np = np.expand_dims(matrix, axis=(0,)).astype(np.float32)
             else:
