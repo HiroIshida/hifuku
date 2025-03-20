@@ -271,7 +271,9 @@ def _create_dataset_from_params_and_results(
                         mesh_likes = torch.zeros(stacked_size)
                 else:
                     # Do not consider voxel tensor as matrix with channels
-                    has_channel = len(matrix.shape) == 3 and not isinstance(ae_model, VoxelAutoEncoder)
+                    has_channel = len(matrix.shape) == 3 and not isinstance(
+                        ae_model, VoxelAutoEncoder
+                    )
                     mat_torch = torch.from_numpy(matrix).float()
                     if not has_channel:
                         mat_torch = mat_torch.unsqueeze(0)
@@ -303,7 +305,9 @@ def _create_dataset_from_params_and_results(
                             encoded = mat_torch  # just don't encode
                     else:
                         # Do not consider voxel tensor as matrix with channels
-                        has_channel = len(matrix.shape) == 3 and not isinstance(ae_model, VoxelAutoEncoder)
+                        has_channel = len(matrix.shape) == 3 and not isinstance(
+                            ae_model, VoxelAutoEncoder
+                        )
                         if not has_channel:
                             mat_torch = mat_torch.unsqueeze(0)
                         encoded = ae_model.forward(mat_torch).squeeze(0).detach()

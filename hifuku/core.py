@@ -253,10 +253,16 @@ class SolutionLibrary:
 
             if isinstance(self.ae_model_shared, nn.Module):
                 n_grid = self.ae_model_shared.config.n_grid
-                if isinstance(self.ae_model_shared, PixelAutoEncoder):
-                    dummy_input = torch.rand(1, 1, n_grid, n_grid).cuda()
+                n_channel = self.ae_model_shared.config.n_channel
+                if isinstance(
+                    self.ae_model_shared, (PixelAutoEncoder, ChannelSplitPixelAutoEncoder)
+                ):
+                    dummy_input = torch.rand(1, n_channel, n_grid, n_grid).cuda()
                 elif isinstance(self.ae_model_shared, VoxelAutoEncoder):
+                    assert n_channel == 1, "TODO: support multi channel voxel auto encoder"
                     dummy_input = torch.rand(1, 1, n_grid, n_grid, n_grid).cuda()
+                else:
+                    assert False
                 traced = torch.jit.trace(self.ae_model_shared.eval(), (dummy_input,))
                 self.ae_model_shared = torch.jit.optimize_for_inference(traced)
 
