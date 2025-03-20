@@ -246,7 +246,10 @@ class SolutionLibrary:
             pred: CostPredictorWithEncoder = self.predictors[0]  # type: ignore[assignment]
             return pred.device
 
-    def jit_compile(self, batch_predictor: bool = False) -> None:
+    def jit_compile(self, batch_predictor: bool = False, n_batch_vec: int = 1) -> None:
+        # batch input of image is not supported yet
+        if n_batch_vec > 1:
+            print("batch size larger than 1 is experimental")
         print("compling...")
         assert self.device.type == "cuda"
         if self.ae_model_shared is not None:
@@ -269,9 +272,13 @@ class SolutionLibrary:
             pred_config = self.predictors[0].config
             dummy_input = (
                 torch.rand(1, pred_config.dim_conv_bottleneck).cuda(),
-                torch.rand(1, pred_config.dim_task_descriptor).cuda(),
+                torch.rand(n_batch_vec, pred_config.dim_task_descriptor).cuda(),
             )
         else:
+            if n_batch_vec > 1:
+                raise ValueError(
+                    "TODO: batch size larger than 1 is not supported for non-shared ae"
+                )
             pred_config = self.predictors[0].config
             assert isinstance(pred_config, CostPredictorWithEncoderConfig)
             dim_vector = pred_config.costpred_model.config.dim_task_descriptor
@@ -298,7 +305,8 @@ class SolutionLibrary:
 
                 def forward(self, bottleneck, descriptor):
                     expanded = self.fcn_expanders(descriptor)
-                    encoded = bottleneck.unsqueeze(1).expand(1, self.n, -1)
+                    n_batch = expanded.shape[0]
+                    encoded = bottleneck.repeat(n_batch, self.n, 1)
                     concat = torch.cat((encoded, expanded), dim=2)
                     tmp = self.fcn_linears(concat)
                     return tmp.squeeze(2)
