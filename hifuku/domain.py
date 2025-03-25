@@ -21,11 +21,7 @@ from rpbench.articulated.jaxon.below_table import (
     HumanoidTableReachingTask2,
     HumanoidTableReachingTask3,
 )
-from rpbench.articulated.pr2.jskfridge import (
-    JskFridgeReachingTask,
-    JskFridgeVerticalReachingTask,
-    JskFridgeVerticalReachingTask2,
-)
+from rpbench.articulated.pr2.jskfridge import JskFridgeReachingTask
 from rpbench.articulated.pr2.minifridge import (
     FixedPR2MiniFridgeTask,
     PR2MiniFridgeTask,
@@ -384,94 +380,15 @@ class Pr2ThesisJskTable2(DomainProtocol):
 #     auto_encoder_type = PixelAutoEncoder
 
 
-class JSKFridge_SQP(DomainProtocol):
+class JSKFridge(DomainProtocol):
     task_type = JskFridgeReachingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(
-        n_wp=40, n_max_call=8, motion_step_satisfaction="explicit", ineq_tighten_coef=0.0
-    )
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridge_RRT2000(DomainProtocol):
-    task_type = JskFridgeReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=2000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridge_RRT5000(DomainProtocol):
-    task_type = JskFridgeReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=5000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridge_RRT10000(DomainProtocol):
-    task_type = JskFridgeReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
+    solver_type = PlainOMPLSolverWrapper
+    solver_config = plainOMPLSolverConfig(
         n_max_call=10000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
+        n_max_ik_trial=1,
         ertconnect_eps=0.1,
     )
     auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridgeVertical_SQP(DomainProtocol):
-    task_type = JskFridgeVerticalReachingTask
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(n_wp=40, n_max_call=8, motion_step_satisfaction="explicit")
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridgeVertical_RRT2000(DomainProtocol):
-    task_type = JskFridgeVerticalReachingTask
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=2000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridgeVertical2_SQP(DomainProtocol):
-    task_type = JskFridgeVerticalReachingTask2
-    solver_type = SQPBasedSolver
-    solver_config = SQPBasedSolverConfig(n_wp=40, n_max_call=8, motion_step_satisfaction="explicit")
-    auto_encoder_project_name = "JskFridgeWorld2-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridgeVertical2_RRT2000(DomainProtocol):
-    task_type = JskFridgeVerticalReachingTask2
-    solver_type = OMPLSolver
-    solver_config = OMPLSolverConfig(
-        n_max_call=2000,
-        n_max_satisfaction_trial=1,
-        expbased_planner_backend="ertconnect",
-        ertconnect_eps=0.1,
-    )
-    auto_encoder_project_name = "JskFridgeWorld2-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
 
 
@@ -706,14 +623,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         pr2_minifridge_voxel_rrt2000 = PR2MiniFridgeVoxel_RRT2000
         pr2_thesis_jsk_table = Pr2ThesisJskTable
         pr2_thesis_jsk_table2 = Pr2ThesisJskTable2
-        jsk_fridge_sqp = JSKFridge_SQP
-        jsk_fridge_rrt2000 = JSKFridge_RRT2000
-        jsk_fridge_rrt5000 = JSKFridge_RRT5000
-        jsk_fridge_rrt10000 = JSKFridge_RRT10000
-        jsk_fridge_vertical_sqp = JSKFridgeVertical_SQP
-        jsk_fridge_vertical_rrt2000 = JSKFridgeVertical_RRT2000
-        jsk_fridge_vertical2_sqp = JSKFridgeVertical2_SQP
-        jsk_fridge_vertical2_rrt2000 = JSKFridgeVertical2_RRT2000
+        jsk_fridge = JSKFridge
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         humanoid_trr2_sqp = HumanoidTableRarmReaching2_SQP_Domain
         humanoid_trr2_sqp10 = HumanoidTableRarmReaching2_SQP10_Domain
