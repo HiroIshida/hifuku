@@ -21,7 +21,10 @@ from rpbench.articulated.jaxon.below_table import (
     HumanoidTableReachingTask2,
     HumanoidTableReachingTask3,
 )
-from rpbench.articulated.pr2.jskfridge import JskFridgeReachingTask
+from rpbench.articulated.pr2.jskfridge import (
+    JskFridgeGraspingReachingTask,
+    JskFridgeReachingTask,
+)
 from rpbench.articulated.pr2.minifridge import (
     FixedPR2MiniFridgeTask,
     PR2MiniFridgeTask,
@@ -392,6 +395,18 @@ class JSKFridge(DomainProtocol):
     auto_encoder_type = PixelAutoEncoder
 
 
+class JSKFridgeGrasping(DomainProtocol):
+    task_type = JskFridgeGraspingReachingTask
+    solver_type = PlainOMPLSolverWrapper
+    solver_config = plainOMPLSolverConfig(
+        n_max_call=10000,
+        n_max_ik_trial=1,
+        ertconnect_eps=0.1,
+    )
+    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
+    auto_encoder_type = PixelAutoEncoder
+
+
 class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
     task_type = HumanoidTableReachingTask
     solver_type = SQPBasedSolver
@@ -624,6 +639,7 @@ def select_domain(domain_name: str) -> Type[DomainProtocol]:
         pr2_thesis_jsk_table = Pr2ThesisJskTable
         pr2_thesis_jsk_table2 = Pr2ThesisJskTable2
         jsk_fridge = JSKFridge
+        jsk_fridge_grasping = JSKFridgeGrasping
         humanoid_trr_sqp = HumanoidTableRarmReaching_SQP_Domain
         humanoid_trr2_sqp = HumanoidTableRarmReaching2_SQP_Domain
         humanoid_trr2_sqp10 = HumanoidTableRarmReaching2_SQP10_Domain
