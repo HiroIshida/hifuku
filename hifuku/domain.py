@@ -389,7 +389,7 @@ class JSKFridge(DomainProtocol):
     solver_config = plainOMPLSolverConfig(
         n_max_call=10000,
         n_max_ik_trial=1,
-        ertconnect_eps=0.1,
+        ertconnect_eps=0.5,
     )
     auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
@@ -401,7 +401,7 @@ class JSKFridgeGrasping(DomainProtocol):
     solver_config = plainOMPLSolverConfig(
         n_max_call=10000,
         n_max_ik_trial=1,
-        ertconnect_eps=0.1,
+        ertconnect_eps=0.5,
     )
     auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
     auto_encoder_type = PixelAutoEncoder
