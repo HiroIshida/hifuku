@@ -10,6 +10,7 @@ install_requires = [
     "threadpoolctl",
     "cmaes",
     "numba",
+    "psutils",
 ]
 
 setup(
