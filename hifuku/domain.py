@@ -21,10 +21,6 @@ from rpbench.articulated.jaxon.below_table import (
     HumanoidTableReachingTask2,
     HumanoidTableReachingTask3,
 )
-from rpbench.articulated.pr2.jskfridge import (
-    JskFridgeGraspingReachingTask,
-    JskFridgeReachingTask,
-)
 from rpbench.articulated.pr2.minifridge import (
     FixedPR2MiniFridgeTask,
     PR2MiniFridgeTask,
@@ -381,30 +377,6 @@ class Pr2ThesisJskTable2(DomainProtocol):
 #     )
 #     auto_encoder_project_name = "TabletopClutteredFridgeWorld-AutoEncoder"
 #     auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridge(DomainProtocol):
-    task_type = JskFridgeReachingTask
-    solver_type = PlainOMPLSolverWrapper
-    solver_config = plainOMPLSolverConfig(
-        n_max_call=10000,
-        n_max_ik_trial=1,
-        ertconnect_eps=0.5,
-    )
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
-
-
-class JSKFridgeGrasping(DomainProtocol):
-    task_type = JskFridgeGraspingReachingTask
-    solver_type = PlainOMPLSolverWrapper
-    solver_config = plainOMPLSolverConfig(
-        n_max_call=10000,
-        n_max_ik_trial=1,
-        ertconnect_eps=0.5,
-    )
-    auto_encoder_project_name = "JskFridgeWorld-AutoEncoder"
-    auto_encoder_type = PixelAutoEncoder
 
 
 class HumanoidTableRarmReaching_SQP_Domain(DomainProtocol):
